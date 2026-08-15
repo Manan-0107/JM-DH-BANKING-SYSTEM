@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <meta name="description" content="Banking Database Management System — College DBMS Project with ER diagrams, normalization, SQL operations, and interactive schema visualization." />
+    <link rel="shortcut icon" type="image/png" href="img/icon.png" />
+
+    <link
+      href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <title>BankDB | Banking Database Management System</title>
+  </head>
+  <body>
+    <header class="header">
+      <nav class="nav">
+        <img
+          src="img/logo.png"
+          alt="BankDB logo"
+          class="nav__logo"
+          id="logo"
+          designer="Jonas"
+        />
+        <ul class="nav__links">
+          <li class="nav__item">
+            <a class="nav__link" href="#section--1">Tables</a>
+          </li>
+          <li class="nav__item">
+            <a class="nav__link" href="#section--2">Operations</a>
+          </li>
+          <li class="nav__item">
+            <a class="nav__link" href="#section--3">Query Lab</a>
+          </li>
+          <li class="nav__item">
+            <a class="nav__link" href="#section--4">Schema</a>
+          </li>
+          <li class="nav__item">
+            <a class="nav__link nav__link--btn btn--show-modal" href="#"
+              >Add Record</a
+            >
+          </li>
+        </ul>
+      </nav>
+
+      <div class="header__title">
+        <h1>
+          When
+          <span class="highlight">database</span>
+          meets<br />
+          <span class="highlight">design</span>
+        </h1>
+        <h4>A Banking DBMS project — structured, normalized, and visualized.</h4>
+        <button class="btn--text btn--scroll-to">Explore Database &DownArrow;</button>
+        <!-- Schema mini-visual replaces hero image -->
+        <div class="header__img header__schema-visual">
+          <div class="schema-mini">
+            <div class="schema-mini__node schema-mini__node--primary">Branch</div>
+            <div class="schema-mini__connector schema-mini__connector--down"></div>
+            <div class="schema-mini__row">
+              <div class="schema-mini__node schema-mini__node--secondary">Banker</div>
+              <div class="schema-mini__node schema-mini__node--secondary">Account</div>
+              <div class="schema-mini__node schema-mini__node--secondary">Loan</div>
+            </div>
+            <div class="schema-mini__connector schema-mini__connector--down"></div>
+            <div class="schema-mini__row">
+              <div class="schema-mini__node schema-mini__node--tertiary">Customer</div>
+              <div class="schema-mini__node schema-mini__node--tertiary">Transaction</div>
+              <div class="schema-mini__node schema-mini__node--tertiary">Credit Card</div>
+            </div>
+            <div class="schema-mini__connector schema-mini__connector--down"></div>
+            <div class="schema-mini__row">
+              <div class="schema-mini__node schema-mini__node--secondary">Borrower</div>
+              <div class="schema-mini__node schema-mini__node--tertiary">Loan Payment</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===== SECTION 1: DATABASE TABLES ===== -->
+    <section class="section" id="section--1">
+      <div class="section__title">
+        <h2 class="section__description">Database Tables</h2>
+        <h3 class="section__header">
+          9 normalized tables powering the banking system.
+        </h3>
+      </div>
+
+      <div class="tables-grid">
+        <div class="table-card" data-table="branch">
+          <div class="table-card__icon table-card__icon--1">🏦</div>
+          <h5 class="table-card__name">Branch</h5>
+          <p class="table-card__meta">4 attributes &bull; Central entity</p>
+        </div>
+
+        <div class="table-card" data-table="banker">
+          <div class="table-card__icon table-card__icon--2">👤</div>
+          <h5 class="table-card__name">Banker</h5>
+          <p class="table-card__meta">3 attributes &bull; FK → Branch</p>
+        </div>
+
+        <div class="table-card" data-table="account">
+          <div class="table-card__icon table-card__icon--3">💳</div>
+          <h5 class="table-card__name">Account</h5>
+          <p class="table-card__meta">4 attributes &bull; FK → Branch</p>
+        </div>
+
+        <div class="table-card" data-table="customer">
+          <div class="table-card__icon table-card__icon--1">🧑</div>
+          <h5 class="table-card__name">Customer</h5>
+          <p class="table-card__meta">5 attributes &bull; FK → Account</p>
+        </div>
+
+        <div class="table-card" data-table="loan">
+          <div class="table-card__icon table-card__icon--2">🏠</div>
+          <h5 class="table-card__name">Loan</h5>
+          <p class="table-card__meta">5 attributes &bull; FK → Branch, Account</p>
+        </div>
+
+        <div class="table-card" data-table="loan_payment">
+          <div class="table-card__icon table-card__icon--3">💰</div>
+          <h5 class="table-card__name">Loan Payment</h5>
+          <p class="table-card__meta">3 attributes &bull; FK → Loan</p>
+        </div>
+
+        <div class="table-card" data-table="borrower">
+          <div class="table-card__icon table-card__icon--1">🤝</div>
+          <h5 class="table-card__name">Borrower</h5>
+          <p class="table-card__meta">3 attributes &bull; FK → Loan, Customer</p>
+        </div>
+
+        <div class="table-card" data-table="transaction">
+          <div class="table-card__icon table-card__icon--2">📊</div>
+          <h5 class="table-card__name">Transaction</h5>
+          <p class="table-card__meta">4 attributes &bull; FK → Account, Customer</p>
+        </div>
+
+        <div class="table-card" data-table="credit_card">
+          <div class="table-card__icon table-card__icon--3">💎</div>
+          <h5 class="table-card__name">Credit Card</h5>
+          <p class="table-card__meta">5 attributes &bull; FK → Account, Customer</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 2: SQL OPERATIONS ===== -->
+    <section class="section" id="section--2">
+      <div class="section__title">
+        <h2 class="section__description">SQL Operations</h2>
+        <h3 class="section__header">
+          DDL, DML, DQL, DCL, and TCL — all in one place.
+        </h3>
+      </div>
+
+      <div class="operations">
+        <div class="operations__tab-container">
+          <button
+            class="btn operations__tab operations__tab--1 operations__tab--active"
+            data-tab="1"
+          >
+            <span>01</span>DDL
+          </button>
+          <button class="btn operations__tab operations__tab--2" data-tab="2">
+            <span>02</span>DML
+          </button>
+          <button class="btn operations__tab operations__tab--3" data-tab="3">
+            <span>03</span>DQL
+          </button>
+          <button class="btn operations__tab operations__tab--4" data-tab="4">
+            <span>04</span>DCL
+          </button>
+          <button class="btn operations__tab operations__tab--5" data-tab="5">
+            <span>05</span>TCL
+          </button>
+        </div>
+
+        <!-- DDL Content -->
+        <div
+          class="operations__content operations__content--1 operations__content--active"
+        >
+          <div class="operations__icon operations__icon--1">
+            <span class="operations__emoji">🏗️</span>
+          </div>
+          <h5 class="operations__header">
+            Data Definition Language — Structure your database
+          </h5>
+          <div class="operations__commands">
+            <div class="command-card">
+              <h6 class="command-card__title">CREATE</h6>
+              <pre class="command-card__sql">CREATE TABLE Branch (
+  branch_id INT PRIMARY KEY,
+  branch_name VARCHAR(100) NOT NULL,
+  branch_address VARCHAR(255) NOT NULL,
+  assets DECIMAL(15,2) CHECK (assets >= 0)
+);</pre>
+              <p class="command-card__desc">Creates a new table with columns, data types, and integrity constraints.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">ALTER</h6>
+              <pre class="command-card__sql">ALTER TABLE Branch
+ADD COLUMN city VARCHAR(50);
+
+ALTER TABLE Account
+MODIFY account_balance DECIMAL(15,2) DEFAULT 0;</pre>
+              <p class="command-card__desc">Modifies the structure of an existing table — add, modify, or drop columns.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">DROP</h6>
+              <pre class="command-card__sql">DROP TABLE IF EXISTS Loan_Payment;</pre>
+              <p class="command-card__desc">Permanently removes a table and all its data from the database.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">TRUNCATE</h6>
+              <pre class="command-card__sql">TRUNCATE TABLE Transaction;</pre>
+              <p class="command-card__desc">Removes all rows from a table without logging individual deletions.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">RENAME</h6>
+              <pre class="command-card__sql">RENAME TABLE Borrower TO Loan_Borrower;</pre>
+              <p class="command-card__desc">Changes the name of an existing table.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- DML Content -->
+        <div class="operations__content operations__content--2">
+          <div class="operations__icon operations__icon--2">
+            <span class="operations__emoji">✏️</span>
+          </div>
+          <h5 class="operations__header">
+            Data Manipulation Language — Manage your records
+          </h5>
+          <div class="operations__commands">
+            <div class="command-card">
+              <h6 class="command-card__title">INSERT</h6>
+              <pre class="command-card__sql">INSERT INTO Customer (customer_id, customer_name, dob, mobileno, account_id)
+VALUES (1, 'Aarav Sharma', '1995-03-15', '9876543210', 101);</pre>
+              <p class="command-card__desc">Adds new records to a table with specified values.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">UPDATE</h6>
+              <pre class="command-card__sql">UPDATE Account
+SET account_balance = account_balance + 5000.00
+WHERE account_id = 101;
+
+-- With CASCADE
+UPDATE Branch SET branch_id = 20
+WHERE branch_id = 10;
+-- Cascades to Account, Loan, Banker where branch_id = 10</pre>
+              <p class="command-card__desc">Modifies existing records. CASCADE propagates changes to child tables.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">DELETE</h6>
+              <pre class="command-card__sql">DELETE FROM Loan_Payment
+WHERE loan_id = 501;
+
+-- With CASCADE
+DELETE FROM Customer WHERE customer_id = 1;
+-- Cascades to Borrower, Transaction, Credit_Card</pre>
+              <p class="command-card__desc">Removes records from a table. CASCADE deletes dependent rows in child tables.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- DQL Content -->
+        <div class="operations__content operations__content--3">
+          <div class="operations__icon operations__icon--3">
+            <span class="operations__emoji">🔍</span>
+          </div>
+          <h5 class="operations__header">
+            Data Query Language — Retrieve and explore data
+          </h5>
+          <div class="operations__commands">
+            <div class="command-card">
+              <h6 class="command-card__title">SELECT with WHERE</h6>
+              <pre class="command-card__sql">SELECT customer_name, mobileno
+FROM Customer
+WHERE account_id = 101;</pre>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">Aggregate Functions</h6>
+              <pre class="command-card__sql">SELECT COUNT(*) AS total_accounts,
+       SUM(account_balance) AS total_balance,
+       AVG(account_balance) AS avg_balance,
+       MIN(account_balance) AS min_balance,
+       MAX(account_balance) AS max_balance
+FROM Account;</pre>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">GROUP BY with HAVING</h6>
+              <pre class="command-card__sql">SELECT branch_id, COUNT(*) AS num_accounts,
+       AVG(account_balance) AS avg_bal
+FROM Account
+GROUP BY branch_id
+HAVING AVG(account_balance) > 25000
+ORDER BY avg_bal DESC;</pre>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">DISTINCT, LIKE, IN</h6>
+              <pre class="command-card__sql">SELECT DISTINCT account_type FROM Account;
+
+SELECT * FROM Customer
+WHERE customer_name LIKE 'A%';
+
+SELECT * FROM Branch
+WHERE branch_id IN (1, 2, 3);</pre>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">ORDER BY, LIMIT, OFFSET</h6>
+              <pre class="command-card__sql">SELECT * FROM Transaction
+ORDER BY amount DESC
+LIMIT 10 OFFSET 5;</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- DCL Content -->
+        <div class="operations__content operations__content--4">
+          <div class="operations__icon operations__icon--1">
+            <span class="operations__emoji">🔐</span>
+          </div>
+          <h5 class="operations__header">
+            Data Control Language — Manage access and permissions
+          </h5>
+          <div class="operations__commands">
+            <div class="command-card">
+              <h6 class="command-card__title">GRANT</h6>
+              <pre class="command-card__sql">-- Grant SELECT on Customer table to a user
+GRANT SELECT ON banking_db.Customer TO 'banker_user'@'localhost';
+
+-- Grant INSERT, UPDATE on Account to a user
+GRANT INSERT, UPDATE ON banking_db.Account TO 'branch_mgr'@'localhost';
+
+-- Grant all privileges on Branch
+GRANT ALL PRIVILEGES ON banking_db.Branch TO 'admin_user'@'localhost';</pre>
+              <p class="command-card__desc">Gives specific privileges to users on database tables.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">REVOKE</h6>
+              <pre class="command-card__sql">-- Revoke INSERT on Account from a user
+REVOKE INSERT ON banking_db.Account FROM 'banker_user'@'localhost';
+
+-- Revoke all privileges on Loan from a user
+REVOKE ALL PRIVILEGES ON banking_db.Loan FROM 'temp_user'@'localhost';</pre>
+              <p class="command-card__desc">Removes previously granted privileges from users.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TCL Content -->
+        <div class="operations__content operations__content--5">
+          <div class="operations__icon operations__icon--2">
+            <span class="operations__emoji">🔄</span>
+          </div>
+          <h5 class="operations__header">
+            Transaction Control Language — Ensure data consistency
+          </h5>
+          <div class="operations__commands">
+            <div class="command-card">
+              <h6 class="command-card__title">COMMIT</h6>
+              <pre class="command-card__sql">START TRANSACTION;
+
+UPDATE Account SET account_balance = account_balance - 5000
+WHERE account_id = 101;
+
+UPDATE Account SET account_balance = account_balance + 5000
+WHERE account_id = 102;
+
+COMMIT;  -- Both updates are permanently saved</pre>
+              <p class="command-card__desc">Permanently saves all changes made during the current transaction.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">SAVEPOINT</h6>
+              <pre class="command-card__sql">START TRANSACTION;
+
+INSERT INTO Transaction (transaction_id, account_id, customer_id, amount)
+VALUES (301, 101, 1, 5000);
+
+SAVEPOINT after_insert;
+
+UPDATE Account SET account_balance = account_balance - 5000
+WHERE account_id = 101;
+
+-- If something goes wrong:
+ROLLBACK TO SAVEPOINT after_insert;
+-- Only the UPDATE is rolled back, INSERT remains</pre>
+              <p class="command-card__desc">Creates a checkpoint within a transaction to allow partial rollbacks.</p>
+            </div>
+            <div class="command-card">
+              <h6 class="command-card__title">ROLLBACK</h6>
+              <pre class="command-card__sql">START TRANSACTION;
+
+DELETE FROM Loan_Payment WHERE loan_id = 501;
+DELETE FROM Loan WHERE loan_id = 501;
+
+-- Oops! Wrong loan. Undo everything:
+ROLLBACK;  -- Both DELETEs are undone</pre>
+              <p class="command-card__desc">Undoes all changes made during the current transaction (or back to a savepoint).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 3: QUERY LAB ===== -->
+    <section class="section" id="section--3">
+      <div class="section__title section__title--testimonials">
+        <h2 class="section__description">Query Lab</h2>
+        <h3 class="section__header">
+          Interactive SQL queries on the banking database.
+        </h3>
+      </div>
+
+      <!-- Query category selector -->
+      <div class="query-categories">
+        <button class="btn query-cat-btn query-cat-btn--active" data-category="joins">Joins</button>
+        <button class="btn query-cat-btn" data-category="aggregates">Aggregates</button>
+        <button class="btn query-cat-btn" data-category="setops">Set Ops</button>
+        <button class="btn query-cat-btn" data-category="advanced">Advanced</button>
+      </div>
+
+      <div class="slider">
+        <!-- Slides are dynamically generated by JavaScript -->
+        <button class="slider__btn slider__btn--left">&larr;</button>
+        <button class="slider__btn slider__btn--right">&rarr;</button>
+        <div class="dots"></div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 4: SCHEMA & RELATIONSHIPS ===== -->
+    <section class="section section--sign-up" id="section--4">
+      <div class="section__title">
+        <h3 class="section__header" style="color: #fff;">
+          Schema Diagram &amp; Relationships
+        </h3>
+        <p style="color: #aaa; font-size: 1.6rem; margin-top: 1rem;">Click any table to inspect its attributes, keys, and constraints.</p>
+      </div>
+
+      <div class="schema-viewer">
+        <!-- Row 1: Branch (center) -->
+        <div class="schema-row">
+          <div class="schema-entity schema-entity--clickable" data-schema-table="branch">
+            <div class="schema-entity__header schema-entity__header--primary">Branch</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">branch_id</span>
+              <span>branch_name</span>
+              <span>branch_address</span>
+              <span>assets</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="schema-connectors">
+          <span class="schema-line">↓</span>
+          <span class="schema-line">↓</span>
+          <span class="schema-line">↓</span>
+        </div>
+
+        <!-- Row 2: Banker, Account, Loan -->
+        <div class="schema-row">
+          <div class="schema-entity schema-entity--clickable" data-schema-table="banker">
+            <div class="schema-entity__header schema-entity__header--secondary">Banker</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">banker_id</span>
+              <span>banker_name</span>
+              <span class="schema-fk">branch_id</span>
+            </div>
+          </div>
+          <div class="schema-entity schema-entity--clickable" data-schema-table="account">
+            <div class="schema-entity__header schema-entity__header--primary">Account</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">account_id</span>
+              <span>account_balance</span>
+              <span>account_type</span>
+              <span class="schema-fk">branch_id</span>
+            </div>
+          </div>
+          <div class="schema-entity schema-entity--clickable" data-schema-table="loan">
+            <div class="schema-entity__header schema-entity__header--tertiary">Loan</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">loan_id</span>
+              <span>issued_amount</span>
+              <span>remaining_amount</span>
+              <span class="schema-fk">branch_id</span>
+              <span class="schema-fk">account_id</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="schema-connectors">
+          <span class="schema-line-empty"></span>
+          <span class="schema-line">↓</span>
+          <span class="schema-line">↓</span>
+        </div>
+
+        <!-- Row 3: Customer, Transaction, Loan Payment -->
+        <div class="schema-row">
+          <div class="schema-entity schema-entity--clickable" data-schema-table="customer">
+            <div class="schema-entity__header schema-entity__header--secondary">Customer</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">customer_id</span>
+              <span>customer_name</span>
+              <span>dob</span>
+              <span>mobileno</span>
+              <span class="schema-fk">account_id</span>
+            </div>
+          </div>
+          <div class="schema-entity schema-entity--clickable" data-schema-table="transaction">
+            <div class="schema-entity__header schema-entity__header--tertiary">Transaction</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">transaction_id</span>
+              <span class="schema-fk">account_id</span>
+              <span class="schema-fk">customer_id</span>
+              <span>amount</span>
+            </div>
+          </div>
+          <div class="schema-entity schema-entity--clickable" data-schema-table="loan_payment">
+            <div class="schema-entity__header schema-entity__header--primary">Loan Payment</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">loan_payment_id</span>
+              <span class="schema-fk">loan_id</span>
+              <span>amount</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="schema-connectors">
+          <span class="schema-line">↑</span>
+          <span class="schema-line-empty"></span>
+          <span class="schema-line-empty"></span>
+        </div>
+
+        <!-- Row 4: Borrower, Credit Card -->
+        <div class="schema-row">
+          <div class="schema-entity schema-entity--clickable" data-schema-table="borrower">
+            <div class="schema-entity__header schema-entity__header--tertiary">Borrower</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">borrower_id</span>
+              <span class="schema-fk">loan_id</span>
+              <span class="schema-fk">customer_id</span>
+            </div>
+          </div>
+          <div class="schema-entity schema-entity--clickable" data-schema-table="credit_card">
+            <div class="schema-entity__header schema-entity__header--secondary">Credit Card</div>
+            <div class="schema-entity__attrs">
+              <span class="schema-pk">credit_card_id</span>
+              <span>expiry_date</span>
+              <span>card_limit</span>
+              <span class="schema-fk">account_id</span>
+              <span class="schema-fk">customer_id</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Constraint Legend -->
+      <div class="constraint-legend">
+        <span class="constraint-legend__item"><span class="schema-pk">PK</span> Primary Key</span>
+        <span class="constraint-legend__item"><span class="schema-fk">FK</span> Foreign Key</span>
+        <span class="constraint-legend__item">NOT NULL &bull; UNIQUE &bull; CHECK &bull; Referential Integrity</span>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 5: PROJECT DOCUMENTATION ===== -->
+    <section class="section" id="section--5">
+      <div class="section__title">
+        <h2 class="section__description">Project Documentation</h2>
+        <h3 class="section__header">
+          From ER model to 3NF — the complete DBMS journey.
+        </h3>
+      </div>
+
+      <div class="documentation">
+        <div class="doc-tabs">
+          <button class="btn doc-tab doc-tab--active" data-doc="statement">Project Statement</button>
+          <button class="btn doc-tab" data-doc="normalization">Normalization</button>
+          <button class="btn doc-tab" data-doc="constraints">Constraints</button>
+          <button class="btn doc-tab" data-doc="advanced-sql">Views &amp; Procedures</button>
+        </div>
+
+        <!-- Project Statement -->
+        <div class="doc-content doc-content--statement doc-content--active">
+          <h4>Banking Database Management System</h4>
+          <p>This project implements a comprehensive banking database system that manages branches, bankers, customer accounts, loans, transactions, and credit cards. The system is designed to handle real-world banking operations with proper referential integrity, normalization up to 3NF, and full SQL coverage including DDL, DML, DQL, DCL, and TCL operations.</p>
+          <h5>Use Cases</h5>
+          <ul>
+            <li>Manage branch-wise banking operations and banker assignments</li>
+            <li>Handle customer accounts with multiple account types</li>
+            <li>Process loans with payment tracking through Loan Payment records</li>
+            <li>Link borrowers to loans and customers via the Borrower bridge table</li>
+            <li>Record transactions between accounts and customers</li>
+            <li>Issue and manage credit cards tied to accounts and customers</li>
+          </ul>
+          <h5>Entities</h5>
+          <p>The database consists of <strong>9 entities</strong>: Branch, Banker, Account, Customer, Loan, Loan Payment, Borrower, Transaction, and Credit Card.</p>
+        </div>
+
+        <!-- Normalization -->
+        <div class="doc-content doc-content--normalization">
+          <h4>Normalization to 3NF</h4>
+
+          <h5>Functional Dependencies</h5>
+          <div class="fd-list">
+            <div class="fd-item">
+              <strong>Branch:</strong>
+              <code>branch_id → branch_name, branch_address, assets</code>
+            </div>
+            <div class="fd-item">
+              <strong>Banker:</strong>
+              <code>banker_id → banker_name, branch_id</code>
+            </div>
+            <div class="fd-item">
+              <strong>Account:</strong>
+              <code>account_id → account_balance, account_type, branch_id</code>
+            </div>
+            <div class="fd-item">
+              <strong>Customer:</strong>
+              <code>customer_id → customer_name, dob, mobileno, account_id</code>
+            </div>
+            <div class="fd-item">
+              <strong>Loan:</strong>
+              <code>loan_id → issued_amount, remaining_amount, branch_id, account_id</code>
+            </div>
+            <div class="fd-item">
+              <strong>Loan Payment:</strong>
+              <code>loan_payment_id → loan_id, amount</code>
+            </div>
+            <div class="fd-item">
+              <strong>Borrower:</strong>
+              <code>borrower_id → loan_id, customer_id</code>
+            </div>
+            <div class="fd-item">
+              <strong>Transaction:</strong>
+              <code>transaction_id → account_id, customer_id, amount</code>
+            </div>
+            <div class="fd-item">
+              <strong>Credit Card:</strong>
+              <code>credit_card_id → expiry_date, card_limit, account_id, customer_id</code>
+            </div>
+          </div>
+
+          <h5>1NF Analysis</h5>
+          <p>All tables have atomic values in each column, a defined primary key, and no repeating groups. ✅ All relations are in 1NF.</p>
+
+          <h5>2NF Analysis</h5>
+          <p>All non-key attributes are fully functionally dependent on the entire primary key (each table has a single-column PK). There are no partial dependencies. ✅ All relations are in 2NF.</p>
+
+          <h5>3NF Analysis</h5>
+          <p>No transitive dependencies exist — every non-key attribute depends directly on the primary key and not on any other non-key attribute. For example, in Customer, <code>mobileno</code> depends on <code>customer_id</code>, not on <code>customer_name</code>. ✅ All relations are in 3NF.</p>
+
+          <h5>Final Decomposed Relations</h5>
+          <p>The schema requires <strong>no further decomposition</strong>. All 9 tables are already in 3NF with their original attributes preserved.</p>
+        </div>
+
+        <!-- Constraints -->
+        <div class="doc-content doc-content--constraints">
+          <h4>Integrity Constraints</h4>
+          <div class="constraints-grid">
+            <div class="constraint-box">
+              <h6>PRIMARY KEY</h6>
+              <p>Every table has a unique primary key: <code>branch_id</code>, <code>banker_id</code>, <code>account_id</code>, <code>customer_id</code>, <code>loan_id</code>, <code>loan_payment_id</code>, <code>borrower_id</code>, <code>transaction_id</code>, <code>credit_card_id</code></p>
+            </div>
+            <div class="constraint-box">
+              <h6>FOREIGN KEY (Referential Integrity)</h6>
+              <ul>
+                <li>Banker.branch_id → Branch.branch_id</li>
+                <li>Account.branch_id → Branch.branch_id</li>
+                <li>Customer.account_id → Account.account_id</li>
+                <li>Loan.branch_id → Branch.branch_id</li>
+                <li>Loan.account_id → Account.account_id</li>
+                <li>Loan_Payment.loan_id → Loan.loan_id</li>
+                <li>Borrower.loan_id → Loan.loan_id</li>
+                <li>Borrower.customer_id → Customer.customer_id</li>
+                <li>Transaction.account_id → Account.account_id</li>
+                <li>Transaction.customer_id → Customer.customer_id</li>
+                <li>Credit_Card.account_id → Account.account_id</li>
+                <li>Credit_Card.customer_id → Customer.customer_id</li>
+              </ul>
+            </div>
+            <div class="constraint-box">
+              <h6>NOT NULL</h6>
+              <p>branch_name, branch_address, banker_name, customer_name, account_type, mobileno, issued_amount, remaining_amount, expiry_date, card_limit</p>
+            </div>
+            <div class="constraint-box">
+              <h6>UNIQUE</h6>
+              <p>mobileno (Customer), credit_card_id (Credit Card)</p>
+            </div>
+            <div class="constraint-box">
+              <h6>CHECK</h6>
+              <ul>
+                <li>assets &gt;= 0 (Branch)</li>
+                <li>account_balance &gt;= 0 (Account)</li>
+                <li>issued_amount &gt; 0 (Loan)</li>
+                <li>remaining_amount &gt;= 0 (Loan)</li>
+                <li>amount &gt; 0 (Transaction, Loan Payment)</li>
+                <li>card_limit &gt; 0 (Credit Card)</li>
+                <li>account_type IN ('Savings', 'Current', 'Fixed Deposit')</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Views & Procedures -->
+        <div class="doc-content doc-content--advanced-sql">
+          <h4>Views, Procedures, Functions &amp; Triggers</h4>
+
+          <h5>View</h5>
+          <pre class="command-card__sql">CREATE VIEW customer_account_view AS
+SELECT c.customer_id, c.customer_name, c.mobileno,
+       a.account_id, a.account_type, a.account_balance,
+       b.branch_name
+FROM Customer c
+JOIN Account a ON c.account_id = a.account_id
+JOIN Branch b ON a.branch_id = b.branch_id;
+
+-- Query the view
+SELECT * FROM customer_account_view
+WHERE account_type = 'Savings';</pre>
+
+          <h5>Materialized View (Simulated in MySQL)</h5>
+          <pre class="command-card__sql">-- MySQL does not support MATERIALIZED VIEW directly.
+-- Simulated using a summary table + scheduled refresh:
+
+CREATE TABLE branch_summary_mv AS
+SELECT b.branch_id, b.branch_name,
+       COUNT(a.account_id) AS total_accounts,
+       SUM(a.account_balance) AS total_deposits
+FROM Branch b
+LEFT JOIN Account a ON b.branch_id = a.branch_id
+GROUP BY b.branch_id, b.branch_name;
+
+-- To refresh: TRUNCATE and re-INSERT
+TRUNCATE TABLE branch_summary_mv;
+INSERT INTO branch_summary_mv
+SELECT b.branch_id, b.branch_name,
+       COUNT(a.account_id), SUM(a.account_balance)
+FROM Branch b
+LEFT JOIN Account a ON b.branch_id = a.branch_id
+GROUP BY b.branch_id, b.branch_name;</pre>
+
+          <h5>Stored Procedure</h5>
+          <pre class="command-card__sql">DELIMITER //
+CREATE PROCEDURE TransferFunds(
+  IN from_acc INT, IN to_acc INT, IN transfer_amt DECIMAL(15,2)
+)
+BEGIN
+  DECLARE from_bal DECIMAL(15,2);
+  SELECT account_balance INTO from_bal FROM Account WHERE account_id = from_acc;
+  IF from_bal >= transfer_amt THEN
+    UPDATE Account SET account_balance = account_balance - transfer_amt WHERE account_id = from_acc;
+    UPDATE Account SET account_balance = account_balance + transfer_amt WHERE account_id = to_acc;
+    INSERT INTO Transaction (account_id, customer_id, amount)
+    VALUES (from_acc, (SELECT customer_id FROM Customer WHERE account_id = from_acc LIMIT 1), transfer_amt);
+  END IF;
+END //
+DELIMITER ;</pre>
+
+          <h5>Function</h5>
+          <pre class="command-card__sql">DELIMITER //
+CREATE FUNCTION GetLoanBalance(p_loan_id INT)
+RETURNS DECIMAL(15,2) DETERMINISTIC
+BEGIN
+  DECLARE bal DECIMAL(15,2);
+  SELECT remaining_amount INTO bal FROM Loan WHERE loan_id = p_loan_id;
+  RETURN bal;
+END //
+DELIMITER ;</pre>
+
+          <h5>Trigger</h5>
+          <pre class="command-card__sql">DELIMITER //
+CREATE TRIGGER after_loan_payment
+AFTER INSERT ON Loan_Payment
+FOR EACH ROW
+BEGIN
+  UPDATE Loan
+  SET remaining_amount = remaining_amount - NEW.amount
+  WHERE loan_id = NEW.loan_id;
+END //
+DELIMITER ;</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer">
+      <ul class="footer__nav">
+        <li class="footer__item">
+          <a class="footer__link" href="#section--1">Tables</a>
+        </li>
+        <li class="footer__item">
+          <a class="footer__link" href="#section--2">Operations</a>
+        </li>
+        <li class="footer__item">
+          <a class="footer__link" href="#section--3">Query Lab</a>
+        </li>
+        <li class="footer__item">
+          <a class="footer__link" href="#section--4">Schema</a>
+        </li>
+        <li class="footer__item">
+          <a class="footer__link" href="#section--5">Documentation</a>
+        </li>
+        <li class="footer__item">
+          <a class="footer__link" href="#" onclick="event.preventDefault(); document.querySelector('.header').scrollIntoView({behavior:'smooth'});">Back to Top</a>
+        </li>
+      </ul>
+      <img src="img/icon.png" alt="Logo" class="footer__logo" />
+      <p class="footer__copyright">
+        &copy; Banking DBMS Project &mdash; College Database Management System.
+        Built with the
+        <a class="footer__link" href="#">Bankist</a> design system.
+      </p>
+    </footer>
+
+    <!-- ===== MODAL: RECORD MANAGEMENT ===== -->
+    <div class="modal hidden" id="record-modal">
+      <button class="btn--close-modal">&times;</button>
+      <h2 class="modal__header">
+        Add New Record <br />
+        to <span class="highlight" id="modal-table-name">Customer</span>
+      </h2>
+
+      <!-- Table selector -->
+      <div class="modal__table-select">
+        <label style="font-size: 1.5rem; font-weight: 500;">Select Table:</label>
+        <select id="modal-table-selector" class="modal__select">
+          <option value="branch">Branch</option>
+          <option value="banker">Banker</option>
+          <option value="account">Account</option>
+          <option value="customer" selected>Customer</option>
+          <option value="loan">Loan</option>
+          <option value="loan_payment">Loan Payment</option>
+          <option value="borrower">Borrower</option>
+          <option value="transaction">Transaction</option>
+          <option value="credit_card">Credit Card</option>
+        </select>
+      </div>
+
+      <form class="modal__form" id="record-form">
+        <!-- Dynamic fields generated by JavaScript -->
+      </form>
+    </div>
+
+    <!-- ===== MODAL: TABLE DETAIL ===== -->
+    <div class="modal hidden" id="table-detail-modal">
+      <button class="btn--close-modal">&times;</button>
+      <h2 class="modal__header" id="table-detail-title">Table Details</h2>
+      <div id="table-detail-content" class="table-detail-content">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+
+    <div class="overlay hidden"></div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
