@@ -1288,4 +1288,11 @@ a.btn--text:visited {
   color: #997300;
   border: 1px solid #e6b800;
 }
+
+.header__title--logged-in {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+}
+
 

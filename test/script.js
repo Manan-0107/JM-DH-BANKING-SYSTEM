@@ -260,10 +260,10 @@ if (langToggleBtn) {
 // ============================================================
 const sectionPersonal = document.getElementById('section--2');
 const navItemPersonal = document.getElementById('nav-item-personal');
-const userProfileCard = document.getElementById('user-profile-card');
-const welcomeUserText = document.getElementById('welcome-user-text');
-const btnLogout = document.getElementById('btn-logout');
-const btnViewPersonal = document.getElementById('btn-view-personal');
+const navItemLogout = document.getElementById('nav-item-logout');
+const navBtnLogout = document.getElementById('nav-btn-logout');
+const headerFormContainer = document.querySelector('.header__form-container');
+const headerTitle = document.querySelector('.header__title');
 const inputUsername = document.getElementById('input-username');
 const inputFullname = document.getElementById('input-fullname');
 
@@ -272,25 +272,21 @@ function updateAuthState(isLoggedIn, username = 'User') {
     sessionStorage.setItem('isLoggedIn', 'true');
     sessionStorage.setItem('username', username);
 
-    // Hide forms & tab selector
-    if (formLogin) formLogin.classList.add('hidden');
-    if (formSignup) formSignup.classList.add('hidden');
-    if (tabContainer) tabContainer.classList.add('d-none');
+    // Completely hide login and signup page/container after login
+    if (headerFormContainer) headerFormContainer.classList.add('d-none');
+    if (headerTitle) headerTitle.classList.add('header__title--logged-in');
 
-    // Show profile card
-    if (userProfileCard) userProfileCard.classList.remove('d-none');
-    if (welcomeUserText) welcomeUserText.textContent = `Welcome, ${username}!`;
-
-    // Show Personal section & Nav item
+    // Show Personal section, Personal nav link, and Logout button in navigation bar
     if (sectionPersonal) sectionPersonal.classList.remove('d-none');
     if (navItemPersonal) navItemPersonal.classList.remove('d-none');
+    if (navItemLogout) navItemLogout.classList.remove('d-none');
   } else {
     sessionStorage.removeItem('isLoggedIn');
     sessionStorage.removeItem('username');
 
-    // Hide profile card & show tab selector
-    if (userProfileCard) userProfileCard.classList.add('d-none');
-    if (tabContainer) tabContainer.classList.remove('d-none');
+    // Show login/signup form container when logged out
+    if (headerFormContainer) headerFormContainer.classList.remove('d-none');
+    if (headerTitle) headerTitle.classList.remove('header__title--logged-in');
 
     // Reset forms visibility according to active tab
     const activeTab = document.querySelector('.form__tab--active');
@@ -303,9 +299,10 @@ function updateAuthState(isLoggedIn, username = 'User') {
       if (formSignup) formSignup.classList.remove('hidden');
     }
 
-    // Hide Personal section & Nav item
+    // Hide Personal section & Logout nav item
     if (sectionPersonal) sectionPersonal.classList.add('d-none');
     if (navItemPersonal) navItemPersonal.classList.add('d-none');
+    if (navItemLogout) navItemLogout.classList.add('d-none');
   }
 }
 
@@ -343,23 +340,24 @@ if (formSignup) {
   });
 }
 
-if (btnLogout) {
-  btnLogout.addEventListener('click', function () {
+if (navBtnLogout) {
+  navBtnLogout.addEventListener('click', function () {
     updateAuthState(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  });
-}
-
-if (btnViewPersonal) {
-  btnViewPersonal.addEventListener('click', function () {
-    window.location.href = 'personal.html';
+    window.location.href = 'index.html';
   });
 }
 
 // Initial Session Check
-document.addEventListener('DOMContentLoaded', function () {
+const initAuth = function () {
   const savedLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
   const savedUser = sessionStorage.getItem('username') || 'User';
   updateAuthState(savedLoggedIn, savedUser);
-});
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAuth);
+} else {
+  initAuth();
+}
+
 

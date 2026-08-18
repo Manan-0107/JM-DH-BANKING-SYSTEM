@@ -413,12 +413,24 @@ document.addEventListener('DOMContentLoaded', () => {
   setupModal();
 
   const navItemPersonal = document.getElementById('nav-item-personal');
-  if (navItemPersonal) {
-    if (sessionStorage.getItem('isLoggedIn') === 'true') {
-      navItemPersonal.classList.remove('d-none');
-    } else {
-      navItemPersonal.classList.add('d-none');
-    }
+  const navItemLogout = document.getElementById('nav-item-logout');
+  const navBtnLogout = document.getElementById('nav-btn-logout');
+
+  if (sessionStorage.getItem('isLoggedIn') === 'true') {
+    if (navItemPersonal) navItemPersonal.classList.remove('d-none');
+    if (navItemLogout) navItemLogout.classList.remove('d-none');
+  } else {
+    if (navItemPersonal) navItemPersonal.classList.add('d-none');
+    if (navItemLogout) navItemLogout.classList.add('d-none');
+  }
+
+  if (navBtnLogout) {
+    navBtnLogout.addEventListener('click', () => {
+      sessionStorage.removeItem('isLoggedIn');
+      sessionStorage.removeItem('username');
+      window.location.href = 'index.html';
+    });
   }
 });
+
 
