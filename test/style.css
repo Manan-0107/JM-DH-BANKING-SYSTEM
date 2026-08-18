@@ -1263,4 +1263,29 @@ a.btn--text:visited {
 .auth__btn--logout:hover {
   background-color: #c0392b !important;
   color: #fff !important;
-}
+}
+
+/* PAYMENT MODE BADGES (RTGS / NEFT) */
+.mode-badge {
+  display: inline-block;
+  padding: 0.35rem 1.2rem;
+  border-radius: 2rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  box-shadow: 0 0.2rem 0.5rem rgba(0, 0, 0, 0.05);
+}
+
+.mode-badge--rtgs {
+  background-color: rgba(94, 197, 118, 0.2);
+  color: #23683f;
+  border: 1px solid #39b385;
+}
+
+.mode-badge--neft {
+  background-color: rgba(255, 203, 3, 0.25);
+  color: #997300;
+  border: 1px solid #e6b800;
+}
+

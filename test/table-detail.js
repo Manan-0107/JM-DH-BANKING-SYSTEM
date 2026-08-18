@@ -73,13 +73,13 @@ const TABLES_DATA = {
         desc: 'Sub-millisecond ledger reconciliation across all active distributed database nodes.'
       }
     ],
-    headers: ['Account No', 'Customer ID', 'Account Type', 'Currency', 'Balance', 'Status'],
+    headers: ['Account No', 'Customer ID', 'Account Type', 'Payment Mode', 'Currency', 'Balance', 'Status'],
     rows: [
-      ['ACC-883921', 'CUST-104', 'High-Yield Savings', 'USD', '$142,500.00', 'Active'],
-      ['ACC-772910', 'CUST-101', 'Premium Checking', 'USD', '$28,430.50', 'Active'],
-      ['ACC-664019', 'CUST-103', 'International Treasury', 'EUR', '€95,120.00', 'Active'],
-      ['ACC-553102', 'CUST-102', 'Student Advantage', 'USD', '$3,850.75', 'Active'],
-      ['ACC-442991', 'CUST-105', 'Business Checking', 'GBP', '£210,000.00', 'Active']
+      ['ACC-883921', 'CUST-104', 'High-Yield Savings', 'RTGS', 'USD', '$142,500.00', 'Active'],
+      ['ACC-772910', 'CUST-101', 'Premium Checking', 'NEFT', 'USD', '$28,430.50', 'Active'],
+      ['ACC-664019', 'CUST-103', 'International Treasury', 'RTGS', 'EUR', '€95,120.00', 'Active'],
+      ['ACC-553102', 'CUST-102', 'Student Advantage', 'NEFT', 'USD', '$3,850.75', 'Active'],
+      ['ACC-442991', 'CUST-105', 'Business Checking', 'RTGS', 'GBP', '£210,000.00', 'Active']
     ]
   },
 
@@ -342,6 +342,12 @@ function renderTableRows(rows) {
             if (cell.toLowerCase().includes('pending')) badgeClass = 'status-badge--pending';
             if (cell.toLowerCase().includes('closed')) badgeClass = 'status-badge--closed';
             return `<td><span class="status-badge ${badgeClass}">${cell}</span></td>`;
+          }
+          if (cell === 'RTGS') {
+            return `<td><span class="mode-badge mode-badge--rtgs">RTGS</span></td>`;
+          }
+          if (cell === 'NEFT') {
+            return `<td><span class="mode-badge mode-badge--neft">NEFT</span></td>`;
           }
           return `<td>${cell}</td>`;
         })
