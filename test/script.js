@@ -314,10 +314,11 @@ if (formLogin) {
   formLogin.addEventListener('submit', function (e) {
     e.preventDefault();
     const uname = inputUsername && inputUsername.value.trim() ? inputUsername.value.trim() : 'User';
-    updateAuthState(true, uname);
-    if (sectionPersonal) {
-      sectionPersonal.scrollIntoView({ behavior: 'smooth' });
-    }
+    sessionStorage.setItem('isLoggedIn', 'true');
+    sessionStorage.setItem('username', uname);
+    
+    // Redirect to personal details web page in the SAME TAB
+    window.location.href = 'personal.html';
   });
 }
 
@@ -325,9 +326,19 @@ if (formSignup) {
   formSignup.addEventListener('submit', function (e) {
     e.preventDefault();
     const uname = inputFullname && inputFullname.value.trim() ? inputFullname.value.trim() : 'User';
-    updateAuthState(true, uname);
-    if (sectionPersonal) {
-      sectionPersonal.scrollIntoView({ behavior: 'smooth' });
+    
+    alert('🎉 Account created successfully!\n\nPlease log in with your credentials to view your personal details page.');
+    
+    // Switch to Log In tab and pre-fill User ID
+    document.querySelectorAll('.form__tab').forEach(t => t.classList.remove('form__tab--active'));
+    const tabLoginBtn = document.getElementById('tab-login-btn');
+    if (tabLoginBtn) tabLoginBtn.classList.add('form__tab--active');
+    
+    if (formLogin) formLogin.classList.remove('hidden');
+    if (formSignup) formSignup.classList.add('hidden');
+    if (inputUsername) {
+      inputUsername.value = uname;
+      inputUsername.focus();
     }
   });
 }
@@ -341,9 +352,7 @@ if (btnLogout) {
 
 if (btnViewPersonal) {
   btnViewPersonal.addEventListener('click', function () {
-    if (sectionPersonal) {
-      sectionPersonal.scrollIntoView({ behavior: 'smooth' });
-    }
+    window.location.href = 'personal.html';
   });
 }
 
@@ -352,4 +361,5 @@ document.addEventListener('DOMContentLoaded', function () {
   const savedLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
   const savedUser = sessionStorage.getItem('username') || 'User';
   updateAuthState(savedLoggedIn, savedUser);
-});
+});
+
