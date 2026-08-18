@@ -21,15 +21,13 @@
         <li class="nav__item">
           <a class="nav__link" href="#section--1" data-en="Features" data-hi="विशेषताएँ">Features</a>
         </li>
-        <li class="nav__item">
-          <a class="nav__link" href="#section--2" data-en="Tables" data-hi="तालिकाएँ">Tables</a>
+        <li class="nav__item d-none" id="nav-item-personal">
+          <a class="nav__link" href="#section--2" data-en="Personal" data-hi="व्यक्तिगत">Personal</a>
         </li>
         <li class="nav__item">
           <a class="nav__link" href="#section--3" data-en="Operations" data-hi="संचालन">Operations</a>
         </li>
-        <li class="nav__item">
-          <a class="nav__link" href="#section--4" data-en="Testimonials" data-hi="प्रशंसापत्र">Testimonials</a>
-        </li>
+
         <li class="nav__item">
           <button class="btn--lang-toggle" id="lang-toggle" title="Switch Language / भाषा बदलें">🌐 EN / हिंदी</button>
         </li>
@@ -56,38 +54,48 @@
         </div>
 
         <!-- LOGIN FORM -->
-        <form class="auth__form auth__form--login" id="form-login"
-          onsubmit="event.preventDefault(); alert('Login successful!');">
+        <form class="auth__form auth__form--login" id="form-login">
           <h3 class="auth__header" id="login-header-title">Welcome Back</h3>
           <div class="input-group">
             <label id="lbl-user">User ID / Email</label>
-            <input type="text" placeholder="e.g. user123" required />
+            <input type="text" id="input-username" placeholder="e.g. user123" required />
           </div>
           <div class="input-group">
             <label id="lbl-pass">PIN / Password</label>
-            <input type="password" placeholder="••••" required />
+            <input type="password" id="input-pin" placeholder="••••" required />
           </div>
-          <button class="btn auth__btn" id="btn-login-submit">LOG IN &rarr;</button>
+          <button class="btn auth__btn" id="btn-login-submit" type="submit">LOG IN &rarr;</button>
         </form>
 
         <!-- SIGNUP FORM -->
-        <form class="auth__form auth__form--signup hidden" id="form-signup"
-          onsubmit="event.preventDefault(); alert('Account created successfully!');">
+        <form class="auth__form auth__form--signup hidden" id="form-signup">
           <h3 class="auth__header" id="signup-header-title">Get Started Today</h3>
           <div class="input-group">
             <label id="lbl-fullname">Full Name</label>
-            <input type="text" placeholder="Het Nasit" required />
+            <input type="text" id="input-fullname" placeholder="Het Nasit" required />
           </div>
           <div class="input-group">
             <label id="lbl-email">Email Address</label>
-            <input type="email" placeholder="you@example.com" required />
+            <input type="email" id="input-signup-email" placeholder="you@example.com" required />
           </div>
           <div class="input-group">
             <label id="lbl-createpass">Create PIN</label>
-            <input type="password" placeholder="••••" required />
+            <input type="password" id="input-signup-pin" placeholder="••••" required />
           </div>
-          <button class="btn auth__btn" id="btn-signup-submit">CREATE ACCOUNT &rarr;</button>
+          <button class="btn auth__btn" id="btn-signup-submit" type="submit">CREATE ACCOUNT &rarr;</button>
         </form>
+
+        <!-- LOGGED IN USER CARD -->
+        <div class="auth__form auth__logged-in d-none" id="user-profile-card">
+          <h3 class="auth__header" id="welcome-user-text">Welcome Back</h3>
+          <div class="logged-in__badge">
+            <span class="logged-in__dot"></span>
+            <span id="logged-in-status-text">Logged In</span>
+          </div>
+          <p class="logged-in__info" id="logged-in-info-text">You now have full access to your personal banking records.</p>
+          <button class="btn auth__btn" id="btn-view-personal" style="margin-top: 0.5rem;" type="button">Go to Personal Section &darr;</button>
+          <button class="btn auth__btn auth__btn--logout" id="btn-logout" type="button">LOG OUT &rarr;</button>
+        </div>
       </div>
     </div>
   </header>
@@ -149,8 +157,8 @@
   </section>
 
 
-  <!-- ===== SECTION 1: DATABASE TABLES ===== -->
-  <section class="section" id="section--2">
+  <!-- ===== SECTION 2: PERSONAL DATABASE TABLES ===== -->
+  <section class="section d-none" id="section--2">
     <div class="section__title">
       <h2 class="section__description">Personal</h2>
     </div>
@@ -260,84 +268,7 @@
     </div>
   </section>
 
-  <section class="section" id="section--4">
-    <div class="section__title section__title--testimonials">
-      <h2 class="section__description">Not sure yet?</h2>
-      <h3 class="section__header">
-        Millions of Bankists are already making their lifes simpler.
-      </h3>
-    </div>
 
-    <div class="slider">
-      <div class="slide slide--1">
-        <div class="testimonial">
-          <h5 class="testimonial__header">Best financial decision ever!</h5>
-          <blockquote class="testimonial__text">
-            Lorem ipsum dolor sit, amet consectetur adipisicing elit.
-            Accusantium quas quisquam non? Quas voluptate nulla minima
-            deleniti optio ullam nesciunt, numquam corporis et asperiores
-            laboriosam sunt, praesentium suscipit blanditiis. Necessitatibus
-            id alias reiciendis, perferendis facere pariatur dolore veniam
-            autem esse non voluptatem saepe provident nihil molestiae.
-          </blockquote>
-          <address class="testimonial__author">
-            <img src="img/user-1.jpg" alt="" class="testimonial__photo" />
-            <h6 class="testimonial__name">Aarav Lynn</h6>
-            <p class="testimonial__location">San Francisco, USA</p>
-          </address>
-        </div>
-      </div>
-
-      <div class="slide slide--2">
-        <div class="testimonial">
-          <h5 class="testimonial__header">
-            The last step to becoming a complete minimalist
-          </h5>
-          <blockquote class="testimonial__text">
-            Quisquam itaque deserunt ullam, quia ea repellendus provident,
-            ducimus neque ipsam modi voluptatibus doloremque, corrupti
-            laborum. Incidunt numquam perferendis veritatis neque repellendus.
-            Lorem, ipsum dolor sit amet consectetur adipisicing elit. Illo
-            deserunt exercitationem deleniti.
-          </blockquote>
-          <address class="testimonial__author">
-            <img src="img/user-2.jpg" alt="" class="testimonial__photo" />
-            <h6 class="testimonial__name">Miyah Miles</h6>
-            <p class="testimonial__location">London, UK</p>
-          </address>
-        </div>
-      </div>
-
-      <div class="slide slide--3">
-        <div class="testimonial">
-          <h5 class="testimonial__header">
-            Finally free from old-school banks
-          </h5>
-          <blockquote class="testimonial__text">
-            Debitis, nihil sit minus suscipit magni aperiam vel tenetur
-            incidunt commodi architecto numquam omnis nulla autem,
-            necessitatibus blanditiis modi similique quidem. Odio aliquam
-            culpa dicta beatae quod maiores ipsa minus consequatur error sunt,
-            deleniti saepe aliquid quos inventore sequi. Necessitatibus id
-            alias reiciendis, perferendis facere.
-          </blockquote>
-          <address class="testimonial__author">
-            <img src="img/user-3.jpg" alt="" class="testimonial__photo" />
-            <h6 class="testimonial__name">Francisco Gomes</h6>
-            <p class="testimonial__location">Lisbon, Portugal</p>
-          </address>
-        </div>
-      </div>
-
-      <!-- <div class="slide"><img src="img/img-1.jpg" alt="Photo 1" /></div>
-        <div class="slide"><img src="img/img-2.jpg" alt="Photo 2" /></div>
-        <div class="slide"><img src="img/img-3.jpg" alt="Photo 3" /></div>
-        <div class="slide"><img src="img/img-4.jpg" alt="Photo 4" /></div> -->
-      <button class="slider__btn slider__btn--left">&larr;</button>
-      <button class="slider__btn slider__btn--right">&rarr;</button>
-      <div class="dots"></div>
-    </div>
-  </section>
 
   <section class="section section--sign-up">
     <div class="section__title">

@@ -1217,3 +1217,50 @@ a.btn--text:visited {
   color: var(--color-primary);
   text-decoration: none;
 }
+
+/* ============================================================
+   LOGGED IN AUTH & SECTION VISIBILITY STYLES
+   ============================================================ */
+.d-none {
+  display: none !important;
+}
+
+.logged-in__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  background-color: var(--color-primary-opacity);
+  color: #2b7a4b;
+  padding: 0.6rem 1.6rem;
+  border-radius: 2rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0 auto 0.5rem auto;
+}
+
+.logged-in__dot {
+  width: 1rem;
+  height: 1rem;
+  background-color: #2b7a4b;
+  border-radius: 50%;
+  box-shadow: 0 0 0.8rem #2b7a4b;
+}
+
+.logged-in__info {
+  font-size: 1.4rem;
+  color: #555;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.auth__btn--logout {
+  background-color: #e74c3c !important;
+  color: #fff !important;
+  box-shadow: 0 0.4rem 1.2rem rgba(231, 76, 60, 0.3) !important;
+  margin-top: 0.8rem;
+}
+
+.auth__btn--logout:hover {
+  background-color: #c0392b !important;
+  color: #fff !important;
+}

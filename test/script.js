@@ -254,3 +254,102 @@ if (langToggleBtn) {
     });
   });
 }
+
+// ============================================================
+// LOGIN / AUTHENTICATION & PERSONAL SECTION VISIBILITY
+// ============================================================
+const sectionPersonal = document.getElementById('section--2');
+const navItemPersonal = document.getElementById('nav-item-personal');
+const userProfileCard = document.getElementById('user-profile-card');
+const welcomeUserText = document.getElementById('welcome-user-text');
+const btnLogout = document.getElementById('btn-logout');
+const btnViewPersonal = document.getElementById('btn-view-personal');
+const inputUsername = document.getElementById('input-username');
+const inputFullname = document.getElementById('input-fullname');
+
+function updateAuthState(isLoggedIn, username = 'User') {
+  if (isLoggedIn) {
+    sessionStorage.setItem('isLoggedIn', 'true');
+    sessionStorage.setItem('username', username);
+
+    // Hide forms & tab selector
+    if (formLogin) formLogin.classList.add('hidden');
+    if (formSignup) formSignup.classList.add('hidden');
+    if (tabContainer) tabContainer.classList.add('d-none');
+
+    // Show profile card
+    if (userProfileCard) userProfileCard.classList.remove('d-none');
+    if (welcomeUserText) welcomeUserText.textContent = `Welcome, ${username}!`;
+
+    // Show Personal section & Nav item
+    if (sectionPersonal) sectionPersonal.classList.remove('d-none');
+    if (navItemPersonal) navItemPersonal.classList.remove('d-none');
+  } else {
+    sessionStorage.removeItem('isLoggedIn');
+    sessionStorage.removeItem('username');
+
+    // Hide profile card & show tab selector
+    if (userProfileCard) userProfileCard.classList.add('d-none');
+    if (tabContainer) tabContainer.classList.remove('d-none');
+
+    // Reset forms visibility according to active tab
+    const activeTab = document.querySelector('.form__tab--active');
+    const authTab = activeTab ? activeTab.dataset.authTab : 'login';
+    if (authTab === 'login') {
+      if (formLogin) formLogin.classList.remove('hidden');
+      if (formSignup) formSignup.classList.add('hidden');
+    } else {
+      if (formLogin) formLogin.classList.add('hidden');
+      if (formSignup) formSignup.classList.remove('hidden');
+    }
+
+    // Hide Personal section & Nav item
+    if (sectionPersonal) sectionPersonal.classList.add('d-none');
+    if (navItemPersonal) navItemPersonal.classList.add('d-none');
+  }
+}
+
+// Attach Form Submit Handlers
+if (formLogin) {
+  formLogin.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const uname = inputUsername && inputUsername.value.trim() ? inputUsername.value.trim() : 'User';
+    updateAuthState(true, uname);
+    if (sectionPersonal) {
+      sectionPersonal.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+}
+
+if (formSignup) {
+  formSignup.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const uname = inputFullname && inputFullname.value.trim() ? inputFullname.value.trim() : 'User';
+    updateAuthState(true, uname);
+    if (sectionPersonal) {
+      sectionPersonal.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+}
+
+if (btnLogout) {
+  btnLogout.addEventListener('click', function () {
+    updateAuthState(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+if (btnViewPersonal) {
+  btnViewPersonal.addEventListener('click', function () {
+    if (sectionPersonal) {
+      sectionPersonal.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+}
+
+// Initial Session Check
+document.addEventListener('DOMContentLoaded', function () {
+  const savedLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
+  const savedUser = sessionStorage.getItem('username') || 'User';
+  updateAuthState(savedLoggedIn, savedUser);
+});

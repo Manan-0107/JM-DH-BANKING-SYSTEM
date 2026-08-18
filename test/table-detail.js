@@ -405,4 +405,14 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTableDetail();
   setupSearch();
   setupModal();
+
+  const navItemPersonal = document.getElementById('nav-item-personal');
+  if (navItemPersonal) {
+    if (sessionStorage.getItem('isLoggedIn') === 'true') {
+      navItemPersonal.classList.remove('d-none');
+    } else {
+      navItemPersonal.classList.add('d-none');
+    }
+  }
 });
+
