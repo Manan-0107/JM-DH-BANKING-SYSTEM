@@ -212,33 +212,37 @@ function setCookie(name, value, days) {
     date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
     expires = "; expires=" + date.toUTCString();
   }
-  const host = window.location.hostname;
   document.cookie = name + "=" + (value || "") + expires + "; path=/";
-  if (host && host !== 'localhost' && host !== '127.0.0.1') {
-    document.cookie = name + "=" + (value || "") + expires + "; domain=." + host + "; path=/";
-  }
 }
 
 function clearTransCookies() {
-  const host = window.location.hostname;
   document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-  document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=" + host + "; path=/;";
-  if (host && host !== 'localhost' && host !== '127.0.0.1') {
-    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=." + host + "; path=/;";
-  }
+  document.cookie = "googtrans=/en/en; path=/;";
 }
 
 function applyLanguageToCombo(targetLang) {
+  const targetVal = targetLang === 'hi' ? 'hi' : '';
   const combo = document.querySelector('.goog-te-combo');
   if (combo) {
-    const val = targetLang === 'hi' ? 'hi' : '';
-    if (combo.value !== val) {
-      combo.value = val;
+    if (combo.value !== targetVal) {
+      combo.value = targetVal;
       combo.dispatchEvent(new Event('change'));
     }
     return true;
   }
   return false;
+}
+
+function ensureAndApplyLanguage(targetLang) {
+  if (applyLanguageToCombo(targetLang)) return;
+
+  let attempts = 0;
+  const interval = setInterval(() => {
+    attempts++;
+    if (applyLanguageToCombo(targetLang) || attempts > 25) {
+      clearInterval(interval);
+    }
+  }, 60);
 }
 
 function switchLanguage(targetLang) {
@@ -247,18 +251,11 @@ function switchLanguage(targetLang) {
   if (targetLang === 'hi') {
     localStorage.setItem('userLanguage', 'hi');
     setCookie('googtrans', '/en/hi', 30);
-    
-    if (!applyLanguageToCombo('hi')) {
-      window.location.reload();
-    }
+    ensureAndApplyLanguage('hi');
   } else {
     localStorage.setItem('userLanguage', 'en');
     clearTransCookies();
-    setCookie('googtrans', '/en/en', 30);
-
-    if (!applyLanguageToCombo('en')) {
-      window.location.reload();
-    }
+    ensureAndApplyLanguage('en');
   }
 }
 
@@ -267,13 +264,10 @@ function initLanguageState() {
   updateLangBtnText(currentLang);
 
   if (currentLang === 'hi') {
-    if (!document.cookie.includes('googtrans=/en/hi')) {
-      setCookie('googtrans', '/en/hi', 30);
-    }
+    setCookie('googtrans', '/en/hi', 30);
+    ensureAndApplyLanguage('hi');
   } else {
-    if (document.cookie.includes('googtrans=/en/hi')) {
-      clearTransCookies();
-    }
+    clearTransCookies();
   }
 
   const langBtn = document.getElementById('lang-toggle-btn');

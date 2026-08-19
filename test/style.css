@@ -1078,10 +1078,16 @@ h4 {
   box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.1);
 }
 
-/* Hide Google Translate original dropdown & widget elements */
-#google_translate_element,
-.skiptranslate {
-  display: none !important;
+/* Offscreen Google Translate widget container (keeps JS engine alive while hiding element) */
+#google_translate_element {
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Completely suppress Google Translate top toolbar banner, undo frame, and tooltips */
