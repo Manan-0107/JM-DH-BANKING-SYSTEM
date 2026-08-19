@@ -357,11 +357,49 @@ function updateAuthState(isLoggedIn, username = 'User') {
   }
 }
 
+const inputPin = document.getElementById('input-pin');
+
 // Attach Form Submit Handlers
 if (formLogin) {
   formLogin.addEventListener('submit', function (e) {
     e.preventDefault();
-    const uname = inputUsername && inputUsername.value.trim() ? inputUsername.value.trim() : 'User';
+    const uname = inputUsername ? inputUsername.value.trim() : '';
+    const pin = inputPin ? inputPin.value.trim() : '';
+
+    // Validate inputs (e.g. valid Username and 4+ digit PIN)
+    const isValid = uname.length >= 2 && pin.length >= 4;
+
+    if (!isValid) {
+      // Trigger Shake Animation
+      if (headerFormContainer) {
+        headerFormContainer.classList.remove('shake');
+        void headerFormContainer.offsetWidth; // Force CSS reflow
+        headerFormContainer.classList.add('shake');
+
+        setTimeout(() => {
+          headerFormContainer.classList.remove('shake');
+        }, 550);
+      }
+
+      // Highlight erroneous fields
+      if (inputUsername && uname.length < 2) {
+        inputUsername.classList.add('input-error');
+      } else if (inputUsername) {
+        inputUsername.classList.remove('input-error');
+      }
+
+      if (inputPin && pin.length < 4) {
+        inputPin.classList.add('input-error');
+      } else if (inputPin) {
+        inputPin.classList.remove('input-error');
+      }
+      return;
+    }
+
+    // Clear error state on successful validation
+    if (inputUsername) inputUsername.classList.remove('input-error');
+    if (inputPin) inputPin.classList.remove('input-error');
+
     sessionStorage.setItem('isLoggedIn', 'true');
     sessionStorage.setItem('username', uname);
     
@@ -369,6 +407,15 @@ if (formLogin) {
     window.location.href = 'personal.html';
   });
 }
+
+// Clear error highlight when typing
+[inputUsername, inputPin].forEach(input => {
+  if (input) {
+    input.addEventListener('input', () => {
+      input.classList.remove('input-error');
+    });
+  }
+});
 
 if (formSignup) {
   formSignup.addEventListener('submit', function (e) {
