@@ -17,6 +17,17 @@ const closeModal = function () {
 };
 
 btnsOpenModal.forEach(b => b.addEventListener('click', openModal));
+
+// Nav Account Dropdown Click Toggle
+document.querySelectorAll('.nav__item--dropdown').forEach(item => {
+  const toggleBtn = item.querySelector('#nav-account-btn');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', e => {
+      e.preventDefault();
+      item.classList.toggle('active');
+    });
+  }
+});
 /*for (let i = 0; i < btnsOpenModal.length; i++)
   btnsOpenModal[i].addEventListener('click', openModal);*/
 

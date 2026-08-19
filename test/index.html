@@ -20,8 +20,15 @@
       <img src="img/logo.png" alt="Bankist logo" class="nav__logo" id="logo" designer="Jonas" />
 
       <ul class="nav__links">
-        <li class="nav__item">
-          <a class="nav__link" href="#section--1" data-en="Features" data-hi="विशेषताएँ">Features</a>
+        <li class="nav__item nav__item--dropdown">
+          <a class="nav__link" href="#" id="nav-account-btn">
+            Account <span class="dropdown-arrow">▾</span>
+          </a>
+          <ul class="dropdown__menu">
+            <li><a class="dropdown__link" href="table-detail.html?table=account">💳 Savings</a></li>
+            <li><a class="dropdown__link" href="table-detail.html?table=account">🏢 Business</a></li>
+            <li><a class="dropdown__link btn--show-modal" href="#">✨ Account Creation</a></li>
+          </ul>
         </li>
         <li class="nav__item d-none" id="nav-item-personal">
           <a class="nav__link" href="personal.html" data-en="Personal" data-hi="व्यक्तिगत">Personal</a>
