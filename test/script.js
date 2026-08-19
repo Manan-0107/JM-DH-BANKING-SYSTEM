@@ -324,7 +324,11 @@ function updateAuthState(isLoggedIn, username = 'User') {
     sessionStorage.setItem('username', username);
 
     // Completely hide login and signup page/container after login
-    if (headerFormContainer) headerFormContainer.classList.add('d-none');
+    if (headerFormContainer) {
+      headerFormContainer.classList.add('d-none');
+      headerFormContainer.style.setProperty('display', 'none', 'important');
+      headerFormContainer.hidden = true;
+    }
     if (headerTitle) headerTitle.classList.add('header__title--logged-in');
 
     // Show Personal section, Personal nav link, and Logout button in navigation bar
@@ -336,7 +340,11 @@ function updateAuthState(isLoggedIn, username = 'User') {
     sessionStorage.removeItem('username');
 
     // Show login/signup form container when logged out
-    if (headerFormContainer) headerFormContainer.classList.remove('d-none');
+    if (headerFormContainer) {
+      headerFormContainer.classList.remove('d-none');
+      headerFormContainer.style.removeProperty('display');
+      headerFormContainer.hidden = false;
+    }
     if (headerTitle) headerTitle.classList.remove('header__title--logged-in');
 
     // Reset forms visibility according to active tab
@@ -355,6 +363,19 @@ function updateAuthState(isLoggedIn, username = 'User') {
     if (navItemPersonal) navItemPersonal.classList.add('d-none');
     if (navItemLogout) navItemLogout.classList.add('d-none');
   }
+}
+
+// Observe any unintended style/class mutations on headerFormContainer (e.g. from Google Translate)
+if (headerFormContainer) {
+  const observer = new MutationObserver(() => {
+    if (sessionStorage.getItem('isLoggedIn') === 'true') {
+      if (headerFormContainer.style.display !== 'none') {
+        headerFormContainer.style.setProperty('display', 'none', 'important');
+        headerFormContainer.hidden = true;
+      }
+    }
+  });
+  observer.observe(headerFormContainer, { attributes: true, attributeFilter: ['style', 'class'] });
 }
 
 const inputPin = document.getElementById('input-pin');
