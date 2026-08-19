@@ -34,11 +34,11 @@ const TABLES_DATA = {
     ],
     headers: ['Branch ID', 'Branch Name', 'City', 'Vault Reserve', 'Manager', 'Status'],
     rows: [
-      ['BR-101', 'Downtown Central', 'New York', '$45,250,000', 'Sarah Connor', 'Active'],
-      ['BR-102', 'Bay Ridge Hub', 'San Francisco', '$32,100,000', 'Alex Rivera', 'Active'],
-      ['BR-103', 'Financial District', 'London', '$58,900,000', 'Marcus Vance', 'Active'],
-      ['BR-104', 'Metro Plaza', 'Chicago', '$19,450,000', 'Elena Rostova', 'Active'],
-      ['BR-105', 'Tech Quarter', 'Austin', '$28,700,000', 'David Kim', 'Pending']
+      ['BR-101', 'Downtown Central', 'New York', '₹45,250,000', 'Sarah Connor', 'Active'],
+      ['BR-102', 'Bay Ridge Hub', 'San Francisco', '₹32,100,000', 'Alex Rivera', 'Active'],
+      ['BR-103', 'Financial District', 'London', '₹58,900,000', 'Marcus Vance', 'Active'],
+      ['BR-104', 'Metro Plaza', 'Chicago', '₹19,450,000', 'Elena Rostova', 'Active'],
+      ['BR-105', 'Tech Quarter', 'Austin', '₹28,700,000', 'David Kim', 'Pending']
     ]
   },
 
@@ -49,7 +49,7 @@ const TABLES_DATA = {
     pills: [
       { text: 'Ledger: Real-Time Sync', type: 'primary' },
       { text: 'Yield: Up to 4.8% APY', type: 'secondary' },
-      { text: 'Currencies: USD, EUR, GBP', type: 'tertiary' }
+      { text: 'Currencies: INR, USD, EUR, GBP', type: 'tertiary' }
     ],
     features: [
       {
@@ -65,7 +65,7 @@ const TABLES_DATA = {
       {
         icon: '💱',
         title: 'Multi-Currency Ledgers',
-        desc: 'Hold USD, EUR, GBP, and JPY under a single unified master banking account.'
+        desc: 'Hold INR, USD, EUR, and GBP under a single unified master banking account.'
       },
       {
         icon: '⚡',
@@ -75,10 +75,10 @@ const TABLES_DATA = {
     ],
     headers: ['Account No', 'Customer ID', 'Account Type', 'Payment Mode', 'Currency', 'Balance', 'Status'],
     rows: [
-      ['ACC-883921', 'CUST-104', 'High-Yield Savings', 'RTGS', 'USD', '$142,500.00', 'Active'],
-      ['ACC-772910', 'CUST-101', 'Premium Checking', 'NEFT', 'USD', '$28,430.50', 'Active'],
+      ['ACC-883921', 'CUST-104', 'High-Yield Savings', 'RTGS', 'INR', '₹142,500.00', 'Active'],
+      ['ACC-772910', 'CUST-101', 'Premium Checking', 'NEFT', 'INR', '₹28,430.50', 'Active'],
       ['ACC-664019', 'CUST-103', 'International Treasury', 'RTGS', 'EUR', '€95,120.00', 'Active'],
-      ['ACC-553102', 'CUST-102', 'Student Advantage', 'NEFT', 'USD', '$3,850.75', 'Active'],
+      ['ACC-553102', 'CUST-102', 'Student Advantage', 'NEFT', 'INR', '₹3,850.75', 'Active'],
       ['ACC-442991', 'CUST-105', 'Business Checking', 'RTGS', 'GBP', '£210,000.00', 'Active']
     ]
   },
@@ -157,11 +157,11 @@ const TABLES_DATA = {
     ],
     headers: ['Loan ID', 'Customer ID', 'Loan Type', 'Principal Amount', 'Interest Rate', 'Term (Mo)', 'Status'],
     rows: [
-      ['LN-901', 'CUST-101', 'Home Mortgage', '$450,000', '3.5%', '360', 'Active'],
-      ['LN-902', 'CUST-103', 'Electric Vehicle', '$38,000', '4.2%', '60', 'Active'],
-      ['LN-903', 'CUST-102', 'Small Business', '$120,000', '5.0%', '120', 'Active'],
-      ['LN-904', 'CUST-105', 'Commercial Property', '$850,000', '3.8%', '240', 'Active'],
-      ['LN-905', 'CUST-104', 'Personal Credit Line', '$15,000', '6.5%', '36', 'Pending']
+      ['LN-901', 'CUST-101', 'Home Mortgage', '₹450,000', '3.5%', '360', 'Active'],
+      ['LN-902', 'CUST-103', 'Electric Vehicle', '₹38,000', '4.2%', '60', 'Active'],
+      ['LN-903', 'CUST-102', 'Small Business', '₹120,000', '5.0%', '120', 'Active'],
+      ['LN-904', 'CUST-105', 'Commercial Property', '₹850,000', '3.8%', '240', 'Active'],
+      ['LN-905', 'CUST-104', 'Personal Credit Line', '₹15,000', '6.5%', '36', 'Pending']
     ]
   },
 
@@ -198,11 +198,11 @@ const TABLES_DATA = {
     ],
     headers: ['Deposit ID', 'Customer ID', 'Deposit Type', 'Amount', 'Maturity Date', 'Yield Rate', 'Status'],
     rows: [
-      ['DEP-501', 'CUST-101', 'Fixed Deposit (3 Yrs)', '$50,000', '2027-08-15', '4.8%', 'Active'],
-      ['DEP-502', 'CUST-103', 'Tax Saver FD', '$15,000', '2029-03-31', '5.2%', 'Active'],
-      ['DEP-503', 'CUST-102', 'Recurring Deposit', '$1,200/mo', '2026-12-01', '4.5%', 'Active'],
-      ['DEP-504', 'CUST-105', 'Treasury Certificate', '$250,000', '2028-06-30', '5.5%', 'Active'],
-      ['DEP-505', 'CUST-104', 'Short-Term Deposit', '$10,000', '2026-11-15', '4.0%', 'Active']
+      ['DEP-501', 'CUST-101', 'Fixed Deposit (3 Yrs)', '₹50,000', '2027-08-15', '4.8%', 'Active'],
+      ['DEP-502', 'CUST-103', 'Tax Saver FD', '₹15,000', '2029-03-31', '5.2%', 'Active'],
+      ['DEP-503', 'CUST-102', 'Recurring Deposit', '₹1,200/mo', '2026-12-01', '4.5%', 'Active'],
+      ['DEP-504', 'CUST-105', 'Treasury Certificate', '₹250,000', '2028-06-30', '5.5%', 'Active'],
+      ['DEP-505', 'CUST-104', 'Short-Term Deposit', '₹10,000', '2026-11-15', '4.0%', 'Active']
     ]
   },
 
@@ -239,11 +239,11 @@ const TABLES_DATA = {
     ],
     headers: ['Card Number', 'Account No', 'Card Type', 'Expiry Date', 'Daily Limit', 'Status'],
     rows: [
-      ['**** 4892', 'ACC-772910', 'Platinum Debit Visa', '08/28', '$5,000', 'Active'],
-      ['**** 3102', 'ACC-883921', 'World Elite Mastercard', '11/29', '$10,000', 'Active'],
-      ['**** 9918', 'ACC-664019', 'Virtual One-Time Card', '09/26', '$500', 'Active'],
-      ['**** 2041', 'ACC-553102', 'Metal Contactless Debit', '04/27', '$2,500', 'Active'],
-      ['**** 7183', 'ACC-442991', 'Business Credit Card', '01/30', '$25,000', 'Active']
+      ['**** 4892', 'ACC-772910', 'Platinum Debit Visa', '08/28', '₹5,000', 'Active'],
+      ['**** 3102', 'ACC-883921', 'World Elite Mastercard', '11/29', '₹10,000', 'Active'],
+      ['**** 9918', 'ACC-664019', 'Virtual One-Time Card', '09/26', '₹500', 'Active'],
+      ['**** 2041', 'ACC-553102', 'Metal Contactless Debit', '04/27', '₹2,500', 'Active'],
+      ['**** 7183', 'ACC-442991', 'Business Credit Card', '01/30', '₹25,000', 'Active']
     ]
   }
 };
