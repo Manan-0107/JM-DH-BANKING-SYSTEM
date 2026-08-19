@@ -169,7 +169,7 @@ if (tabContainer) {
 }
 
 // ============================================================
-// GOOGLE TRANSLATE WIDGET & TOP-RIGHT EN/HI TOGGLE BUTTON
+// GOOGLE TRANSLATE WIDGET & INSTANT EN/HI TOGGLE BUTTON
 // ============================================================
 function googleTranslateElementInit() {
   new google.translate.TranslateElement(
@@ -181,6 +181,12 @@ function googleTranslateElementInit() {
     },
     'google_translate_element'
   );
+
+  // Instantly trigger translation when Google Translate loads if Hindi is selected
+  const savedLang = getActiveLanguage();
+  if (savedLang === 'hi') {
+    applyLanguageToCombo('hi');
+  }
 }
 
 function getActiveLanguage() {
@@ -217,36 +223,38 @@ function clearTransCookies() {
   }
 }
 
+function applyLanguageToCombo(targetLang) {
+  const combo = document.querySelector('.goog-te-combo');
+  if (combo) {
+    const val = targetLang === 'hi' ? 'hi' : '';
+    if (combo.value !== val) {
+      combo.value = val;
+      combo.dispatchEvent(new Event('change'));
+    }
+    return true;
+  }
+  return false;
+}
+
 function switchLanguage(targetLang) {
+  updateLangBtnText(targetLang);
+
   if (targetLang === 'hi') {
     localStorage.setItem('userLanguage', 'hi');
     setCookie('googtrans', '/en/hi', 30);
     
-    const combo = document.querySelector('.goog-te-combo');
-    if (combo) {
-      combo.value = 'hi';
-      combo.dispatchEvent(new Event('change'));
+    if (!applyLanguageToCombo('hi')) {
+      window.location.reload();
     }
-    // Reload if combo isn't applied immediately
-    setTimeout(() => {
-      if (!document.body.classList.contains('translated') && getActiveLanguage() === 'hi') {
-        window.location.reload();
-      }
-    }, 300);
   } else {
     localStorage.setItem('userLanguage', 'en');
     clearTransCookies();
     setCookie('googtrans', '/en/en', 30);
 
-    const combo = document.querySelector('.goog-te-combo');
-    if (combo) {
-      combo.value = '';
-      combo.dispatchEvent(new Event('change'));
+    if (!applyLanguageToCombo('en')) {
+      window.location.reload();
     }
-    // Reload page to guarantee clean original English DOM restoration
-    window.location.reload();
   }
-  updateLangBtnText(targetLang);
 }
 
 function initLanguageState() {
