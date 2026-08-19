@@ -221,12 +221,19 @@ function clearTransCookies() {
 }
 
 function applyLanguageToCombo(targetLang) {
-  const targetVal = targetLang === 'hi' ? 'hi' : '';
   const combo = document.querySelector('.goog-te-combo');
   if (combo) {
-    if (combo.value !== targetVal) {
-      combo.value = targetVal;
-      combo.dispatchEvent(new Event('change'));
+    if (targetLang === 'hi') {
+      if (combo.value !== 'hi') {
+        combo.value = 'hi';
+        combo.dispatchEvent(new Event('change'));
+      }
+    } else {
+      if (combo.value !== '' && combo.value !== 'en') {
+        combo.value = '';
+        if (combo.selectedIndex !== 0) combo.selectedIndex = 0;
+        combo.dispatchEvent(new Event('change'));
+      }
     }
     return true;
   }
