@@ -183,13 +183,8 @@ function googleTranslateElementInit() {
   );
 }
 
-function getGoogleTransCookie() {
-  const match = document.cookie.match(/(?:^|; )googtrans=([^;]*)/);
-  if (match) {
-    const val = decodeURIComponent(match[1]);
-    if (val.endsWith('/hi')) return 'hi';
-  }
-  return 'en';
+function getActiveLanguage() {
+  return localStorage.getItem('userLanguage') || 'en';
 }
 
 function updateLangBtnText(lang) {
@@ -199,32 +194,91 @@ function updateLangBtnText(lang) {
   }
 }
 
-function setGoogleTranslateLanguage(targetLang) {
-  const combo = document.querySelector('.goog-te-combo');
-  if (combo) {
-    combo.value = targetLang;
-    combo.dispatchEvent(new Event('change'));
+function setCookie(name, value, days) {
+  let expires = "";
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  const host = window.location.hostname;
+  document.cookie = name + "=" + (value || "") + expires + "; path=/";
+  if (host && host !== 'localhost' && host !== '127.0.0.1') {
+    document.cookie = name + "=" + (value || "") + expires + "; domain=." + host + "; path=/";
+  }
+}
+
+function clearTransCookies() {
+  const host = window.location.hostname;
+  document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=" + host + "; path=/;";
+  if (host && host !== 'localhost' && host !== '127.0.0.1') {
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=." + host + "; path=/;";
+  }
+}
+
+function switchLanguage(targetLang) {
+  if (targetLang === 'hi') {
+    localStorage.setItem('userLanguage', 'hi');
+    setCookie('googtrans', '/en/hi', 30);
+    
+    const combo = document.querySelector('.goog-te-combo');
+    if (combo) {
+      combo.value = 'hi';
+      combo.dispatchEvent(new Event('change'));
+    }
+    // Reload if combo isn't applied immediately
+    setTimeout(() => {
+      if (!document.body.classList.contains('translated') && getActiveLanguage() === 'hi') {
+        window.location.reload();
+      }
+    }, 300);
   } else {
-    document.cookie = `googtrans=/en/${targetLang}; path=/`;
-    document.cookie = `googtrans=/en/${targetLang}; domain=${window.location.hostname}; path=/`;
+    localStorage.setItem('userLanguage', 'en');
+    clearTransCookies();
+    setCookie('googtrans', '/en/en', 30);
+
+    const combo = document.querySelector('.goog-te-combo');
+    if (combo) {
+      combo.value = '';
+      combo.dispatchEvent(new Event('change'));
+    }
+    // Reload page to guarantee clean original English DOM restoration
     window.location.reload();
   }
   updateLangBtnText(targetLang);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const langBtn = document.getElementById('lang-toggle-btn');
-  const currentLang = getGoogleTransCookie();
+function initLanguageState() {
+  const currentLang = getActiveLanguage();
   updateLangBtnText(currentLang);
 
-  if (langBtn) {
-    langBtn.addEventListener('click', () => {
-      const activeLang = getGoogleTransCookie();
-      const nextLang = activeLang === 'en' ? 'hi' : 'en';
-      setGoogleTranslateLanguage(nextLang);
-    });
+  if (currentLang === 'hi') {
+    if (!document.cookie.includes('googtrans=/en/hi')) {
+      setCookie('googtrans', '/en/hi', 30);
+    }
+  } else {
+    if (document.cookie.includes('googtrans=/en/hi')) {
+      clearTransCookies();
+    }
   }
-});
+
+  const langBtn = document.getElementById('lang-toggle-btn');
+  if (langBtn) {
+    langBtn.onclick = function (e) {
+      e.preventDefault();
+      const activeLang = getActiveLanguage();
+      const nextLang = activeLang === 'en' ? 'hi' : 'en';
+      switchLanguage(nextLang);
+    };
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initLanguageState);
+} else {
+  initLanguageState();
+}
 
 // ============================================================
 // LOGIN / AUTHENTICATION & PERSONAL SECTION VISIBILITY
