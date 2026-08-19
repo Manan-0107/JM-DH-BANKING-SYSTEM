@@ -169,18 +169,62 @@ if (tabContainer) {
 }
 
 // ============================================================
-// GOOGLE TRANSLATE WIDGET INITIALIZATION
+// GOOGLE TRANSLATE WIDGET & TOP-RIGHT EN/HI TOGGLE BUTTON
 // ============================================================
 function googleTranslateElementInit() {
   new google.translate.TranslateElement(
     {
       pageLanguage: 'en',
+      includedLanguages: 'hi,en',
       layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
       autoDisplay: false
     },
     'google_translate_element'
   );
 }
+
+function getGoogleTransCookie() {
+  const match = document.cookie.match(/(?:^|; )googtrans=([^;]*)/);
+  if (match) {
+    const val = decodeURIComponent(match[1]);
+    if (val.endsWith('/hi')) return 'hi';
+  }
+  return 'en';
+}
+
+function updateLangBtnText(lang) {
+  const btn = document.getElementById('lang-toggle-btn');
+  if (btn) {
+    btn.textContent = lang === 'hi' ? '🌐 हिंदी / EN' : '🌐 EN / हिंदी';
+  }
+}
+
+function setGoogleTranslateLanguage(targetLang) {
+  const combo = document.querySelector('.goog-te-combo');
+  if (combo) {
+    combo.value = targetLang;
+    combo.dispatchEvent(new Event('change'));
+  } else {
+    document.cookie = `googtrans=/en/${targetLang}; path=/`;
+    document.cookie = `googtrans=/en/${targetLang}; domain=${window.location.hostname}; path=/`;
+    window.location.reload();
+  }
+  updateLangBtnText(targetLang);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const langBtn = document.getElementById('lang-toggle-btn');
+  const currentLang = getGoogleTransCookie();
+  updateLangBtnText(currentLang);
+
+  if (langBtn) {
+    langBtn.addEventListener('click', () => {
+      const activeLang = getGoogleTransCookie();
+      const nextLang = activeLang === 'en' ? 'hi' : 'en';
+      setGoogleTranslateLanguage(nextLang);
+    });
+  }
+});
 
 // ============================================================
 // LOGIN / AUTHENTICATION & PERSONAL SECTION VISIBILITY

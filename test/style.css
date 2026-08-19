@@ -1054,61 +1054,58 @@ h4 {
    LANGUAGE TOGGLE & SIDE AUTH FORM STYLES
    ============================================================ */
 
-.google-translate-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.btn--lang-toggle {
   background-color: #ffffff;
   border: 1px solid #ddd;
-  padding: 0.4rem 1.2rem;
+  padding: 0.8rem 1.8rem;
   border-radius: 3rem;
-  box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.05);
+  font-family: inherit;
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.05);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
-.google-translate-wrapper:hover {
+.btn--lang-toggle:hover {
   border-color: var(--color-primary);
+  background-color: var(--color-primary-opacity);
+  transform: translateY(-2px);
   box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.1);
 }
 
-.google-translate-wrapper::before {
-  content: '🌐';
-  font-size: 1.6rem;
-}
-
-.goog-te-gadget {
-  font-family: inherit !important;
-  font-size: 1.4rem !important;
-  color: transparent !important;
-  line-height: 1 !important;
-}
-
-.goog-te-gadget .goog-te-combo {
-  padding: 0.4rem 0.6rem;
-  border-radius: 0.8rem;
-  border: none;
-  font-family: inherit;
-  font-size: 1.4rem;
-  font-weight: 500;
-  color: #333;
-  background: transparent;
-  outline: none;
-  cursor: pointer;
-}
-
-.goog-te-gadget > span,
-.goog-te-gadget > a,
-.goog-te-gadget .goog-logo-link {
+/* Hide Google Translate original dropdown & widget elements */
+#google_translate_element,
+.skiptranslate {
   display: none !important;
+}
+
+/* Completely suppress Google Translate top toolbar banner, undo frame, and tooltips */
+.goog-te-banner-frame,
+.goog-te-banner,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 body {
   top: 0px !important;
+  position: static !important;
 }
 
-.goog-te-banner-frame {
-  display: none !important;
-  visibility: hidden !important;
+/* Prevent text highlighting artifact from Google Translate */
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
 }
 
 .header__text-box {
