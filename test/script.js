@@ -18,16 +18,17 @@ const closeModal = function () {
 
 btnsOpenModal.forEach(b => b.addEventListener('click', openModal));
 
-// Nav Account Dropdown Click & Outside Click Close
+// Nav Dropdown Click & Outside Click Close
 document.addEventListener('click', function (e) {
   const dropdowns = document.querySelectorAll('.nav__item--dropdown');
   dropdowns.forEach(item => {
-    const toggleBtn = item.querySelector('#nav-account-btn');
+    const toggleBtn = item.querySelector('.nav__link');
     const isToggleClick = toggleBtn && toggleBtn.contains(e.target);
     const isInsideDropdown = item.contains(e.target);
 
     if (isToggleClick) {
       e.preventDefault();
+      dropdowns.forEach(d => { if (d !== item) d.classList.remove('active'); });
       item.classList.toggle('active');
     } else if (!isInsideDropdown || e.target.closest('.dropdown__link')) {
       item.classList.remove('active');
