@@ -1054,24 +1054,61 @@ h4 {
    LANGUAGE TOGGLE & SIDE AUTH FORM STYLES
    ============================================================ */
 
-.btn--lang-toggle {
-  background-color: #fff;
+.google-translate-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #ffffff;
   border: 1px solid #ddd;
-  padding: 0.8rem 1.8rem;
+  padding: 0.4rem 1.2rem;
   border-radius: 3rem;
-  font-family: inherit;
-  font-size: 1.5rem;
-  font-weight: 500;
-  color: #333;
-  cursor: pointer;
-  transition: all 0.3s ease;
   box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
-.btn--lang-toggle:hover {
+.google-translate-wrapper:hover {
   border-color: var(--color-primary);
-  background-color: var(--color-primary-opacity);
-  transform: translateY(-2px);
+  box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.1);
+}
+
+.google-translate-wrapper::before {
+  content: '🌐';
+  font-size: 1.6rem;
+}
+
+.goog-te-gadget {
+  font-family: inherit !important;
+  font-size: 1.4rem !important;
+  color: transparent !important;
+  line-height: 1 !important;
+}
+
+.goog-te-gadget .goog-te-combo {
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.8rem;
+  border: none;
+  font-family: inherit;
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: #333;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+
+.goog-te-gadget > span,
+.goog-te-gadget > a,
+.goog-te-gadget .goog-logo-link {
+  display: none !important;
+}
+
+body {
+  top: 0px !important;
+}
+
+.goog-te-banner-frame {
+  display: none !important;
+  visibility: hidden !important;
 }
 
 .header__text-box {

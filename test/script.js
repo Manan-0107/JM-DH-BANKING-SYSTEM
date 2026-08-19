@@ -168,91 +168,18 @@ if (tabContainer) {
   });
 }
 
-// Language Switcher (Bilingual English / Hindi)
-const langToggleBtn = document.getElementById('lang-toggle');
-let currentLang = 'en';
-
-const translations = {
-  en: {
-    heroTitle: 'When <span class="highlight">banking</span> meets<br /><span class="highlight">minimalist</span>',
-    heroSub: 'A simpler banking experience for a simpler life.',
-    heroLearn: 'Learn more ↓',
-    tabLogin: 'Log In',
-    tabSignup: 'Sign Up',
-    loginHeader: 'Welcome Back',
-    signupHeader: 'Get Started Today',
-    lblUser: 'User ID / Email',
-    lblPass: 'PIN / Password',
-    lblFullname: 'Full Name',
-    lblEmail: 'Email Address',
-    lblCreatepass: 'Create PIN',
-    btnLogin: 'LOG IN →',
-    btnSignup: 'CREATE ACCOUNT →'
-  },
-  hi: {
-    heroTitle: 'जब <span class="highlight">बैंकिंग</span> मिले<br /><span class="highlight">सरलता</span> से',
-    heroSub: 'सरल जीवन के लिए एक सरल एवं आधुनिक बैंकिंग अनुभव।',
-    heroLearn: 'और जानें ↓',
-    tabLogin: 'लॉग इन',
-    tabSignup: 'साइन अप',
-    loginHeader: 'पुनः स्वागत है',
-    signupHeader: 'आज ही शुरुआत करें',
-    lblUser: 'उपयोगकर्ता आईडी / ईमेल',
-    lblPass: 'पिन / पासवर्ड',
-    lblFullname: 'पूरा नाम',
-    lblEmail: 'ईमेल पता',
-    lblCreatepass: 'पिन बनाएं',
-    btnLogin: 'लॉग इन करें →',
-    btnSignup: 'खाता बनाएं →'
-  }
-};
-
-if (langToggleBtn) {
-  langToggleBtn.addEventListener('click', function () {
-    currentLang = currentLang === 'en' ? 'hi' : 'en';
-    const t = translations[currentLang];
-
-    langToggleBtn.textContent = currentLang === 'en' ? '🌐 EN / हिंदी' : '🌐 हिंदी / EN';
-
-    const heroHeading = document.getElementById('hero-heading');
-    const heroSubheading = document.getElementById('hero-subheading');
-    const heroLearnMore = document.getElementById('hero-learn-more');
-    const tabLoginBtn = document.getElementById('tab-login-btn');
-    const tabSignupBtn = document.getElementById('tab-signup-btn');
-    const loginHeaderTitle = document.getElementById('login-header-title');
-    const signupHeaderTitle = document.getElementById('signup-header-title');
-    const lblUser = document.getElementById('lbl-user');
-    const lblPass = document.getElementById('lbl-pass');
-    const lblFullname = document.getElementById('lbl-fullname');
-    const lblEmail = document.getElementById('lbl-email');
-    const lblCreatepass = document.getElementById('lbl-createpass');
-    const btnLoginSubmit = document.getElementById('btn-login-submit');
-    const btnSignupSubmit = document.getElementById('btn-signup-submit');
-
-    if (heroHeading) heroHeading.innerHTML = t.heroTitle;
-    if (heroSubheading) heroSubheading.textContent = t.heroSub;
-    if (heroLearnMore) heroLearnMore.textContent = t.heroLearn;
-
-    if (tabLoginBtn) tabLoginBtn.textContent = t.tabLogin;
-    if (tabSignupBtn) tabSignupBtn.textContent = t.tabSignup;
-
-    if (loginHeaderTitle) loginHeaderTitle.textContent = t.loginHeader;
-    if (signupHeaderTitle) signupHeaderTitle.textContent = t.signupHeader;
-
-    if (lblUser) lblUser.textContent = t.lblUser;
-    if (lblPass) lblPass.textContent = t.lblPass;
-    if (lblFullname) lblFullname.textContent = t.lblFullname;
-    if (lblEmail) lblEmail.textContent = t.lblEmail;
-    if (lblCreatepass) lblCreatepass.textContent = t.lblCreatepass;
-
-    if (btnLoginSubmit) btnLoginSubmit.textContent = t.btnLogin;
-    if (btnSignupSubmit) btnSignupSubmit.textContent = t.btnSignup;
-
-    document.querySelectorAll('.nav__link').forEach(link => {
-      const text = link.dataset[currentLang];
-      if (text) link.textContent = text;
-    });
-  });
+// ============================================================
+// GOOGLE TRANSLATE WIDGET INITIALIZATION
+// ============================================================
+function googleTranslateElementInit() {
+  new google.translate.TranslateElement(
+    {
+      pageLanguage: 'en',
+      layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+      autoDisplay: false
+    },
+    'google_translate_element'
+  );
 }
 
 // ============================================================
