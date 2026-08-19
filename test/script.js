@@ -310,6 +310,9 @@ function updateAuthState(isLoggedIn, username = 'User') {
     sessionStorage.setItem('isLoggedIn', 'true');
     sessionStorage.setItem('username', username);
 
+    document.documentElement.classList.add('is-logged-in');
+    if (document.body) document.body.classList.add('is-logged-in');
+
     // Completely hide login and signup page/container after login
     if (headerFormContainer) {
       headerFormContainer.classList.add('d-none');
@@ -325,6 +328,9 @@ function updateAuthState(isLoggedIn, username = 'User') {
   } else {
     sessionStorage.removeItem('isLoggedIn');
     sessionStorage.removeItem('username');
+
+    document.documentElement.classList.remove('is-logged-in');
+    if (document.body) document.body.classList.remove('is-logged-in');
 
     // Show login/signup form container when logged out
     if (headerFormContainer) {
@@ -350,6 +356,12 @@ function updateAuthState(isLoggedIn, username = 'User') {
     if (navItemPersonal) navItemPersonal.classList.add('d-none');
     if (navItemLogout) navItemLogout.classList.add('d-none');
   }
+}
+
+// Immediate execution check at script load time
+if (sessionStorage.getItem('isLoggedIn') === 'true') {
+  document.documentElement.classList.add('is-logged-in');
+  if (document.body) document.body.classList.add('is-logged-in');
 }
 
 // Observe any unintended style/class mutations on headerFormContainer (e.g. from Google Translate)

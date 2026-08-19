@@ -1343,6 +1343,18 @@ a.btn--text:visited {
   display: none !important;
 }
 
+body.is-logged-in .header__form-container,
+html.is-logged-in .header__form-container {
+  display: none !important;
+}
+
+body.is-logged-in #nav-item-personal,
+body.is-logged-in #nav-item-logout,
+html.is-logged-in #nav-item-personal,
+html.is-logged-in #nav-item-logout {
+  display: inline-block !important;
+}
+
 .logged-in__badge {
   display: inline-flex;
   align-items: center;
