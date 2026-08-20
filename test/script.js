@@ -254,13 +254,26 @@ window.googleTranslateElementInit = function () {
     new window.google.translate.TranslateElement(
       {
         pageLanguage: 'en',
-        includedLanguages: 'hi,en',
+        includedLanguages: 'en,hi',
         layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
         autoDisplay: false
       },
       'google_translate_element'
     );
   }
+
+  // Hide Google Translate top navbar iframe & reset body top offset
+  const hideGoogleBanner = function () {
+    const frame = document.querySelector('.goog-te-banner-frame');
+    if (frame) {
+      frame.style.display = 'none';
+      frame.style.visibility = 'hidden';
+    }
+    if (document.body && document.body.style.top !== '0px') {
+      document.body.style.top = '0px';
+    }
+  };
+  setInterval(hideGoogleBanner, 300);
 
   const savedLang = getActiveLanguage();
   if (savedLang === 'hi') {
