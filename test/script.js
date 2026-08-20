@@ -262,18 +262,22 @@ window.googleTranslateElementInit = function () {
     );
   }
 
-  // Hide Google Translate top navbar iframe & reset body top offset
-  const hideGoogleBanner = function () {
-    const frame = document.querySelector('.goog-te-banner-frame');
-    if (frame) {
-      frame.style.display = 'none';
-      frame.style.visibility = 'hidden';
-    }
+  // Hide Google Translate popups, banners, tooltips & reset body top offset
+  const hideGooglePopups = function () {
+    const popups = document.querySelectorAll(
+      '.goog-te-banner-frame, #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZGain-Ovf-oZ24-wZ38ld, .VIpgJd-yLiTe-l4e-yLiTe, .VIpgJd-yLiTe-Ovf-oZ24-wZ38ld, iframe[aria-label="Language Translate Widget"]'
+    );
+    popups.forEach(el => {
+      el.style.setProperty('display', 'none', 'important');
+      el.style.setProperty('visibility', 'hidden', 'important');
+      el.style.setProperty('opacity', '0', 'important');
+      el.style.setProperty('pointer-events', 'none', 'important');
+    });
     if (document.body && document.body.style.top !== '0px') {
       document.body.style.top = '0px';
     }
   };
-  setInterval(hideGoogleBanner, 300);
+  setInterval(hideGooglePopups, 150);
 
   const savedLang = getActiveLanguage();
   if (savedLang === 'hi') {
@@ -300,27 +304,24 @@ function setCookie(name, value, days) {
     expires = "; expires=" + date.toUTCString();
   }
   document.cookie = name + "=" + (value || "") + expires + "; path=/";
+  if (window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    document.cookie = name + "=" + (value || "") + expires + "; domain=" + window.location.hostname + "; path=/";
+  }
 }
 
 function clearTransCookies() {
   document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-  document.cookie = "googtrans=/en/en; path=/;";
+  setCookie('googtrans', '/en/en', 30);
 }
 
 function applyLanguageToCombo(targetLang) {
   const combo = document.querySelector('.goog-te-combo');
   if (combo) {
-    if (targetLang === 'hi') {
-      if (combo.value !== 'hi') {
-        combo.value = 'hi';
-        combo.dispatchEvent(new Event('change'));
-      }
-    } else {
-      if (combo.value !== '' && combo.value !== 'en') {
-        combo.value = '';
-        if (combo.selectedIndex !== 0) combo.selectedIndex = 0;
-        combo.dispatchEvent(new Event('change'));
-      }
+    const desiredVal = targetLang === 'hi' ? 'hi' : 'en';
+    if (combo.value !== desiredVal) {
+      combo.value = desiredVal;
+      combo.dispatchEvent(new Event('change'));
+      combo.dispatchEvent(new Event('input'));
     }
     return true;
   }
@@ -333,26 +334,30 @@ function ensureAndApplyLanguage(targetLang) {
   let attempts = 0;
   const interval = setInterval(() => {
     attempts++;
-    if (applyLanguageToCombo(targetLang) || attempts > 25) {
+    if (applyLanguageToCombo(targetLang) || attempts > 15) {
       clearInterval(interval);
     }
   }, 60);
 }
 
 function switchLanguage(targetLang) {
+  const activeLang = getActiveLanguage();
+  if (activeLang === targetLang) return;
+
+  localStorage.setItem('userLanguage', targetLang);
   updateLangBtnText(targetLang);
 
   if (targetLang === 'hi') {
-    localStorage.setItem('userLanguage', 'hi');
     setCookie('googtrans', '/en/hi', 30);
-    ensureAndApplyLanguage('hi');
-    applyDictionaryTranslation('hi');
   } else {
-    localStorage.setItem('userLanguage', 'en');
     clearTransCookies();
-    ensureAndApplyLanguage('en');
-    applyDictionaryTranslation('en');
   }
+
+  applyLanguageToCombo(targetLang);
+
+  setTimeout(() => {
+    location.reload();
+  }, 100);
 }
 
 function initLanguageState() {
@@ -362,9 +367,9 @@ function initLanguageState() {
   if (currentLang === 'hi') {
     setCookie('googtrans', '/en/hi', 30);
     ensureAndApplyLanguage('hi');
-    applyDictionaryTranslation('hi');
   } else {
     clearTransCookies();
+    ensureAndApplyLanguage('en');
   }
 
   const langBtn = document.getElementById('lang-toggle-btn');
