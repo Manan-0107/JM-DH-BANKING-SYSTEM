@@ -272,6 +272,13 @@ function getSelectedTableKey() {
 
 function renderTableDetail() {
   const key = getSelectedTableKey();
+
+  if (key === 'account' && sessionStorage.getItem('isLoggedIn') !== 'true') {
+    alert("⚠️ Access Restricted: You need to log in first to access Account features and details.");
+    window.location.href = "index.html?loginRequired=true";
+    return;
+  }
+
   const data = TABLES_DATA[key];
 
   // Title & Metadata

@@ -205,6 +205,42 @@ img {
   justify-items: start;
 }
 
+/* HEADER LOGGED-IN CENTERED LAYOUT */
+.header__title.header__title--logged-in,
+.is-logged-in .header__title {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: 100% !important;
+  max-width: 90rem !important;
+  margin: 0 auto !important;
+  grid-template-columns: none !important;
+}
+
+.header__title.header__title--logged-in .header__text-box,
+.is-logged-in .header__text-box {
+  text-align: center !important;
+  align-items: center !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+.header__title.header__title--logged-in #hero-heading,
+.is-logged-in #hero-heading {
+  text-align: center !important;
+}
+
+.header__title.header__title--logged-in #hero-subheading,
+.is-logged-in #hero-subheading {
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
 h1 {
   font-size: 5.5rem;
   line-height: 1.35;
@@ -1429,6 +1465,53 @@ html.is-logged-in #nav-item-logout {
   grid-template-columns: 1fr;
   justify-items: center;
   text-align: center;
+}
+
+/* ============================================================
+   HIDE GOOGLE TRANSLATE BANNER & TOP NAVBAR
+   ============================================================ */
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+iframe.goog-te-banner-frame,
+.goog-te-banner,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+#goog-gt- {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  pointer-events: none !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+.skiptranslate {
+  font-size: 0 !important;
+}
+
+.goog-te-gadget {
+  color: transparent !important;
+  font-size: 0 !important;
+}
+
+.goog-te-gadget .goog-te-combo {
+  color: #333 !important;
+  font-size: 1.4rem !important;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+#google_translate_element {
+  display: inline-block;
+  vertical-align: middle;
 }
 
 

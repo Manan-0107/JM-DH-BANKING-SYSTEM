@@ -176,23 +176,97 @@ if (tabContainer) {
 // ============================================================
 // GOOGLE TRANSLATE WIDGET & INSTANT EN/HI TOGGLE BUTTON
 // ============================================================
-function googleTranslateElementInit() {
-  new google.translate.TranslateElement(
-    {
-      pageLanguage: 'en',
-      includedLanguages: 'hi,en',
-      layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
-      autoDisplay: false
-    },
-    'google_translate_element'
-  );
+// ============================================================
+// GOOGLE TRANSLATE WIDGET & INSTANT EN/HI TOGGLE BUTTON
+// ============================================================
+const TRANSLATION_MAP = {
+  "Home": "होम",
+  "Account": "खाता",
+  "Personal": "व्यक्तिगत",
+  "Personal Details": "व्यक्तिगत विवरण",
+  "Loan": "ऋण",
+  "Log Out": "लॉग आउट",
+  "Log Out →": "लॉग आउट →",
+  "Log In": "लॉग इन",
+  "Sign Up": "साइन अप",
+  "Welcome Back": "वापसी पर आपका स्वागत है",
+  "User ID / Email": "यूजर आईडी / ईमेल",
+  "PIN / Password": "पिन / पासवर्ड",
+  "Get Started Today": "आज ही शुरू करें",
+  "Full Name": "पूरा नाम",
+  "LOG IN →": "लॉग इन →",
+  "SIGN UP →": "साइन अप →",
+  "When banking meets minimalist": "जब बैंकिंग सादगी से मिलती है",
+  "A simpler banking experience for a simpler life.": "सरल जीवन के लिए एक सरल बैंकिंग अनुभव।",
+  "High-Yield Savings": "उच्च-ब्याज बचत",
+  "Business Checking": "व्यावसायिक चेकिंग",
+  "Student Advantage": "छात्र लाभ",
+  "International Treasury": "अंतरराष्ट्रीय खजाना",
+  "Instant Account Creation": "तत्काल खाता निर्माण",
+  "Home Mortgage Loan": "गृह बंधक ऋण",
+  "Electric Vehicle Loan": "इलेक्ट्रिक वाहन ऋण",
+  "Small Business Financing": "छोटे व्यवसाय का वित्तपोषण",
+  "Commercial Property Loan": "वाणिज्यिक संपत्ति ऋण",
+  "Personal Credit Line": "व्यक्तिगत क्रेडिट लाइन",
+  "Open account": "खाता खोलें",
+  "FEATURES": "विशेषताएं",
+  "Everything you need in a modern bank": "एक आधुनिक बैंक में आपकी आवश्यकता की हर चीज",
+  "OPERATIONS": "संचालन",
+  "Simpler. Faster. Seamless.": "सरल। तेज। निर्बाध।",
+  "TESTIMONIALS": "प्रशंसापत्र",
+  "Not sure yet? Thousands of happy bankists already have accounts": "अभी भी अनिश्चित हैं? हजारों खुश ग्राहक पहले से ही खातों का उपयोग कर रहे हैं"
+};
 
-  // Instantly trigger translation when Google Translate loads if Hindi is selected
+const REVERSE_TRANSLATION_MAP = {};
+Object.keys(TRANSLATION_MAP).forEach(key => {
+  REVERSE_TRANSLATION_MAP[TRANSLATION_MAP[key]] = key;
+});
+
+function applyDictionaryTranslation(lang) {
+  const walkNodes = function(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent.trim();
+      if (!text) return;
+      if (lang === 'hi') {
+        if (TRANSLATION_MAP[text]) {
+          if (!node._originalEn) node._originalEn = node.textContent;
+          node.textContent = node.textContent.replace(text, TRANSLATION_MAP[text]);
+        }
+      } else if (lang === 'en') {
+        if (node._originalEn) {
+          node.textContent = node._originalEn;
+        } else if (REVERSE_TRANSLATION_MAP[text]) {
+          node.textContent = node.textContent.replace(text, REVERSE_TRANSLATION_MAP[text]);
+        }
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE' || node.id === 'google_translate_element' || node.tagName === 'INPUT') return;
+      for (let child of node.childNodes) {
+        walkNodes(child);
+      }
+    }
+  };
+  walkNodes(document.body || document.documentElement);
+}
+
+window.googleTranslateElementInit = function () {
+  if (window.google && window.google.translate) {
+    new window.google.translate.TranslateElement(
+      {
+        pageLanguage: 'en',
+        includedLanguages: 'hi,en',
+        layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
+        autoDisplay: false
+      },
+      'google_translate_element'
+    );
+  }
+
   const savedLang = getActiveLanguage();
   if (savedLang === 'hi') {
     applyLanguageToCombo('hi');
   }
-}
+};
 
 function getActiveLanguage() {
   return localStorage.getItem('userLanguage') || 'en';
@@ -259,10 +333,12 @@ function switchLanguage(targetLang) {
     localStorage.setItem('userLanguage', 'hi');
     setCookie('googtrans', '/en/hi', 30);
     ensureAndApplyLanguage('hi');
+    applyDictionaryTranslation('hi');
   } else {
     localStorage.setItem('userLanguage', 'en');
     clearTransCookies();
     ensureAndApplyLanguage('en');
+    applyDictionaryTranslation('en');
   }
 }
 
@@ -273,6 +349,7 @@ function initLanguageState() {
   if (currentLang === 'hi') {
     setCookie('googtrans', '/en/hi', 30);
     ensureAndApplyLanguage('hi');
+    applyDictionaryTranslation('hi');
   } else {
     clearTransCookies();
   }
@@ -477,6 +554,52 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initAuth);
 } else {
   initAuth();
+}
+
+// ============================================================
+// ACCOUNT FIELDS AUTHENTICATION CONSTRAINT
+// ============================================================
+document.addEventListener('click', function (e) {
+  const accountTarget = e.target.closest('a[href*="account.html"], a[href*="table=account"], #nav-account-btn, [data-table="account"]');
+  if (accountTarget) {
+    const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
+    if (!isLoggedIn) {
+      e.preventDefault();
+      e.stopPropagation();
+      alert("⚠️ Access Restricted: You need to log in first to access Account features and details.");
+      
+      const headerFormContainer = document.querySelector('.header__form-container');
+      if (headerFormContainer && !headerFormContainer.classList.contains('d-none') && headerFormContainer.style.display !== 'none') {
+        headerFormContainer.scrollIntoView({ behavior: 'smooth' });
+        headerFormContainer.classList.remove('shake');
+        void headerFormContainer.offsetWidth;
+        headerFormContainer.classList.add('shake');
+        const uInput = document.getElementById('input-username');
+        if (uInput) uInput.focus();
+      } else {
+        window.location.href = 'index.html?loginRequired=true';
+      }
+    }
+  }
+}, true);
+
+// Check if redirected with loginRequired parameter
+const checkLoginRequiredParam = function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('loginRequired') && sessionStorage.getItem('isLoggedIn') !== 'true') {
+    const headerFormContainer = document.querySelector('.header__form-container');
+    if (headerFormContainer) {
+      headerFormContainer.scrollIntoView({ behavior: 'smooth' });
+      const uInput = document.getElementById('input-username');
+      if (uInput) uInput.focus();
+    }
+  }
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', checkLoginRequiredParam);
+} else {
+  checkLoginRequiredParam();
 }
 
 
