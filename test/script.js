@@ -174,79 +174,54 @@ if (tabContainer) {
 }
 
 // ============================================================
-// GOOGLE TRANSLATE WIDGET & INSTANT EN/HI TOGGLE BUTTON
+// GOOGLE TRANSLATE ENGINE & INSTANT EN/HI TOGGLE BUTTON
 // ============================================================
-// ============================================================
-// GOOGLE TRANSLATE WIDGET & INSTANT EN/HI TOGGLE BUTTON
-// ============================================================
-const TRANSLATION_MAP = {
-  "Home": "होम",
-  "Account": "खाता",
-  "Personal": "व्यक्तिगत",
-  "Personal Details": "व्यक्तिगत विवरण",
-  "Loan": "ऋण",
-  "Log Out": "लॉग आउट",
-  "Log Out →": "लॉग आउट →",
-  "Log In": "लॉग इन",
-  "Sign Up": "साइन अप",
-  "Welcome Back": "वापसी पर आपका स्वागत है",
-  "User ID / Email": "यूजर आईडी / ईमेल",
-  "PIN / Password": "पिन / पासवर्ड",
-  "Get Started Today": "आज ही शुरू करें",
-  "Full Name": "पूरा नाम",
-  "LOG IN →": "लॉग इन →",
-  "SIGN UP →": "साइन अप →",
-  "When banking meets minimalist": "जब बैंकिंग सादगी से मिलती है",
-  "A simpler banking experience for a simpler life.": "सरल जीवन के लिए एक सरल बैंकिंग अनुभव।",
-  "High-Yield Savings": "उच्च-ब्याज बचत",
-  "Business Checking": "व्यावसायिक चेकिंग",
-  "Student Advantage": "छात्र लाभ",
-  "International Treasury": "अंतरराष्ट्रीय खजाना",
-  "Instant Account Creation": "तत्काल खाता निर्माण",
-  "Home Mortgage Loan": "गृह बंधक ऋण",
-  "Electric Vehicle Loan": "इलेक्ट्रिक वाहन ऋण",
-  "Small Business Financing": "छोटे व्यवसाय का वित्तपोषण",
-  "Commercial Property Loan": "वाणिज्यिक संपत्ति ऋण",
-  "Personal Credit Line": "व्यक्तिगत क्रेडिट लाइन",
-  "Open account": "खाता खोलें",
-  "FEATURES": "विशेषताएं",
-  "Everything you need in a modern bank": "एक आधुनिक बैंक में आपकी आवश्यकता की हर चीज",
-  "OPERATIONS": "संचालन",
-  "Simpler. Faster. Seamless.": "सरल। तेज। निर्बाध।",
-  "TESTIMONIALS": "प्रशंसापत्र",
-  "Not sure yet? Thousands of happy bankists already have accounts": "अभी भी अनिश्चित हैं? हजारों खुश ग्राहक पहले से ही खातों का उपयोग कर रहे हैं"
-};
+function setGoogleTransCookie(targetLang) {
+  const cookieVal = targetLang === 'hi' ? '/en/hi' : '/en/en';
+  const expires = "; expires=" + new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
+  const pastExpires = "; expires=Thu, 01 Jan 1970 00:00:00 UTC";
 
-const REVERSE_TRANSLATION_MAP = {};
-Object.keys(TRANSLATION_MAP).forEach(key => {
-  REVERSE_TRANSLATION_MAP[TRANSLATION_MAP[key]] = key;
-});
+  document.cookie = "googtrans=" + cookieVal + expires + "; path=/";
+  if (location.hostname && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    document.cookie = "googtrans=" + cookieVal + expires + "; domain=" + location.hostname + "; path=/";
+  }
 
-function applyDictionaryTranslation(lang) {
-  const walkNodes = function(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent.trim();
-      if (!text) return;
-      if (lang === 'hi') {
-        if (TRANSLATION_MAP[text]) {
-          if (!node._originalEn) node._originalEn = node.textContent;
-          node.textContent = node.textContent.replace(text, TRANSLATION_MAP[text]);
-        }
-      } else if (lang === 'en') {
-        if (node._originalEn) {
-          node.textContent = node._originalEn;
-        } else if (REVERSE_TRANSLATION_MAP[text]) {
-          node.textContent = node.textContent.replace(text, REVERSE_TRANSLATION_MAP[text]);
-        }
-      }
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE' || node.id === 'google_translate_element' || node.tagName === 'INPUT') return;
-      for (let child of node.childNodes) {
-        walkNodes(child);
-      }
-    }
-  };
-  walkNodes(document.body || document.documentElement);
+  if (targetLang === 'en') {
+    document.cookie = "googtrans=" + pastExpires + "; path=/";
+    document.cookie = "googtrans=" + pastExpires + "; path=/; domain=" + location.hostname;
+    document.cookie = "googtrans=/en/en" + expires + "; path=/";
+  }
+}
+
+function triggerGoogleTranslate(targetLang) {
+  const desiredVal = targetLang === 'hi' ? 'hi' : 'en';
+  const combo = document.querySelector('.goog-te-combo');
+  if (combo) {
+    combo.value = desiredVal;
+    combo.dispatchEvent(new Event('change'));
+    combo.dispatchEvent(new Event('input'));
+  }
+}
+
+function updateLangBtnText(lang) {
+  const btn = document.getElementById('lang-toggle-btn');
+  if (btn) {
+    btn.textContent = lang === 'hi' ? '🌐 हिंदी / EN' : '🌐 EN / हिंदी';
+  }
+}
+
+function toggleLanguage() {
+  const currentLang = localStorage.getItem('userLanguage') || 'en';
+  const nextLang = currentLang === 'en' ? 'hi' : 'en';
+
+  localStorage.setItem('userLanguage', nextLang);
+  setGoogleTransCookie(nextLang);
+  updateLangBtnText(nextLang);
+  triggerGoogleTranslate(nextLang);
+
+  setTimeout(() => {
+    location.reload();
+  }, 50);
 }
 
 window.googleTranslateElementInit = function () {
@@ -262,10 +237,10 @@ window.googleTranslateElementInit = function () {
     );
   }
 
-  // Hide Google Translate popups, banners, tooltips & reset body top offset
-  const hideGooglePopups = function () {
+  // Suppress all Google Translate popups, top banner frames & keep body top at 0px
+  const hidePopups = function () {
     const popups = document.querySelectorAll(
-      '.goog-te-banner-frame, #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZGain-Ovf-oZ24-wZ38ld, .VIpgJd-yLiTe-l4e-yLiTe, .VIpgJd-yLiTe-Ovf-oZ24-wZ38ld, iframe[aria-label="Language Translate Widget"]'
+      '.goog-te-banner-frame, iframe.goog-te-banner-frame, #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZGain-Ovf-oZ24-wZ38ld, .VIpgJd-yLiTe-l4e-yLiTe'
     );
     popups.forEach(el => {
       el.style.setProperty('display', 'none', 'important');
@@ -277,117 +252,27 @@ window.googleTranslateElementInit = function () {
       document.body.style.top = '0px';
     }
   };
-  setInterval(hideGooglePopups, 150);
+  setInterval(hidePopups, 150);
 
-  const savedLang = getActiveLanguage();
-  if (savedLang === 'hi') {
-    applyLanguageToCombo('hi');
+  const activeLang = localStorage.getItem('userLanguage') || 'en';
+  updateLangBtnText(activeLang);
+  if (activeLang === 'hi') {
+    triggerGoogleTranslate('hi');
   }
 };
 
-function getActiveLanguage() {
-  return localStorage.getItem('userLanguage') || 'en';
-}
-
-function updateLangBtnText(lang) {
-  const btn = document.getElementById('lang-toggle-btn');
-  if (btn) {
-    btn.textContent = lang === 'hi' ? '🌐 हिंदी / EN' : '🌐 EN / हिंदी';
-  }
-}
-
-function setCookie(name, value, days) {
-  let expires = "";
-  if (days) {
-    const date = new Date();
-    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-    expires = "; expires=" + date.toUTCString();
-  }
-  document.cookie = name + "=" + (value || "") + expires + "; path=/";
-  if (window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    document.cookie = name + "=" + (value || "") + expires + "; domain=" + window.location.hostname + "; path=/";
-  }
-}
-
-function clearTransCookies() {
-  document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-  setCookie('googtrans', '/en/en', 30);
-}
-
-function applyLanguageToCombo(targetLang) {
-  const combo = document.querySelector('.goog-te-combo');
-  if (combo) {
-    const desiredVal = targetLang === 'hi' ? 'hi' : 'en';
-    if (combo.value !== desiredVal) {
-      combo.value = desiredVal;
-      combo.dispatchEvent(new Event('change'));
-      combo.dispatchEvent(new Event('input'));
-    }
-    return true;
-  }
-  return false;
-}
-
-function ensureAndApplyLanguage(targetLang) {
-  if (applyLanguageToCombo(targetLang)) return;
-
-  let attempts = 0;
-  const interval = setInterval(() => {
-    attempts++;
-    if (applyLanguageToCombo(targetLang) || attempts > 15) {
-      clearInterval(interval);
-    }
-  }, 60);
-}
-
-function switchLanguage(targetLang) {
-  const activeLang = getActiveLanguage();
-  if (activeLang === targetLang) return;
-
-  localStorage.setItem('userLanguage', targetLang);
-  updateLangBtnText(targetLang);
-
-  if (targetLang === 'hi') {
-    setCookie('googtrans', '/en/hi', 30);
-  } else {
-    clearTransCookies();
-  }
-
-  applyLanguageToCombo(targetLang);
-
-  setTimeout(() => {
-    location.reload();
-  }, 100);
-}
-
-function initLanguageState() {
-  const currentLang = getActiveLanguage();
-  updateLangBtnText(currentLang);
-
-  if (currentLang === 'hi') {
-    setCookie('googtrans', '/en/hi', 30);
-    ensureAndApplyLanguage('hi');
-  } else {
-    clearTransCookies();
-    ensureAndApplyLanguage('en');
-  }
-
-  const langBtn = document.getElementById('lang-toggle-btn');
+document.addEventListener('click', function (e) {
+  const langBtn = e.target.closest('#lang-toggle-btn');
   if (langBtn) {
-    langBtn.onclick = function (e) {
-      e.preventDefault();
-      const activeLang = getActiveLanguage();
-      const nextLang = activeLang === 'en' ? 'hi' : 'en';
-      switchLanguage(nextLang);
-    };
+    e.preventDefault();
+    toggleLanguage();
   }
-}
+});
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initLanguageState);
-} else {
-  initLanguageState();
-}
+document.addEventListener('DOMContentLoaded', function () {
+  const activeLang = localStorage.getItem('userLanguage') || 'en';
+  updateLangBtnText(activeLang);
+});
 
 // ============================================================
 // LOGIN / AUTHENTICATION & PERSONAL SECTION VISIBILITY
@@ -620,4 +505,4 @@ if (document.readyState === 'loading') {
   checkLoginRequiredParam();
 }
 
-
+

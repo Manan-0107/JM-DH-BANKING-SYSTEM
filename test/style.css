@@ -1468,8 +1468,43 @@ html.is-logged-in #nav-item-logout {
 }
 
 /* ============================================================
-   HIDE ALL GOOGLE TRANSLATE POPUPS, TOOLTIPS, BANNERS & OVERLAYS
+   LANGUAGE TOGGLE BUTTON & HIDDEN GOOGLE TRANSLATE ENGINE
    ============================================================ */
+.btn--lang-toggle {
+  background-color: #fff;
+  color: var(--color-dark--1, #333);
+  border: 1.5px solid var(--color-primary, #5ec576);
+  border-radius: 2rem;
+  padding: 0.6rem 1.4rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 0.2rem 0.6rem rgba(0, 0, 0, 0.05);
+}
+
+.btn--lang-toggle:hover {
+  background-color: var(--color-primary, #5ec576);
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 0.4rem 1rem rgba(94, 197, 118, 0.25);
+}
+
+/* OFF-SCREEN GOOGLE TRANSLATE ELEMENT & COMPLETE POPUP SUPPRESSION */
+#google_translate_element {
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 .goog-te-banner-frame,
 .goog-te-banner-frame.skiptranslate,
 iframe.goog-te-banner-frame,
@@ -1509,19 +1544,6 @@ font {
 body {
   top: 0px !important;
   position: static !important;
-}
-
-.skiptranslate {
-  font-size: 0 !important;
-}
-
-.goog-te-gadget {
-  color: transparent !important;
-  font-size: 0 !important;
-}
-
-#google_translate_element {
-  display: none !important;
 }
 
 
