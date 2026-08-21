@@ -505,4 +505,244 @@ if (document.readyState === 'loading') {
   checkLoginRequiredParam();
 }
 
+// ============================================================
+// SMART AMORTIZATION & EMI CALCULATOR ENGINE & MODAL
+// ============================================================
+const CalculatorEngine = {
+  calculateAmortization(principal, annualRate, tenureYears) {
+    const p = parseFloat(principal) || 0;
+    const rate = parseFloat(annualRate) || 0;
+    const years = parseFloat(tenureYears) || 0;
+
+    const totalMonths = Math.max(1, Math.round(years * 12));
+    const monthlyRate = rate / 12 / 100;
+
+    let emi = 0;
+    if (monthlyRate > 0) {
+      emi = (p * monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1);
+    } else {
+      emi = p / totalMonths;
+    }
+
+    const totalPayment = emi * totalMonths;
+    const totalInterest = Math.max(0, totalPayment - p);
+
+    const schedule = [];
+    let balance = p;
+    let accumulatedInterest = 0;
+    let accumulatedPrincipal = 0;
+
+    for (let month = 1; month <= totalMonths; month++) {
+      const interestPayment = balance * monthlyRate;
+      const principalPayment = Math.min(balance, emi - interestPayment);
+      balance = Math.max(0, balance - principalPayment);
+
+      accumulatedInterest += interestPayment;
+      accumulatedPrincipal += principalPayment;
+
+      if (month % 12 === 0 || month === totalMonths) {
+        const yearNum = Math.ceil(month / 12);
+        schedule.push({
+          year: `Year ${yearNum}`,
+          month: month,
+          principalPaid: accumulatedPrincipal,
+          interestPaid: accumulatedInterest,
+          balance: balance
+        });
+      }
+    }
+
+    return {
+      emi: Math.round(emi),
+      totalPayment: Math.round(totalPayment),
+      totalInterest: Math.round(totalInterest),
+      totalMonths: totalMonths,
+      schedule: schedule
+    };
+  },
+
+  formatCurrency(num) {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(num);
+  },
+
+  ensureModalContainer() {
+    if (document.getElementById('calc-modal-overlay')) return;
+
+    const modalHtml = `
+      <div id="calc-modal-overlay" class="modal-calc-overlay hidden">
+        <div class="modal-calc-window">
+          <button class="modal-calc__close" id="calc-modal-close" aria-label="Close Calculator">&times;</button>
+          
+          <div class="modal-calc__header">
+            <h3 class="modal-calc__title">🧮 Smart Amortization & EMI Calculator</h3>
+            <p class="modal-calc__subtitle">Calculate your exact monthly EMI, total interest, and annual balance breakdown schedule.</p>
+          </div>
+
+          <div class="modal-calc__grid">
+            <div class="calc-inputs-col">
+              <div class="calc-input-group">
+                <label for="calc-slider-principal">
+                  <span>Loan Amount (Principal)</span>
+                  <span class="calc-input-val" id="calc-val-principal">₹500,000</span>
+                </label>
+                <input type="range" id="calc-slider-principal" class="calc-range-slider" min="10000" max="10000000" step="10000" value="500000" />
+              </div>
+
+              <div class="calc-input-group">
+                <label for="calc-slider-rate">
+                  <span>Annual Interest Rate (%)</span>
+                  <span class="calc-input-val" id="calc-val-rate">5.5%</span>
+                </label>
+                <input type="range" id="calc-slider-rate" class="calc-range-slider" min="1.0" max="20.0" step="0.1" value="5.5" />
+              </div>
+
+              <div class="calc-input-group">
+                <label for="calc-slider-tenure">
+                  <span>Loan Tenure (Years)</span>
+                  <span class="calc-input-val" id="calc-val-tenure">15 Years</span>
+                </label>
+                <input type="range" id="calc-slider-tenure" class="calc-range-slider" min="1" max="30" step="1" value="15" />
+              </div>
+            </div>
+
+            <div class="calc-results-box">
+              <div class="calc-res-item">
+                <div class="calc-res-label">Monthly EMI Payment</div>
+                <div class="calc-res-value" id="res-calc-emi">₹4,085 / mo</div>
+              </div>
+
+              <div class="calc-res-item">
+                <div class="calc-res-label">Total Interest Payable</div>
+                <div class="calc-res-value calc-res-value--secondary" id="res-calc-interest">₹235,389</div>
+              </div>
+
+              <div class="calc-res-item">
+                <div class="calc-res-label">Total Repayment (Principal + Interest)</div>
+                <div class="calc-res-value calc-res-value--secondary" id="res-calc-total">₹735,389</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-calc__schedule">
+            <h4 class="modal-calc__schedule-title">📊 Annual Amortization Schedule Breakdown</h4>
+            <div class="calc-schedule-table-wrap">
+              <table class="calc-schedule-table">
+                <thead>
+                  <tr>
+                    <th>Timeline</th>
+                    <th>Cumulative Principal Paid</th>
+                    <th>Cumulative Interest Paid</th>
+                    <th>Remaining Balance</th>
+                  </tr>
+                </thead>
+                <tbody id="calc-schedule-tbody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    this.bindEvents();
+  },
+
+  bindEvents() {
+    const overlay = document.getElementById('calc-modal-overlay');
+    const closeBtn = document.getElementById('calc-modal-close');
+
+    if (closeBtn) closeBtn.onclick = () => this.closeModal();
+    if (overlay) {
+      overlay.onclick = (e) => {
+        if (e.target === overlay) this.closeModal();
+      };
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.closeModal();
+    });
+
+    const sliderPrincipal = document.getElementById('calc-slider-principal');
+    const sliderRate = document.getElementById('calc-slider-rate');
+    const sliderTenure = document.getElementById('calc-slider-tenure');
+
+    const updateCalc = () => {
+      const p = sliderPrincipal.value;
+      const r = sliderRate.value;
+      const t = sliderTenure.value;
+
+      document.getElementById('calc-val-principal').textContent = this.formatCurrency(p);
+      document.getElementById('calc-val-rate').textContent = `${parseFloat(r).toFixed(1)}%`;
+      document.getElementById('calc-val-tenure').textContent = `${t} Year${t > 1 ? 's' : ''}`;
+
+      const res = this.calculateAmortization(p, r, t);
+
+      document.getElementById('res-calc-emi').textContent = `${this.formatCurrency(res.emi)} / mo`;
+      document.getElementById('res-calc-interest').textContent = this.formatCurrency(res.totalInterest);
+      document.getElementById('res-calc-total').textContent = this.formatCurrency(res.totalPayment);
+
+      const tbody = document.getElementById('calc-schedule-tbody');
+      if (tbody) {
+        tbody.innerHTML = res.schedule
+          .map(
+            s => `
+            <tr>
+              <td><strong>${s.year}</strong> (Month ${s.month})</td>
+              <td>${this.formatCurrency(s.principalPaid)}</td>
+              <td>${this.formatCurrency(s.interestPaid)}</td>
+              <td><strong>${this.formatCurrency(s.balance)}</strong></td>
+            </tr>`
+          )
+          .join('');
+      }
+    };
+
+    if (sliderPrincipal) sliderPrincipal.oninput = updateCalc;
+    if (sliderRate) sliderRate.oninput = updateCalc;
+    if (sliderTenure) sliderTenure.oninput = updateCalc;
+  },
+
+  openModal(defaultPrincipal = 500000, defaultRate = 5.5, defaultTenure = 15) {
+    this.ensureModalContainer();
+
+    const sliderPrincipal = document.getElementById('calc-slider-principal');
+    const sliderRate = document.getElementById('calc-slider-rate');
+    const sliderTenure = document.getElementById('calc-slider-tenure');
+
+    if (sliderPrincipal) sliderPrincipal.value = defaultPrincipal;
+    if (sliderRate) sliderRate.value = defaultRate;
+    if (sliderTenure) sliderTenure.value = defaultTenure;
+
+    if (sliderPrincipal) sliderPrincipal.oninput();
+
+    const overlay = document.getElementById('calc-modal-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+    }
+  },
+
+  closeModal() {
+    const overlay = document.getElementById('calc-modal-overlay');
+    if (overlay) {
+      overlay.classList.add('hidden');
+    }
+  }
+};
+
+document.addEventListener('click', (e) => {
+  const calcCard = e.target.closest('[data-action="open-calc"]') || e.target.closest('.feature-card');
+  if (calcCard) {
+    const title = calcCard.querySelector('.feature-card__title')?.textContent || '';
+    if (title.toLowerCase().includes('amortization') || title.toLowerCase().includes('calculator') || title.toLowerCase().includes('loan') || title.toLowerCase().includes('yield') || title.toLowerCase().includes('goal')) {
+      e.preventDefault();
+      CalculatorEngine.openModal(500000, 5.5, 15);
+    }
+  }
+});
+
 

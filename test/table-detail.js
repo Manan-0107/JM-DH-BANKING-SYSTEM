@@ -304,12 +304,18 @@ function renderTableDetail() {
   if (featureGrid) {
     featureGrid.innerHTML = data.features
       .map(
-        f => `
-      <div class="feature-card">
+        f => {
+          const isCalc = f.title.toLowerCase().includes('calculator') || f.title.toLowerCase().includes('amortization') || f.title.toLowerCase().includes('goal') || f.title.toLowerCase().includes('yield');
+          const calcAttr = isCalc ? `data-action="open-calc" data-calc-title="${f.title}" style="cursor: pointer;"` : '';
+          const calcBadge = isCalc ? `<span class="calc-click-badge">Click to Calculate &rarr;</span>` : '';
+          return `
+      <div class="feature-card ${isCalc ? 'feature-card--interactive' : ''}" ${calcAttr}>
         <div class="feature-card__icon">${f.icon}</div>
         <h4 class="feature-card__title">${f.title}</h4>
         <p class="feature-card__desc">${f.desc}</p>
-      </div>`
+        ${calcBadge}
+      </div>`;
+        }
       )
       .join('');
   }
@@ -437,6 +443,19 @@ document.addEventListener('DOMContentLoaded', () => {
       sessionStorage.removeItem('username');
       window.location.href = 'index.html';
     });
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const calcCard = e.target.closest('[data-action="open-calc"]') || e.target.closest('.feature-card');
+  if (calcCard) {
+    const title = calcCard.querySelector('.feature-card__title')?.textContent || '';
+    if (title.toLowerCase().includes('amortization') || title.toLowerCase().includes('calculator') || title.toLowerCase().includes('loan') || title.toLowerCase().includes('yield') || title.toLowerCase().includes('goal')) {
+      e.preventDefault();
+      if (window.CalculatorEngine) {
+        window.CalculatorEngine.openModal(500000, 5.5, 15);
+      }
+    }
   }
 });
 
