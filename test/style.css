@@ -205,6 +205,42 @@ img {
   justify-items: start;
 }
 
+/* HEADER LOGGED-IN CENTERED LAYOUT */
+.header__title.header__title--logged-in,
+.is-logged-in .header__title {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: 100% !important;
+  max-width: 90rem !important;
+  margin: 0 auto !important;
+  grid-template-columns: none !important;
+}
+
+.header__title.header__title--logged-in .header__text-box,
+.is-logged-in .header__text-box {
+  text-align: center !important;
+  align-items: center !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+.header__title.header__title--logged-in #hero-heading,
+.is-logged-in #hero-heading {
+  text-align: center !important;
+}
+
+.header__title.header__title--logged-in #hero-subheading,
+.is-logged-in #hero-subheading {
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
 h1 {
   font-size: 5.5rem;
   line-height: 1.35;
@@ -1055,7 +1091,7 @@ h4 {
    ============================================================ */
 
 .btn--lang-toggle {
-  background-color: #fff;
+  background-color: #ffffff;
   border: 1px solid #ddd;
   padding: 0.8rem 1.8rem;
   border-radius: 3rem;
@@ -1066,12 +1102,116 @@ h4 {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.05);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .btn--lang-toggle:hover {
   border-color: var(--color-primary);
   background-color: var(--color-primary-opacity);
   transform: translateY(-2px);
+  box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.1);
+}
+
+/* Offscreen Google Translate widget container (keeps JS engine alive while hiding element) */
+#google_translate_element {
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Completely suppress Google Translate top toolbar banner, undo frame, and tooltips */
+.goog-te-banner-frame,
+.goog-te-banner,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+/* Prevent text highlighting artifact from Google Translate */
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   NAV ACCOUNT DROPDOWN MENU STYLES
+   ============================================================ */
+.nav__item--dropdown {
+  position: relative;
+}
+
+.dropdown-arrow {
+  font-size: 1.2rem;
+  margin-left: 0.4rem;
+  transition: transform 0.3s ease;
+  display: inline-block;
+}
+
+.nav__item--dropdown:hover .dropdown-arrow,
+.nav__item--dropdown.active .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.dropdown__menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: #ffffff;
+  min-width: 22rem;
+  border-radius: 1.2rem;
+  box-shadow: 0 1.5rem 3.5rem rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 1rem 0;
+  list-style: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
+}
+
+.nav__item--dropdown:hover .dropdown__menu,
+.nav__item--dropdown:focus-within .dropdown__menu,
+.nav__item--dropdown.active .dropdown__menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.dropdown__link {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 2rem;
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: #333;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.dropdown__link:hover {
+  background-color: var(--color-primary-opacity);
+  color: var(--color-primary);
+  padding-left: 2.4rem;
 }
 
 .header__text-box {
@@ -1097,6 +1237,26 @@ h4 {
 
 .header__form-container:hover {
   box-shadow: 0 2.5rem 5.5rem rgba(0, 0, 0, 0.13);
+}
+
+/* ============================================================
+   LOGIN SHAKE ANIMATION & ERROR STYLES
+   ============================================================ */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-12px); }
+  30%, 60%, 90% { transform: translateX(12px); }
+}
+
+.shake {
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  border-color: #d9534f !important;
+  box-shadow: 0 0.8rem 2.5rem rgba(217, 83, 79, 0.3) !important;
+}
+
+.input-error {
+  border-color: #d9534f !important;
+  background-color: #fff5f5 !important;
 }
 
 .form__tab-container {
@@ -1219,6 +1379,416 @@ a.btn--text:visited {
 }
 
 /* ============================================================
+   LOGGED IN AUTH & SECTION VISIBILITY STYLES
+   ============================================================ */
+.d-none {
+  display: none !important;
+}
+
+body.is-logged-in .header__form-container,
+html.is-logged-in .header__form-container {
+  display: none !important;
+}
+
+body.is-logged-in #nav-item-personal,
+body.is-logged-in #nav-item-logout,
+html.is-logged-in #nav-item-personal,
+html.is-logged-in #nav-item-logout {
+  display: inline-block !important;
+}
+
+.logged-in__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  background-color: var(--color-primary-opacity);
+  color: #2b7a4b;
+  padding: 0.6rem 1.6rem;
+  border-radius: 2rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0 auto 0.5rem auto;
+}
+
+.logged-in__dot {
+  width: 1rem;
+  height: 1rem;
+  background-color: #2b7a4b;
+  border-radius: 50%;
+  box-shadow: 0 0 0.8rem #2b7a4b;
+}
+
+.logged-in__info {
+  font-size: 1.4rem;
+  color: #555;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.auth__btn--logout {
+  background-color: #e74c3c !important;
+  color: #fff !important;
+  box-shadow: 0 0.4rem 1.2rem rgba(231, 76, 60, 0.3) !important;
+  margin-top: 0.8rem;
+}
+
+.auth__btn--logout:hover {
+  background-color: #c0392b !important;
+  color: #fff !important;
+}
+
+/* PAYMENT MODE BADGES (RTGS / NEFT) */
+.mode-badge {
+  display: inline-block;
+  padding: 0.35rem 1.2rem;
+  border-radius: 2rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  box-shadow: 0 0.2rem 0.5rem rgba(0, 0, 0, 0.05);
+}
+
+.mode-badge--rtgs {
+  background-color: rgba(94, 197, 118, 0.2);
+  color: #23683f;
+  border: 1px solid #39b385;
+}
+
+.mode-badge--neft {
+  background-color: rgba(255, 203, 3, 0.25);
+  color: #997300;
+  border: 1px solid #e6b800;
+}
+
+.header__title--logged-in {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+}
+
+/* ============================================================
+   LANGUAGE TOGGLE BUTTON & HIDDEN GOOGLE TRANSLATE ENGINE
+   ============================================================ */
+.btn--lang-toggle {
+  background-color: #fff;
+  color: var(--color-dark--1, #333);
+  border: 1.5px solid var(--color-primary, #5ec576);
+  border-radius: 2rem;
+  padding: 0.6rem 1.4rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 0.2rem 0.6rem rgba(0, 0, 0, 0.05);
+}
+
+.btn--lang-toggle:hover {
+  background-color: var(--color-primary, #5ec576);
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 0.4rem 1rem rgba(94, 197, 118, 0.25);
+}
+
+/* OFF-SCREEN GOOGLE TRANSLATE ELEMENT & COMPLETE POPUP SUPPRESSION */
+#google_translate_element {
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+iframe.goog-te-banner-frame,
+.goog-te-banner,
+#goog-gt-tt,
+#goog-gt-tt *,
+.goog-te-balloon-frame,
+.goog-tooltip,
+.goog-tooltip:hover,
+.goog-text-highlight,
+.VIpgJd-ZGain-Ovf-oZ24-wZ38ld,
+.VIpgJd-yLiTe-l4e-yLiTe,
+.VIpgJd-yLiTe-Ovf-oZ24-wZ38ld,
+.VIpgJd-yLiTe-aspect-ratio,
+.VIpgJd-yLiTe-a11y-speak-region,
+iframe[id*=":1.container"],
+iframe[id*=":2.container"],
+iframe[aria-label="Language Translate Widget"],
+.goog-te-spinner-pos,
+#goog-gt- {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+}
+
+font {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+/* ============================================================
+   INTERACTIVE AMORTIZATION & EMI CALCULATOR MODAL STYLING
+   ============================================================ */
+.modal-calc-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(5px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: all 0.3s ease;
+}
+
+.modal-calc-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.modal-calc-window {
+  background-color: #ffffff;
+  border-radius: 1.6rem;
+  max-width: 85rem;
+  width: 92%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 3.5rem;
+  box-shadow: 0 2.5rem 5rem rgba(0, 0, 0, 0.25);
+  position: relative;
+  animation: modalCalcSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalCalcSlideUp {
+  from {
+    transform: translateY(30px) scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.modal-calc__close {
+  position: absolute;
+  top: 2rem;
+  right: 2.5rem;
+  font-size: 3rem;
+  color: #777;
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.modal-calc__close:hover {
+  color: var(--color-tertiary, #ff585f);
+  transform: scale(1.15);
+}
+
+.modal-calc__header {
+  margin-bottom: 2.5rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 1.5rem;
+}
+
+.modal-calc__title {
+  font-size: 2.4rem;
+  font-weight: 600;
+  color: #222;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.modal-calc__subtitle {
+  font-size: 1.4rem;
+  color: #666;
+  margin-top: 0.5rem;
+}
+
+.modal-calc__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  margin-bottom: 2.5rem;
+}
+
+@media (max-width: 768px) {
+  .modal-calc__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.calc-input-group {
+  margin-bottom: 2rem;
+}
+
+.calc-input-group label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.8rem;
+}
+
+.calc-input-val {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary-darker, #39b385);
+  background: rgba(94, 197, 118, 0.12);
+  padding: 0.3rem 1rem;
+  border-radius: 1rem;
+}
+
+.calc-range-slider {
+  width: 100%;
+  height: 0.8rem;
+  border-radius: 0.4rem;
+  background: #e4e4e4;
+  outline: none;
+  cursor: pointer;
+  accent-color: var(--color-primary, #5ec576);
+}
+
+.calc-results-box {
+  background: linear-gradient(135deg, #f8fff9 0%, #edfbf1 100%);
+  border: 1px solid #d0f2d8;
+  border-radius: 1.2rem;
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.calc-res-item {
+  margin-bottom: 1.8rem;
+}
+
+.calc-res-item:last-child {
+  margin-bottom: 0;
+}
+
+.calc-res-label {
+  font-size: 1.3rem;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.calc-res-value {
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--color-primary-darker, #39b385);
+  margin-top: 0.3rem;
+}
+
+.calc-res-value--secondary {
+  font-size: 2rem;
+  color: #333;
+}
+
+.modal-calc__schedule {
+  margin-top: 2rem;
+}
+
+.modal-calc__schedule-title {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin-bottom: 1.2rem;
+  color: #222;
+}
+
+.calc-schedule-table-wrap {
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 0.8rem;
+}
+
+.calc-schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.3rem;
+  text-align: left;
+}
+
+.calc-schedule-table th {
+  background-color: #f7f9f7;
+  padding: 1rem 1.4rem;
+  color: #444;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.calc-schedule-table td {
+  padding: 0.8rem 1.4rem;
+  border-top: 1px solid #f0f0f0;
+  color: #555;
+}
+
+.feature-card--interactive {
+  position: relative;
+  transition: all 0.3s ease;
+  border: 1px solid var(--color-primary-opacity, rgba(94, 197, 118, 0.4)) !important;
+}
+
+.feature-card--interactive:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 1rem 2.5rem rgba(94, 197, 118, 0.2);
+  border-color: var(--color-primary, #5ec576) !important;
+}
+
+.calc-click-badge {
+  display: inline-block;
+  margin-top: 1rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--color-primary-darker, #39b385);
+  background: rgba(94, 197, 118, 0.15);
+  padding: 0.4rem 1rem;
+  border-radius: 1.2rem;
+  transition: all 0.2s;
+}
+
+.feature-card--interactive:hover .calc-click-badge {
+  background: var(--color-primary, #5ec576);
+  color: #fff;
+}
+
+/* ============================================================
    TOAST NOTIFICATIONS & DYNAMIC UI STATES
    ============================================================ */
 
@@ -1241,14 +1811,12 @@ a.btn--text:visited {
   font-size: 1.5rem;
   font-weight: 500;
   transform: translateX(120%);
-  opacity: 0;
   transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   border-left: 5px solid #ddd;
 }
 
 .toast--visible {
   transform: translateX(0);
-  opacity: 1;
 }
 
 .toast--success {
@@ -1260,7 +1828,6 @@ a.btn--text:visited {
 }
 
 .loading-spinner {
-  display: inline-block;
   width: 3rem;
   height: 3rem;
   border: 3px solid rgba(94, 197, 118, 0.3);
@@ -1279,4 +1846,5 @@ a.btn--text:visited {
   font-size: 1.2rem;
   border-radius: 2rem;
   margin-right: 0.5rem;
-}
+}
+

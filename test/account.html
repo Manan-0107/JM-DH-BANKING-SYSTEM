@@ -2,11 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=table-detail.html?table=account">
-  <script>window.location.replace("table-detail.html?table=account");</script>
   <title>Bankist | Account Features</title>
+  <script>
+    (function () {
+      const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
+      if (isLoggedIn) {
+        window.location.replace("table-detail.html?table=account");
+      } else {
+        alert("⚠️ Access Restricted: You need to log in first to access Account features and details.");
+        window.location.replace("index.html?loginRequired=true");
+      }
+    })();
+  </script>
 </head>
 <body>
-  <p>Redirecting to <a href="table-detail.html?table=account">Account Features</a>...</p>
+  <p>Checking authentication...</p>
 </body>
 </html>

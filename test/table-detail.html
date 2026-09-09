@@ -6,6 +6,8 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
     <link rel="shortcut icon" type="image/png" href="img/icon.png" />
 
+    <link rel="preconnect" href="https://translate.google.com" />
+    <link rel="preconnect" href="https://translate.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600&display=swap"
       rel="stylesheet"
@@ -26,22 +28,50 @@
       </a>
 
       <ul class="nav__links">
-        <li class="nav__item">
-          <a class="nav__link" href="index.html#section--1">Features</a>
+        <li class="nav__item" id="nav-item-home">
+          <a class="nav__link" href="index.html">Home</a>
         </li>
-        <li class="nav__item">
-          <a class="nav__link" href="index.html#section--2">Tables</a>
+        <li class="nav__item nav__item--dropdown">
+          <a class="nav__link" href="table-detail.html?table=account" id="nav-account-btn">
+            Account <span class="dropdown-arrow">▾</span>
+          </a>
+          <ul class="dropdown__menu">
+            <li><a class="dropdown__link" href="table-detail.html?table=account">💳 High-Yield Savings</a></li>
+            <li><a class="dropdown__link" href="table-detail.html?table=account">🏢 Business Checking</a></li>
+            <li><a class="dropdown__link" href="table-detail.html?table=account">🎓 Student Advantage</a></li>
+            <li><a class="dropdown__link" href="table-detail.html?table=account">🌐 International Treasury</a></li>
+            <li style="border-top: 1px solid #eee; margin-top: 0.4rem; padding-top: 0.4rem;">
+              <a class="dropdown__link btn--show-modal" href="#">✨ Instant Account Creation</a>
+            </li>
+          </ul>
         </li>
-        <li class="nav__item">
-          <a class="nav__link" href="index.html#section--3">Operations</a>
+        <li class="nav__item d-none" id="nav-item-personal">
+          <a class="nav__link" href="personal.html">Personal</a>
         </li>
-        <li class="nav__item">
-          <a class="nav__link" href="index.html#section--4">Testimonials</a>
+        <li class="nav__item nav__item--dropdown">
+          <a class="nav__link" href="table-detail.html?table=loan" id="nav-loan-btn">
+            Loan <span class="dropdown-arrow">▾</span>
+          </a>
+          <ul class="dropdown__menu">
+            <li><a class="dropdown__link" href="table-detail.html?table=loan">🏠 Home Mortgage Loan</a></li>
+            <li><a class="dropdown__link" href="table-detail.html?table=loan">🚗 Electric Vehicle Loan</a></li>
+            <li><a class="dropdown__link" href="table-detail.html?table=loan">💼 Small Business Financing</a></li>
+            <li><a class="dropdown__link" href="table-detail.html?table=loan">🏢 Commercial Property Loan</a></li>
+            <li><a class="dropdown__link" href="table-detail.html?table=loan">💳 Personal Credit Line</a></li>
+          </ul>
         </li>
+
         <li class="nav__item">
           <a class="nav__link nav__link--btn btn--show-modal" href="#"
             >Open account</a
           >
+        </li>
+        <li class="nav__item d-none" id="nav-item-logout">
+          <button class="btn auth__btn--logout" id="nav-btn-logout" style="padding: 0.8rem 2.2rem; font-size: 1.4rem;">Log Out &rarr;</button>
+        </li>
+        <li class="nav__item" id="nav-item-lang">
+          <button class="btn--lang-toggle notranslate skiptranslate" id="lang-toggle-btn" title="Switch Language (English / हिंदी)">🌐 EN / हिंदी</button>
+          <div id="google_translate_element"></div>
         </li>
       </ul>
     </nav>
@@ -201,8 +231,10 @@
     </div>
     <div class="overlay hidden"></div>
 
+    <script src="script.js"></script>
     <script src="api.js"></script>
     <script src="table-detail-api.js"></script>
     <script src="table-detail.js"></script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
   </body>
 </html>
