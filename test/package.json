@@ -1,0 +1,19 @@
+{
+  "name": "bankist-server",
+  "version": "1.0.0",
+  "description": "Bankist Banking System Backend API",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.23.3",
+    "uuid": "^10.0.0"
+  }
+}

@@ -56,8 +56,7 @@
         </div>
 
         <!-- LOGIN FORM -->
-        <form class="auth__form auth__form--login" id="form-login"
-          onsubmit="event.preventDefault(); alert('Login successful!');">
+        <form class="auth__form auth__form--login" id="form-login">
           <h3 class="auth__header" id="login-header-title">Welcome Back</h3>
           <div class="input-group">
             <label id="lbl-user">User ID / Email</label>
@@ -71,8 +70,7 @@
         </form>
 
         <!-- SIGNUP FORM -->
-        <form class="auth__form auth__form--signup hidden" id="form-signup"
-          onsubmit="event.preventDefault(); alert('Account created successfully!');">
+        <form class="auth__form auth__form--signup hidden" id="form-signup">
           <h3 class="auth__header" id="signup-header-title">Get Started Today</h3>
           <div class="input-group">
             <label id="lbl-fullname">Full Name</label>
@@ -400,6 +398,9 @@
   </div>
   <div class="overlay hidden"></div>
 
+  <script src="api.js"></script>
+  <script src="banking.js"></script>
+  <script src="dashboard.js"></script>
   <script src="script.js"></script>
 </body>
 
