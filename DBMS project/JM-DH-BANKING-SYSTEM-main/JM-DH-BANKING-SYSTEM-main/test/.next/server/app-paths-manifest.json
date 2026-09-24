@@ -1,0 +1,12 @@
+{
+  "/page": "app/page.js",
+  "/api/beneficiaries/route": "app/api/beneficiaries/route.js",
+  "/api/auth/me/route": "app/api/auth/me/route.js",
+  "/api/upi/simulate-receive/route": "app/api/upi/simulate-receive/route.js",
+  "/table-detail/page": "app/table-detail/page.js",
+  "/personal/page": "app/personal/page.js",
+  "/api/transactions/my-transactions/route": "app/api/transactions/my-transactions/route.js",
+  "/api/accounts/[id]/freeze/route": "app/api/accounts/[id]/freeze/route.js",
+  "/api/deposits/route": "app/api/deposits/route.js",
+  "/api/accounts/[id]/withdraw/route": "app/api/accounts/[id]/withdraw/route.js"
+}
