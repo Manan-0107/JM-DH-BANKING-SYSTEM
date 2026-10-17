@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
+import { getUserFromRequest, verifyTransactionPin, generateTransactionReference } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { source_account, deposit_type, principal_amount, tenure_months, pin } = body;
 
     if (!source_account) {
@@ -56,7 +55,7 @@ export async function POST(request: Request) {
 
     const db = await getDb();
 
-    // Verify source account
+    // 1. Verify source account
     const [accRows] = await db.query(
       `SELECT * FROM accounts WHERE account_number = ? AND customer_id = ?`,
       [source_account, authUser.customer_id]
@@ -77,21 +76,22 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Verify PIN
-    const [custRows] = await db.query(`SELECT password_hash, card_pin FROM customers WHERE customer_id = ?`, [authUser.customer_id]);
+    // 2. Verify PIN
+    const [custRows] = await db.query(
+      `SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?`,
+      [authUser.customer_id]
+    );
+
     if (!custRows || custRows.length === 0) {
       return NextResponse.json({ error: 'Customer verification failed' }, { status: 404 });
     }
 
-    const providedPin = (pin || '').trim();
-    const matchesCardPin = custRows[0].card_pin && custRows[0].card_pin === providedPin;
-    const matchesPassword = bcrypt.compareSync(providedPin, custRows[0].password_hash);
-
-    if (!matchesCardPin && !matchesPassword) {
+    const isValidPin = verifyTransactionPin(pin, custRows[0]);
+    if (!isValidPin) {
       return NextResponse.json({ error: 'Invalid 4-digit Debit Card PIN entered' }, { status: 401 });
     }
 
-    // Determine interest rate based on tenure
+    // 3. Determine Interest Rate
     let rate = 6.5;
     if (tenure <= 3) rate = 6.25;
     else if (tenure <= 6) rate = 6.75;
@@ -99,8 +99,6 @@ export async function POST(request: Request) {
     else if (tenure <= 36) rate = 7.75;
     else rate = 8.10;
 
-    // Senior citizen bonus simulation (+0.50% if age > 60, optional)
-    // Maturity Calculation: A = P * (1 + r/(4*100))^(4 * (tenure/12))
     const tYears = tenure / 12;
     const n = 4; // quarterly compounding
     const maturityAmount = Math.round(amount * Math.pow(1 + (rate / 100) / n, n * tYears) * 100) / 100;
@@ -113,23 +111,37 @@ export async function POST(request: Request) {
     const maturityDateStr = maturityDate.toISOString().slice(0, 10);
     const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    await db.transaction(async (conn) => {
-      // 1. Deduct principal from source account
-      await conn.query(`UPDATE accounts SET balance = balance - ? WHERE account_number = ?`, [amount, source_account]);
+    const { txnId, referenceNumber } = generateTransactionReference('TXN-BOOK');
 
-      // 2. Insert into deposits table
+    // 4. Atomic Execution with Concurrency Protection
+    await db.transaction(async (conn) => {
+      const [debitResult] = await conn.query(
+        `UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND balance >= ? AND status = ?`,
+        [amount, source_account, amount, 'Active']
+      );
+
+      const affected = (debitResult as any)?.affectedRows ?? (debitResult as any)?.changes ?? 0;
+      if (affected === 0) {
+        throw new Error('INSUFFICIENT_FUNDS');
+      }
+
       await conn.query(
         `INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?)`,
         [depositId, authUser.customer_id, source_account, finalType, amount, rate, tenure, maturityAmount, maturityDateStr, nowTime]
       );
 
-      // 3. Record transaction in ledger
-      const txnId = `TXN-${Date.now().toString().slice(-8)}`;
       await conn.query(
-        `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description)
-         VALUES (?, ?, NULL, ?, 'Transfer', ?, 'Success', ?)`,
-        [txnId, source_account, amount, nowTime, `${finalType} Booking (${depositId}) - ${tenure} Mo @ ${rate}% p.a.`]
+        `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
+         VALUES (?, ?, NULL, ?, 'Transfer', ?, 'Success', ?, ?)`,
+        [txnId, source_account, amount, nowTime, `${finalType} Booking (${depositId}) - ${tenure} Mo @ ${rate}% p.a.`, referenceNumber]
+      );
+
+      const auditId = `AUD-${Date.now().toString().slice(-6)}`;
+      await conn.query(
+        `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
+         VALUES (?, ?, 'DEPOSIT_BOOKING', 'DEPOSIT', ?, ?, ?)`,
+        [auditId, authUser.customer_id, depositId, `Booked ${finalType} ₹${amount}. Ref: ${referenceNumber}`, nowTime]
       );
     });
 
@@ -142,7 +154,10 @@ export async function POST(request: Request) {
       account: updatedAccount[0],
     }, { status: 201 });
   } catch (err: any) {
+    if (err.message === 'INSUFFICIENT_FUNDS') {
+      return NextResponse.json({ error: 'Deposit booking failed: Insufficient funds in source account.' }, { status: 400 });
+    }
     console.error('Book deposit error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to book deposit' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to book term deposit. Please try again.' }, { status: 500 });
   }
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
+import { getUserFromRequest, verifyTransactionPin, generateTransactionReference } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -19,7 +18,7 @@ export async function POST(
 
     const db = await getDb();
 
-    // Verify deposit ownership
+    // 1. Verify deposit ownership
     const [depRows] = await db.query(
       `SELECT * FROM deposits WHERE deposit_id = ? AND customer_id = ?`,
       [id, authUser.customer_id]
@@ -31,46 +30,62 @@ export async function POST(
 
     const deposit = depRows[0];
     if (deposit.status !== 'Active') {
-      return NextResponse.json({ error: `This deposit is already ${deposit.status.toLowerCase()}.` }, { status: 400 });
+      return NextResponse.json({ error: `This deposit certificate is already ${deposit.status.toLowerCase()}.` }, { status: 400 });
     }
 
-    // Verify PIN if provided
-    const [custRows] = await db.query(`SELECT password_hash, card_pin FROM customers WHERE customer_id = ?`, [authUser.customer_id]);
+    // 2. Verify PIN
+    const [custRows] = await db.query(
+      `SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?`,
+      [authUser.customer_id]
+    );
+
     if (!custRows || custRows.length === 0) {
       return NextResponse.json({ error: 'Customer verification failed' }, { status: 404 });
     }
 
-    const providedPin = (pin || '').trim();
-    if (providedPin) {
-      const matchesCardPin = custRows[0].card_pin && custRows[0].card_pin === providedPin;
-      const matchesPassword = bcrypt.compareSync(providedPin, custRows[0].password_hash);
-      if (!matchesCardPin && !matchesPassword) {
+    if (pin) {
+      const isValidPin = verifyTransactionPin(pin, custRows[0]);
+      if (!isValidPin) {
         return NextResponse.json({ error: 'Invalid PIN entered for liquidation' }, { status: 401 });
       }
     }
 
-    // Payout calculation: Principal + proportional interest (less 0.5% premature penalty)
+    // 3. Payout calculation
     const principal = parseFloat(deposit.principal_amount);
-    const nominalRate = Math.max(3.5, parseFloat(deposit.interest_rate) - 0.5); // Penalty deducted
-    const prematureInterest = Math.round((principal * (nominalRate / 100) * 0.5) * 100) / 100; // simulated 6-mo accrual
+    const nominalRate = Math.max(3.5, parseFloat(deposit.interest_rate) - 0.5); // 0.5% premature deduction
+    const prematureInterest = Math.round((principal * (nominalRate / 100) * 0.5) * 100) / 100;
     const totalPayout = principal + prematureInterest;
 
     const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const targetAccount = deposit.linked_account;
 
-    await db.transaction(async (conn) => {
-      // 1. Mark deposit as Liquidated
-      await conn.query(`UPDATE deposits SET status = 'Liquidated' WHERE deposit_id = ?`, [id]);
+    const { txnId, referenceNumber } = generateTransactionReference('TXN-LIQ');
 
-      // 2. Credit payout back to linked account
+    // 4. Atomic Execution
+    await db.transaction(async (conn) => {
+      // Ensure deposit is still Active
+      const [updateDep] = await conn.query(
+        `UPDATE deposits SET status = 'Liquidated' WHERE deposit_id = ? AND status = 'Active'`,
+        [id]
+      );
+      const affected = (updateDep as any)?.affectedRows ?? (updateDep as any)?.changes ?? 0;
+      if (affected === 0) {
+        throw new Error('ALREADY_LIQUIDATED');
+      }
+
       await conn.query(`UPDATE accounts SET balance = balance + ? WHERE account_number = ?`, [totalPayout, targetAccount]);
 
-      // 3. Record transaction in ledger
-      const txnId = `TXN-${Date.now().toString().slice(-8)}`;
       await conn.query(
-        `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description)
-         VALUES (?, NULL, ?, ?, 'Deposit', ?, 'Success', ?)`,
-        [txnId, targetAccount, totalPayout, nowTime, `Premature Liquidation Refund - ${id} (Principal: ₹${principal} + Net Int: ₹${prematureInterest})`]
+        `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
+         VALUES (?, NULL, ?, ?, 'Deposit', ?, 'Success', ?, ?)`,
+        [txnId, targetAccount, totalPayout, nowTime, `Premature Liquidation Refund - ${id} (Principal: ₹${principal} + Net Int: ₹${prematureInterest})`, referenceNumber]
+      );
+
+      const auditId = `AUD-${Date.now().toString().slice(-6)}`;
+      await conn.query(
+        `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
+         VALUES (?, ?, 'DEPOSIT_LIQUIDATION', 'DEPOSIT', ?, ?, ?)`,
+        [auditId, authUser.customer_id, id, `Liquidated ${id} for ₹${totalPayout} into ${targetAccount}. Ref: ${referenceNumber}`, nowTime]
       );
     });
 
@@ -82,7 +97,10 @@ export async function POST(
       account: updatedAccount[0],
     });
   } catch (err: any) {
+    if (err.message === 'ALREADY_LIQUIDATED') {
+      return NextResponse.json({ error: 'This deposit has already been liquidated.' }, { status: 400 });
+    }
     console.error('Break deposit error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to liquidate deposit' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to liquidate deposit. Please try again.' }, { status: 500 });
   }
 }

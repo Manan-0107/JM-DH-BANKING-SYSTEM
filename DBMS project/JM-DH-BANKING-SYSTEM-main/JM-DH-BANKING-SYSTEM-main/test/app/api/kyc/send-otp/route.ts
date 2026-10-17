@@ -1,46 +1,61 @@
 import { NextResponse } from 'next/server';
-
-// In-memory OTP store for simulated verification session (keyed by identifier + purpose)
-const otpStore = new Map<string, { otp: string; expiresAt: number }>();
+import { getDb } from '@/lib/db';
+import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { identifier, purpose } = body;
 
-    if (!identifier) {
+    if (!identifier || typeof identifier !== 'string' || !identifier.trim()) {
       return NextResponse.json(
         { error: 'Mobile number or Aadhaar UID is required' },
         { status: 400 }
       );
     }
 
+    const cleanIdentifier = identifier.trim().replace(/\s/g, '');
+    const cleanPurpose = (purpose || 'GENERAL').trim();
+
     // Generate simulated 6-digit OTP
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const key = `${purpose || 'GENERAL'}_${identifier.trim()}`;
+    const sessionId = `OTP-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
 
-    // Store OTP for 5 minutes
-    otpStore.set(key, {
-      otp: generatedOtp,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    });
+    const db = await getDb();
+
+    // Invalidate any previous unverified OTPs for this identifier/purpose
+    await db.query(
+      `DELETE FROM otp_sessions WHERE identifier = ? AND purpose = ?`,
+      [cleanIdentifier, cleanPurpose]
+    );
+
+    // Persist OTP in database table otp_sessions
+    await db.query(
+      `INSERT INTO otp_sessions (session_id, identifier, purpose, otp_code, expires_at, verified)
+       VALUES (?, ?, ?, ?, ?, 0)`,
+      [sessionId, cleanIdentifier, cleanPurpose, generatedOtp, expiresAt]
+    );
 
     let channelMessage = '';
-    if (purpose === 'AADHAAR_VERIFICATION') {
-      channelMessage = `Simulated UIDAI e-KYC OTP sent to mobile registered with Aadhaar ending in ${identifier.slice(-4)}`;
+    if (cleanPurpose === 'AADHAAR_VERIFICATION') {
+      channelMessage = `Simulated UIDAI e-KYC OTP sent to mobile registered with Aadhaar ending in ${cleanIdentifier.slice(-4)}`;
     } else {
-      channelMessage = `Simulated SMS OTP sent to +91 ${identifier}`;
+      channelMessage = `Simulated SMS OTP sent to +91 ${cleanIdentifier}`;
     }
 
     return NextResponse.json({
       success: true,
+      session_id: sessionId,
       message: channelMessage,
       test_otp: generatedOtp,
       expires_in_sec: 300,
+      disclaimer: 'College DBMS Project Simulation: OTP generated in-memory/database for testing.',
     });
   } catch (error: any) {
+    console.error('Send OTP Error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate OTP: ' + error.message },
+      { error: 'Failed to generate OTP. Please try again.' },
       { status: 500 }
     );
   }

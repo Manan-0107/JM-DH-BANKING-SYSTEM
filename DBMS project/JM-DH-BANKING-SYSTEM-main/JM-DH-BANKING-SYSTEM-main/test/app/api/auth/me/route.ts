@@ -19,15 +19,24 @@ export async function GET(request: Request) {
 
     const customer = custRows[0];
     delete customer.password_hash;
+    delete customer.card_pin;
+    delete customer.card_pin_hash;
 
     const [accounts] = await db.query(
       "SELECT * FROM accounts WHERE customer_id = ? ORDER BY opening_date DESC",
       [customer.customer_id]
     );
 
+    const sanitizedAccounts = (accounts || []).map((acc: any) => {
+      const copy = { ...acc };
+      delete copy.card_pin;
+      delete copy.card_pin_hash;
+      return copy;
+    });
+
     return NextResponse.json({
       customer,
-      accounts: accounts || []
+      accounts: sanitizedAccounts,
     });
   } catch (err: any) {
     console.error('Get me error:', err);

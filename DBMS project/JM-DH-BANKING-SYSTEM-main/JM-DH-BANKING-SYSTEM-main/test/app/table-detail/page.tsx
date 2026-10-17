@@ -33,7 +33,7 @@ function TableDetailContent() {
     }
   }, [searchParams]);
 
-  const branches = [
+  const [branches, setBranches] = useState([
     { name: 'Mumbai Nariman Point Hub', ifsc: 'BTBI0001024', city: 'Mumbai', address: 'Ground Floor, Express Towers, Nariman Point, Mumbai 400021', timing: '09:30 AM - 04:30 PM', phone: '022-22881024' },
     { name: 'Bengaluru MG Road Branch', ifsc: 'BTBI0002018', city: 'Bengaluru', address: 'Prestige Meridian, 29 MG Road, Bengaluru 560001', timing: '09:30 AM - 04:30 PM', phone: '080-25582018' },
     { name: 'Delhi Connaught Place Branch', ifsc: 'BTBI0003055', city: 'New Delhi', address: 'Inner Circle, Blocks A-C, Connaught Place, New Delhi 110001', timing: '09:30 AM - 04:30 PM', phone: '011-23343055' },
@@ -42,7 +42,18 @@ function TableDetailContent() {
     { name: 'Hyderabad Banjara Hills Branch', ifsc: 'BTBI0006033', city: 'Hyderabad', address: 'Road No. 12, Banjara Hills, Hyderabad 500034', timing: '09:30 AM - 04:30 PM', phone: '040-23396033' },
     { name: 'Chennai Anna Salai Branch', ifsc: 'BTBI0007019', city: 'Chennai', address: 'Mount Road, Anna Salai, Chennai 600002', timing: '09:30 AM - 04:30 PM', phone: '044-28527019' },
     { name: 'Kolkata Park Street Branch', ifsc: 'BTBI0008044', city: 'Kolkata', address: 'Park Street Crossing, Kolkata 700016', timing: '09:30 AM - 04:30 PM', phone: '033-22298044' },
-  ];
+  ]);
+
+  useEffect(() => {
+    fetch('/api/institutional')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.branches && data.branches.length > 0) {
+          setBranches(data.branches);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const filteredBranches = branches.filter((b) => {
     const q = branchSearch.toLowerCase();

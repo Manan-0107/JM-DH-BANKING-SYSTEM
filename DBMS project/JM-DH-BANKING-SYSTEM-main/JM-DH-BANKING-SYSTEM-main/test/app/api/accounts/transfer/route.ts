@@ -1,20 +1,31 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
+import { getUserFromRequest, verifyTransactionPin, generateTransactionReference } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
     const authUser = getUserFromRequest(request);
     if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Session invalid or expired' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { from_account, to_account, amount, description, pin } = body;
 
-    if (!from_account || !to_account) {
-      return NextResponse.json({ error: 'Both sender and beneficiary account numbers are required' }, { status: 400 });
+    // 1. Strict Input Validation
+    if (!from_account || typeof from_account !== 'string' || !from_account.trim()) {
+      return NextResponse.json({ error: 'Sender account number is required' }, { status: 400 });
+    }
+
+    if (!to_account || typeof to_account !== 'string' || !to_account.trim()) {
+      return NextResponse.json({ error: 'Beneficiary account number is required' }, { status: 400 });
+    }
+
+    const cleanFrom = from_account.trim();
+    const cleanTo = to_account.trim();
+
+    if (cleanFrom === cleanTo) {
+      return NextResponse.json({ error: 'Sender and beneficiary accounts cannot be identical' }, { status: 400 });
     }
 
     const numAmount = parseFloat(amount);
@@ -26,10 +37,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Maximum IMPS transfer limit is ₹5,00,000 per transaction' }, { status: 400 });
     }
 
+    if (!pin || typeof pin !== 'string' || !pin.trim()) {
+      return NextResponse.json({ error: 'Debit Card 4-Digit PIN is required for authorization' }, { status: 400 });
+    }
+
     const db = await getDb();
 
-    // Verify sender account exists and is owned by authUser
-    const [senderRows] = await db.query("SELECT * FROM accounts WHERE account_number = ?", [from_account]);
+    // 2. Sender Account Ownership & Status Verification
+    const [senderRows] = await db.query(
+      'SELECT account_number, customer_id, balance, status FROM accounts WHERE account_number = ?',
+      [cleanFrom]
+    );
+
     if (!senderRows || senderRows.length === 0) {
       return NextResponse.json({ error: 'Sender account not found' }, { status: 404 });
     }
@@ -40,17 +59,23 @@ export async function POST(request: Request) {
     }
 
     if (senderAcc.status !== 'Active') {
-      return NextResponse.json({ error: 'Sender account is currently frozen or inactive. Please unfreeze before transacting.' }, { status: 400 });
+      return NextResponse.json({ error: `Sender account is currently ${senderAcc.status.toLowerCase()}. Please unfreeze before transacting.` }, { status: 400 });
     }
 
     if (parseFloat(senderAcc.balance) < numAmount) {
-      return NextResponse.json({ error: `Insufficient funds. Available balance: ₹${parseFloat(senderAcc.balance).toLocaleString('en-IN')}` }, { status: 400 });
+      return NextResponse.json({
+        error: `Insufficient funds. Available balance: ₹${parseFloat(senderAcc.balance).toLocaleString('en-IN')}`,
+      }, { status: 400 });
     }
 
-    // Verify receiver account exists
-    const [receiverRows] = await db.query("SELECT * FROM accounts WHERE account_number = ?", [to_account]);
+    // 3. Beneficiary Account Existence & Status Verification
+    const [receiverRows] = await db.query(
+      'SELECT account_number, status, customer_id FROM accounts WHERE account_number = ?',
+      [cleanTo]
+    );
+
     if (!receiverRows || receiverRows.length === 0) {
-      return NextResponse.json({ error: 'Beneficiary/Receiver account not found. Please verify the account number.' }, { status: 404 });
+      return NextResponse.json({ error: 'Beneficiary account not found. Please verify the account number.' }, { status: 404 });
     }
 
     const receiverAcc = receiverRows[0];
@@ -58,51 +83,84 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Beneficiary account is currently inactive.' }, { status: 400 });
     }
 
-    // Verify user Card PIN / Authorization PIN
-    const [custRows] = await db.query("SELECT password_hash, card_pin FROM customers WHERE customer_id = ?", [authUser.customer_id]);
+    // 4. Verify Customer PIN or NetBanking Password
+    const [custRows] = await db.query(
+      'SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?',
+      [authUser.customer_id]
+    );
+
     if (!custRows || custRows.length === 0) {
-      return NextResponse.json({ error: 'Customer record not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Customer verification failed' }, { status: 404 });
     }
 
-    const providedPin = (pin || '').trim();
-    const matchesCardPin = custRows[0].card_pin && custRows[0].card_pin === providedPin;
-    const matchesPassword = bcrypt.compareSync(providedPin, custRows[0].password_hash);
-
-    if (!matchesCardPin && !matchesPassword) {
+    const isValidPin = verifyTransactionPin(pin, custRows[0]);
+    if (!isValidPin) {
       return NextResponse.json({ error: 'Invalid 4-digit Debit Card PIN entered' }, { status: 401 });
     }
 
-    // Generate unique transaction ID
-    const txnId = `TXN-${Date.now().toString().slice(-8)}`;
+    // 5. Generate Collision-Proof Transaction Reference
+    const { txnId, referenceNumber } = generateTransactionReference('TXN');
     const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const finalDesc = description ? description.trim() : `IMPS Fund Transfer to ${cleanTo}`;
 
+    // 6. Execute Concurrency-Safe Atomic Transfer
     await db.transaction(async (conn) => {
-      await conn.query("UPDATE accounts SET balance = balance - ? WHERE account_number = ?", [numAmount, from_account]);
-      await conn.query("UPDATE accounts SET balance = balance + ? WHERE account_number = ?", [numAmount, to_account]);
-      await conn.query(`
-        INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description)
-        VALUES (?, ?, ?, ?, 'Transfer', ?, 'Success', ?)
-      `, [txnId, from_account, to_account, numAmount, nowTime, description || `IMPS Transfer to ${to_account}`]);
+      // Conditional atomic debit: prevents race condition / negative balance under concurrent requests
+      const [debitResult] = await conn.query(
+        'UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND balance >= ? AND status = ?',
+        [numAmount, cleanFrom, numAmount, 'Active']
+      );
+
+      const affected = (debitResult as any)?.affectedRows ?? (debitResult as any)?.changes ?? 0;
+      if (affected === 0) {
+        throw new Error('INSUFFICIENT_FUNDS');
+      }
+
+      // Credit receiver account
+      await conn.query(
+        'UPDATE accounts SET balance = balance + ? WHERE account_number = ?',
+        [numAmount, cleanTo]
+      );
+
+      // Insert transaction ledger record
+      await conn.query(
+        `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
+         VALUES (?, ?, ?, ?, 'Transfer', ?, 'Success', ?, ?)`,
+        [txnId, cleanFrom, cleanTo, numAmount, nowTime, finalDesc, referenceNumber]
+      );
+
+      // Record administrative audit trail
+      const auditId = `AUD-${Date.now().toString().slice(-6)}`;
+      await conn.query(
+        `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
+         VALUES (?, ?, 'FUND_TRANSFER', 'TRANSACTION', ?, ?, ?)`,
+        [auditId, authUser.customer_id, txnId, `Transferred ₹${numAmount} from ${cleanFrom} to ${cleanTo}. Ref: ${referenceNumber}`, nowTime]
+      );
     });
 
-    const [updatedSender] = await db.query("SELECT * FROM accounts WHERE account_number = ?", [from_account]);
+    // Fetch updated sender account
+    const [updatedSender] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [cleanFrom]);
 
     return NextResponse.json({
-      message: `₹${numAmount.toLocaleString('en-IN')} transferred successfully to ${to_account}`,
+      message: `₹${numAmount.toLocaleString('en-IN')} transferred successfully to ${cleanTo}`,
       transaction: {
         transaction_id: txnId,
-        sender_account: from_account,
-        receiver_account: to_account,
+        reference_number: referenceNumber,
+        sender_account: cleanFrom,
+        receiver_account: cleanTo,
         amount: numAmount,
         type: 'Transfer',
         date_time: nowTime,
         status: 'Success',
-        description: description || `IMPS Transfer to ${to_account}`
+        description: finalDesc,
       },
-      sender: updatedSender[0]
+      sender: updatedSender[0],
     });
   } catch (err: any) {
-    console.error('Transfer error:', err);
-    return NextResponse.json({ error: err.message || 'Transfer failed' }, { status: 500 });
+    if (err.message === 'INSUFFICIENT_FUNDS') {
+      return NextResponse.json({ error: 'Transfer failed: Insufficient account balance or concurrent transaction update.' }, { status: 400 });
+    }
+    console.error('Transfer API Error:', err);
+    return NextResponse.json({ error: 'Unable to process fund transfer. Please try again.' }, { status: 500 });
   }
 }
