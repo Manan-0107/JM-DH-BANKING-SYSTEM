@@ -3,10 +3,40 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { AuthUser } from '@/types';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'btb-banking-auth-token-key-2026-secure-hash-jwt';
+// In-memory runtime cache for development/test ephemeral secret
+const globalForJwt = globalThis as unknown as { devEphemeralJwtSecret?: string };
+
+export function getJwtSecret(): string {
+  const envSecret = process.env.JWT_SECRET ? process.env.JWT_SECRET.trim() : '';
+
+  if (envSecret && envSecret.length >= 16) {
+    return envSecret;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'CRITICAL SECURITY ERROR: JWT_SECRET environment variable is missing or too short. ' +
+      'A secure 32+ character random secret must be configured in production.'
+    );
+  }
+
+  // Development/Test mode: Generate a secure runtime ephemeral secret
+  if (!globalForJwt.devEphemeralJwtSecret) {
+    globalForJwt.devEphemeralJwtSecret = crypto.randomBytes(32).toString('hex');
+    console.warn(
+      '[SECURITY NOTICE] No valid JWT_SECRET found in environment. ' +
+      'Generated a secure random ephemeral secret for this session. ' +
+      'Define JWT_SECRET in your .env file for persistent authentication across server restarts.'
+    );
+  }
+
+  return globalForJwt.devEphemeralJwtSecret;
+}
+
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 export function generateToken(user: { customer_id: string; full_name: string; email: string; role?: string }): string {
+  const secret = getJwtSecret();
   return jwt.sign(
     {
       customer_id: user.customer_id,
@@ -14,14 +44,15 @@ export function generateToken(user: { customer_id: string; full_name: string; em
       email: user.email,
       role: user.role || 'customer'
     },
-    JWT_SECRET,
+    secret,
     { expiresIn: JWT_EXPIRES_IN as any }
   );
 }
 
 export function verifyToken(token: string): AuthUser | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthUser;
+    const secret = getJwtSecret();
+    const decoded = jwt.verify(token, secret) as AuthUser;
     return decoded;
   } catch (err) {
     return null;
@@ -36,6 +67,14 @@ export function getUserFromRequest(request: Request): AuthUser | null {
   if (parts.length !== 2 || parts[0] !== 'Bearer') return null;
 
   return verifyToken(parts[1]);
+}
+
+/**
+ * Generates collision-proof audit log IDs under high concurrency
+ */
+export function generateAuditId(): string {
+  const randomHex = crypto.randomBytes(4).toString('hex').toUpperCase();
+  return `AUD-${Date.now()}-${randomHex}`;
 }
 
 /**
@@ -85,15 +124,12 @@ export function verifyTransactionPin(
   return false;
 }
 
-/**
- * Generates an authentic, collision-proof banking transaction ID and UTR reference number
- */
 export function generateTransactionReference(prefix = 'TXN'): { txnId: string; referenceNumber: string } {
   const now = new Date();
   const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
   const randomHex = crypto.randomBytes(4).toString('hex').toUpperCase();
   const txnId = `${prefix}-${datePart}-${randomHex}`;
-  const rrnSuffix = crypto.randomInt(10000000, 99999999);
+  const rrnSuffix = crypto.randomBytes(5).toString('hex').toUpperCase();
   const referenceNumber = `BTB${datePart}${rrnSuffix}`;
   return { txnId, referenceNumber };
 }

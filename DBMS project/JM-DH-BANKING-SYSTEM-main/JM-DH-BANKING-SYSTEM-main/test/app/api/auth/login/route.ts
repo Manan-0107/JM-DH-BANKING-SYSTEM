@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { generateToken, verifyTransactionPin } from '@/lib/auth';
+import { generateToken, verifyTransactionPin, generateAuditId } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     }
 
     // Record login audit trail
-    const auditId = `AUD-${Date.now().toString().slice(-6)}`;
+    const auditId = generateAuditId();
     await db.query(
       `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details)
        VALUES (?, ?, 'USER_LOGIN', 'SESSION', ?, 'Customer logged into NetBanking portal')`,

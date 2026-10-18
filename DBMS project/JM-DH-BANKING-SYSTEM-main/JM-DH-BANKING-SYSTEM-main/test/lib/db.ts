@@ -289,26 +289,51 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
     );
   `);
 
-  // Seed default 4-digit PIN hash ($2a$10$... for '1234')
-  const defaultPinHash = bcrypt.hashSync('1234', 10);
-
-  // Upgrade existing unhashed customer card PINs
+  // 10. Individual PIN Migration for legacy records
+  // Migrates each customer's individual plaintext PIN, hashes that specific credential,
+  // and scrubs the plaintext column. Never resets existing users to a shared default PIN.
   try {
-    await adapter.query(
-      `UPDATE customers SET card_pin_hash = ? WHERE card_pin_hash IS NULL OR card_pin_hash = ''`,
-      [defaultPinHash]
+    // 10a. Migrate individual customer plaintext PINs
+    const [unhashedCustomers] = await adapter.query(
+      `SELECT customer_id, card_pin FROM customers WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
     );
-    await adapter.query(
-      `UPDATE accounts SET card_pin_hash = ? WHERE card_pin_hash IS NULL OR card_pin_hash = ''`,
-      [defaultPinHash]
+    for (const cust of unhashedCustomers || []) {
+      const rawPin = cust.card_pin ? cust.card_pin.toString().trim() : '';
+      if (rawPin.length >= 4) {
+        const hashed = bcrypt.hashSync(rawPin, 10);
+        await adapter.query(
+          `UPDATE customers SET card_pin_hash = ? WHERE customer_id = ?`,
+          [hashed, cust.customer_id]
+        );
+      }
+    }
+
+    // 10b. Migrate individual account plaintext PINs
+    const [unhashedAccounts] = await adapter.query(
+      `SELECT id, account_number, card_pin FROM accounts WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
     );
+    for (const acc of unhashedAccounts || []) {
+      const rawPin = acc.card_pin ? acc.card_pin.toString().trim() : '';
+      if (rawPin.length >= 4) {
+        const hashed = bcrypt.hashSync(rawPin, 10);
+        await adapter.query(
+          `UPDATE accounts SET card_pin_hash = ? WHERE id = ?`,
+          [hashed, acc.id]
+        );
+      }
+    }
+
+    // 10c. Scrub plaintext PIN columns to prevent credential leakage
+    await adapter.query(`UPDATE customers SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''`);
+    await adapter.query(`UPDATE accounts SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''`);
   } catch (e) {
-    // Ignore migration warning
+    // Legacy columns might not exist in all database dialects; safely ignore
   }
 
   // Seed baseline Customers if empty
   const [existing] = await adapter.query("SELECT COUNT(*) as count FROM customers");
   if (!existing[0] || existing[0].count === 0) {
+    const defaultPinHash = bcrypt.hashSync('1234', 10);
     await adapter.query(`
       INSERT INTO customers (customer_id, full_name, email, phone, dob, address, created_at, status, kyc_status, password_hash, card_pin_hash, credit_score, tier) VALUES
       ('CUST-101', 'Aarav Lynn', 'aarav@example.com', '+91 98200 12345', '1990-03-15', 'Flat 402, Nariman Point, Mumbai', '2024-01-10 09:00:00', 'Active', 'Verified', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC', '${defaultPinHash}', 810, 'Platinum'),
@@ -429,14 +454,14 @@ async function initSqliteDb(): Promise<DbAdapter> {
 export async function getDb(): Promise<DbAdapter> {
   if (dbInstance) return dbInstance;
 
-  try {
-    const host = process.env.DB_HOST || 'localhost';
-    const user = process.env.DB_USER || 'root';
-    const password = process.env.DB_PASSWORD || '';
-    const port = parseInt(process.env.DB_PORT || '3306', 10);
-    const dbName = process.env.DB_NAME || 'bankist';
+  const host = process.env.DB_HOST || 'localhost';
+  const user = process.env.DB_USER || 'root';
+  const password = process.env.DB_PASSWORD || '';
+  const port = parseInt(process.env.DB_PORT || '3306', 10);
+  const dbName = process.env.DB_NAME || 'bankist';
 
-    if (process.env.USE_MYSQL === 'true') {
+  if (process.env.USE_MYSQL === 'true') {
+    try {
       const mysql = require('mysql2/promise');
       
       // Check database existence / create if absent
@@ -473,12 +498,26 @@ export async function getDb(): Promise<DbAdapter> {
       await pool.query('SELECT 1');
       await runCommonMigrationsAndSeeds(pool);
       dbInstance = pool;
+      console.log(`[DB Engine] Connected successfully to MySQL 8.0+ (${host}:${port}/${dbName})`);
       return dbInstance;
+    } catch (err: any) {
+      if (process.env.ALLOW_SQLITE_FALLBACK === 'true') {
+        console.warn(
+          `[DB WARNING] USE_MYSQL=true is configured, but MySQL connection failed: ${err.message}. ` +
+          `ALLOW_SQLITE_FALLBACK=true is enabled, falling back to embedded SQLite.`
+        );
+      } else {
+        console.error(`[DB ERROR] Fatal MySQL connection failure: ${err.message}`);
+        throw new Error(
+          `[Database Engine Error] USE_MYSQL=true is configured, but failed to connect to MySQL database at ${host}:${port}/${dbName}: ${err.message}. ` +
+          `To prevent silent data divergence between MySQL and SQLite, startup is aborted. ` +
+          `Please ensure MySQL is running with valid credentials in .env, or set USE_MYSQL=false to explicitly use the SQLite engine.`
+        );
+      }
     }
-  } catch (err: any) {
-    console.warn('MySQL connection skipped or failed, using persistent SQLite database adapter:', err.message);
   }
 
+  // Explicit SQLite Engine
   dbInstance = await initSqliteDb();
   return dbInstance;
 }

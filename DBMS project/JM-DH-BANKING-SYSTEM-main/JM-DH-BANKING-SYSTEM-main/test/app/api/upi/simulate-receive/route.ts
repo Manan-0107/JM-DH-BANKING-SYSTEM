@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest } from '@/lib/auth';
+import { getUserFromRequest, generateAuditId } from '@/lib/auth';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       );
 
       // 3. Record audit log
-      const auditId = `AUD-${Date.now().toString().slice(-6)}`;
+      const auditId = generateAuditId();
       await conn.query(
         `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
          VALUES (?, ?, 'UPI_RECEIVE', 'ACCOUNT', ?, ?, ?)`,

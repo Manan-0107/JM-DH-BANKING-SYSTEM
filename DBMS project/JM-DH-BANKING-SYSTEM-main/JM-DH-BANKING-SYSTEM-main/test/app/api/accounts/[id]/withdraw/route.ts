@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference } from '@/lib/auth';
+import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -90,7 +90,7 @@ export async function POST(
         [txnId, accountId, numAmount, nowTime, finalDesc, referenceNumber]
       );
 
-      const auditId = `AUD-${Date.now().toString().slice(-6)}`;
+      const auditId = generateAuditId();
       await conn.query(
         `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
          VALUES (?, ?, 'ATM_WITHDRAWAL', 'ACCOUNT', ?, ?, ?)`,

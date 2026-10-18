@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference } from '@/lib/auth';
+import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
       );
 
       // Record administrative audit trail
-      const auditId = `AUD-${Date.now().toString().slice(-6)}`;
+      const auditId = generateAuditId();
       await conn.query(
         `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
          VALUES (?, ?, 'FUND_TRANSFER', 'TRANSACTION', ?, ?, ?)`,

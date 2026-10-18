@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { generateToken, hashPin, generateTransactionReference } from '@/lib/auth';
+import { generateToken, hashPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -51,9 +51,26 @@ export async function POST(request: Request) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = full_name.trim();
 
-    // Support both multi-step wizard (password + card_pin) and quick home page signup (pin)
-    const effectivePassword = (password || pin || 'SecureBank@123').toString().trim();
-    const effectivePin = (card_pin || pin || '1234').toString().trim();
+    // Strict credential validation (Rejects missing credentials without default fallbacks)
+    const rawPassword = password ? password.toString().trim() : '';
+    const rawPin = (card_pin || pin) ? (card_pin || pin).toString().trim() : '';
+
+    if (!rawPassword || rawPassword.length < 6) {
+      return NextResponse.json(
+        { error: 'A secure password of at least 6 characters is required for NetBanking registration' },
+        { status: 400 }
+      );
+    }
+
+    if (!rawPin || !/^\d{4}$/.test(rawPin)) {
+      return NextResponse.json(
+        { error: 'A valid 4-digit numeric ATM Card PIN is required' },
+        { status: 400 }
+      );
+    }
+
+    const effectivePassword = rawPassword;
+    const effectivePin = rawPin;
 
     const db = await getDb();
 
@@ -174,7 +191,7 @@ export async function POST(request: Request) {
       }
 
       // 5. Record System Audit Log
-      const auditId = `AUD-${Date.now().toString().slice(-6)}`;
+      const auditId = generateAuditId();
       await conn.query(
         `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
          VALUES (?, ?, 'CUSTOMER_SIGNUP', 'CUSTOMER', ?, ?, ?)`,
