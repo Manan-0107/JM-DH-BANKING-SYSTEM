@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
+import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
@@ -28,14 +28,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Sender and beneficiary accounts cannot be identical' }, { status: 400 });
     }
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      return NextResponse.json({ error: 'Transfer amount must be a positive number' }, { status: 400 });
+    const amountVal = validateMonetaryAmount(amount, { min: 1, max: 500000, fieldName: 'Transfer amount' });
+    if (!amountVal.valid) {
+      return NextResponse.json({ error: amountVal.error }, { status: 400 });
     }
-
-    if (numAmount > 500000) {
-      return NextResponse.json({ error: 'Maximum IMPS transfer limit is ₹5,00,000 per transaction' }, { status: 400 });
-    }
+    const numAmount = amountVal.amount!;
 
     if (!pin || typeof pin !== 'string' || !pin.trim()) {
       return NextResponse.json({ error: 'Debit Card 4-Digit PIN is required for authorization' }, { status: 400 });

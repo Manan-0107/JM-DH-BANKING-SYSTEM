@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
+import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,10 +41,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Linked source account is required' }, { status: 400 });
     }
 
-    const amount = parseFloat(principal_amount);
-    if (isNaN(amount) || amount < 5000) {
-      return NextResponse.json({ error: 'Minimum deposit amount is ₹5,000' }, { status: 400 });
+    const amountVal = validateMonetaryAmount(principal_amount, {
+      min: 5000,
+      max: 10000000,
+      fieldName: 'Principal deposit amount',
+    });
+    if (!amountVal.valid) {
+      return NextResponse.json({ error: amountVal.error }, { status: 400 });
     }
+    const amount = amountVal.amount!;
 
     const tenure = parseInt(tenure_months, 10);
     if (isNaN(tenure) || tenure < 3) {

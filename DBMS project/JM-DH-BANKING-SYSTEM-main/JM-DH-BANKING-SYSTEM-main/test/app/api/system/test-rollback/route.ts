@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { account_number, amount = 1000 } = body;
+    const { account_number, amount = 1000, simulate_verification_failure = false } = body;
 
     if (!account_number) {
       return NextResponse.json({ error: 'account_number is required' }, { status: 400 });
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const { txnId, referenceNumber } = generateTransactionReference('TXN-ROLLBACK-PROBE');
     const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    let rollbackSuccessful = false;
+    let caughtExpectedError = false;
 
     // 4. Execute via application's real transaction abstraction with guaranteed failure & rollback
     try {
@@ -69,16 +69,23 @@ export async function POST(request: Request) {
           [txnId, account_number, amount, nowTime, referenceNumber]
         );
 
-        // Step C: Trigger deliberate SQL error to force automatic transaction rollback
+        // Step C: Trigger deliberate expected SQL error to force automatic transaction rollback
         await conn.query(
           'INSERT INTO non_existent_table_for_rollback_verification (invalid_column) VALUES (?)',
           ['deliberate_error_trigger']
         );
       });
     } catch (txErr: any) {
-      // Log failure safely on server without leaking raw error to client
-      console.log('[Test Rollback] Deliberate transaction failure caught and rolled back successfully.');
-      rollbackSuccessful = true;
+      const errMsg = String(txErr?.message || txErr);
+      if (
+        errMsg.includes('non_existent_table_for_rollback_verification') ||
+        errMsg.includes('no such table') ||
+        errMsg.includes("doesn't exist") ||
+        errMsg.includes('Table')
+      ) {
+        caughtExpectedError = true;
+      }
+      console.log('[Test Rollback] Deliberate transaction failure caught. Validating postconditions...');
     }
 
     // 5. Verify post-rollback account balance and ledger state
@@ -87,6 +94,7 @@ export async function POST(request: Request) {
       [account_number]
     );
     const postBalance = parseFloat(postAccRows[0]?.balance || '0');
+    const balanceRestored = startingBalance === postBalance;
 
     const [txRows] = await db.query(
       'SELECT transaction_id FROM transactions WHERE transaction_id = ? OR reference_number = ?',
@@ -94,16 +102,25 @@ export async function POST(request: Request) {
     );
     const ledgerRecordRemains = txRows && txRows.length > 0;
 
-    if (rollbackSuccessful) {
+    // Strict multi-point verification: every single invariant must pass
+    const isVerificationSuccessful =
+      caughtExpectedError &&
+      balanceRestored &&
+      !ledgerRecordRemains &&
+      !simulate_verification_failure;
+
+    if (isVerificationSuccessful) {
       return NextResponse.json(
         {
           message: 'Deliberate transaction failure caught and rolled back automatically',
           error: 'Deliberate transaction failure triggered for rollback verification',
           rolledBack: true,
+          verified: true,
+          expected_failure_caught: true,
           starting_balance: startingBalance,
           post_balance: postBalance,
-          balance_restored: startingBalance === postBalance,
-          ledger_record_remains: ledgerRecordRemains,
+          balance_restored: true,
+          ledger_record_remains: false,
           probe_txn_id: txnId,
           probe_reference_number: referenceNumber,
           engine: db.isSqlite ? 'sqlite' : 'mysql',
@@ -113,7 +130,14 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: 'Rollback verification probe failed to trigger expected failure' },
+      {
+        error: 'Rollback verification failed: invariants violated or unexpected error occurred',
+        rolledBack: false,
+        verified: false,
+        expected_failure_caught: caughtExpectedError,
+        balance_restored: balanceRestored,
+        ledger_record_remains: ledgerRecordRemains,
+      },
       { status: 500 }
     );
   } catch (err: any) {

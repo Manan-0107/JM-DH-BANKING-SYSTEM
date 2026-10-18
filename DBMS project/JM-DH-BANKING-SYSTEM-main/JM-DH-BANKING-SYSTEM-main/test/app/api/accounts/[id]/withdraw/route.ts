@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
+import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -16,14 +16,11 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const { amount, description, pin } = body;
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      return NextResponse.json({ error: 'Withdrawal amount must be a positive number' }, { status: 400 });
+    const amountVal = validateMonetaryAmount(amount, { min: 1, max: 50000, fieldName: 'Withdrawal amount' });
+    if (!amountVal.valid) {
+      return NextResponse.json({ error: amountVal.error }, { status: 400 });
     }
-
-    if (numAmount > 50000) {
-      return NextResponse.json({ error: 'Maximum ATM single withdrawal limit is ₹50,000' }, { status: 400 });
-    }
+    const numAmount = amountVal.amount!;
 
     if (!pin || typeof pin !== 'string' || !pin.trim()) {
       return NextResponse.json({ error: 'Debit Card 4-Digit PIN is required for ATM withdrawals' }, { status: 400 });

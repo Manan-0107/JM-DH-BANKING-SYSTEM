@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, generateAuditId } from '@/lib/auth';
+import { getUserFromRequest, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
@@ -17,14 +17,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Account number is required' }, { status: 400 });
     }
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      return NextResponse.json({ error: 'Transfer amount must be a positive number' }, { status: 400 });
+    const amountVal = validateMonetaryAmount(amount, {
+      min: 1,
+      max: 100000,
+      fieldName: 'UPI credit amount',
+    });
+    if (!amountVal.valid) {
+      return NextResponse.json({ error: amountVal.error }, { status: 400 });
     }
-
-    if (numAmount > 100000) {
-      return NextResponse.json({ error: 'NPCI UPI single-transaction limit is ₹1,00,000' }, { status: 400 });
-    }
+    const numAmount = amountVal.amount!;
 
     const db = await getDb();
 

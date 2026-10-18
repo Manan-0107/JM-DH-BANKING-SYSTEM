@@ -234,24 +234,48 @@ export async function POST(request: Request) {
         success = true;
       } catch (insertErr: any) {
         const errMsg = String(insertErr?.message || insertErr);
+        const lowerErr = errMsg.toLowerCase();
 
-        // If the conflict is specifically on email, return HTTP 409 Conflict immediately (do not retry)
-        if (errMsg.toLowerCase().includes('email')) {
+        // 1. Email uniqueness conflict: return HTTP 409 immediately without retrying
+        if (
+          lowerErr.includes('customers.email') ||
+          lowerErr.includes("key 'email'") ||
+          lowerErr.includes('key "email"') ||
+          (lowerErr.includes('email') && (lowerErr.includes('unique') || lowerErr.includes('duplicate')))
+        ) {
           return NextResponse.json(
             { error: 'This email is already registered with Bharat Trust Bank. Please login instead.' },
             { status: 409 }
           );
         }
 
-        // Specifically recognize ID / reference number uniqueness collisions
-        const isIdCollision =
-          errMsg.includes('UNIQUE') ||
-          errMsg.includes('Duplicate') ||
-          errMsg.includes('PRIMARY') ||
-          errMsg.includes('constraint') ||
+        // 2. Unrelated errors that must never be retried (schema, null, foreign key, connection)
+        if (
+          errMsg.includes('NOT NULL') ||
+          errMsg.includes('FOREIGN KEY') ||
+          errMsg.includes('cannot be null') ||
+          errMsg.includes('foreign key constraint fails') ||
+          errMsg.includes('syntax') ||
+          errMsg.includes('no such table') ||
+          errMsg.includes('ECONNREFUSED')
+        ) {
+          throw insertErr;
+        }
+
+        // 3. Specifically recognize identifier collisions (customer_id, account_number, reference_number, transaction_id, PRIMARY key)
+        const isUniqueError =
+          errMsg.includes('UNIQUE constraint failed') ||
+          errMsg.includes('Duplicate entry') ||
+          errMsg.includes('ER_DUP_ENTRY');
+
+        const isIdentifierConflict =
           errMsg.includes('customer_id') ||
           errMsg.includes('account_number') ||
-          errMsg.includes('reference_number');
+          errMsg.includes('reference_number') ||
+          errMsg.includes('transaction_id') ||
+          errMsg.includes('PRIMARY');
+
+        const isIdCollision = isUniqueError && isIdentifierConflict;
 
         if (isIdCollision) {
           if (attempt >= maxRetries) {

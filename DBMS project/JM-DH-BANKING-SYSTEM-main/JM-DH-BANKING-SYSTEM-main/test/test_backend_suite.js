@@ -494,8 +494,28 @@ async function runTests() {
 
     assert(rollbackRes.status === 500, 'Transaction error propagated to caller with HTTP 500');
     assert(rollbackData.rolledBack === true, 'Application db.transaction caught deliberate failure and executed rollback');
+    assert(rollbackData.verified === true, 'Application confirmed all rollback postconditions verified');
     assert(rollbackData.balance_restored === true, 'Application confirmed balance was restored inside transaction handler');
     assert(rollbackData.ledger_record_remains === false, 'Application confirmed uncommitted ledger record was not retained');
+
+    // 2b. Test False-Positive Prevention: Simulate verification failure and verify endpoint reports rolledBack === false
+    const simFailRes = await fetch(`${BASE_URL}/api/system/test-rollback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aaravToken}`,
+        'x-test-suite': 'btb-verification-suite',
+      },
+      body: JSON.stringify({
+        account_number: aaravAccount,
+        amount: 1000,
+        simulate_verification_failure: true,
+      }),
+    });
+    const simFailData = await simFailRes.json();
+    assert(simFailRes.status === 500, 'Simulated rollback failure check returns HTTP 500');
+    assert(simFailData.rolledBack === false, 'Endpoint strictly refuses to report success when rollback invariants are not satisfied');
+    assert(simFailData.verified === false, 'Endpoint marks verified = false on invariant mismatch');
 
     // 3. Independent API assertion: Confirm account balance is 100% restored
     const postRollbackMe = await fetch(`${BASE_URL}/api/auth/me`, {
@@ -875,6 +895,219 @@ async function runTests() {
     assert(bcrypt.compareSync('7777', migratedRows[1].card_pin_hash), 'Migrated hash matches original legacy PIN for LEGACY-2');
 
     tempLegacyDb.close();
+
+    // TEST 21: Cryptographic OTP Security, Hashed Storage, Rate Limiting & Bounded Attempts
+    console.log('\n--- 21. Testing Cryptographic OTP Security, Hashed Storage & Rate Limiting ---');
+    const testMobile = `98${Date.now().toString().slice(-8)}`;
+
+    // A. Generate OTP
+    const sendOtpRes = await fetch(`${BASE_URL}/api/kyc/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: testMobile, purpose: 'MOBILE_VERIFICATION' }),
+    });
+    const sendOtpData = await sendOtpRes.json();
+    assert(sendOtpRes.status === 200, 'POST /api/kyc/send-otp returns HTTP 200');
+    assert(sendOtpData.success === true, 'OTP generated successfully');
+    assert(!!sendOtpData.session_id, 'Session ID returned');
+    assert(!!sendOtpData.test_otp, 'Development test_otp provided for verification');
+
+    // B. Direct database assertion: Plaintext OTP is NEVER stored in database, only cryptographic hash
+    const otpDbRow = await new Promise((res) => {
+      verifyDb.get(
+        'SELECT session_id, otp_code, otp_hash, attempts, verified FROM otp_sessions WHERE session_id = ?',
+        [sendOtpData.session_id],
+        (err, row) => res(row)
+      );
+    });
+    assert(otpDbRow && (otpDbRow.otp_code === null || otpDbRow.otp_code === undefined), 'Plaintext OTP is strictly NULL in database (zero plaintext storage)');
+    assert(otpDbRow && !!otpDbRow.otp_hash && otpDbRow.otp_hash.length === 64, 'Cryptographic HMAC-SHA256 hash stored in database (64 hex chars)');
+    assert(otpDbRow && Number(otpDbRow.attempts) === 0, 'Initial attempt counter is 0');
+
+    // C. Rate Limiting Cooldown: Immediate resend rejected with HTTP 429
+    const rapidResendRes = await fetch(`${BASE_URL}/api/kyc/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: testMobile, purpose: 'MOBILE_VERIFICATION' }),
+    });
+    const rapidResendData = await rapidResendRes.json();
+    assert(rapidResendRes.status === 429, 'Immediate OTP resend blocked by rate limit cooldown (HTTP 429 Too Many Requests)');
+    assert(rapidResendData.error && rapidResendData.error.includes('wait'), 'Safe cooldown message returned to caller');
+
+    // D. Format validation on verify
+    const badFormatRes = await fetch(`${BASE_URL}/api/kyc/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: testMobile, otp: '12abc', purpose: 'MOBILE_VERIFICATION' }),
+    });
+    assert(badFormatRes.status === 400, 'Non-6-digit OTP rejected with HTTP 400 Bad Request');
+
+    // E. Invalid OTP attempt tracking
+    const wrongOtpRes = await fetch(`${BASE_URL}/api/kyc/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: testMobile, otp: '000000', purpose: 'MOBILE_VERIFICATION' }),
+    });
+    const wrongOtpData = await wrongOtpRes.json();
+    assert(wrongOtpRes.status === 400, 'Incorrect OTP rejected with HTTP 400');
+    assert(wrongOtpData.error && wrongOtpData.error.includes('attempt(s) remaining'), 'Error message reports remaining attempts');
+
+    const updatedOtpRow = await new Promise((res) => {
+      verifyDb.get('SELECT attempts FROM otp_sessions WHERE session_id = ?', [sendOtpData.session_id], (err, row) => res(row));
+    });
+    assert(updatedOtpRow && Number(updatedOtpRow.attempts) === 1, 'Attempt counter incremented in database to 1');
+
+    // F. Attempt Exhaustion Lockout: Exhaust all 5 attempts
+    for (let attempt = 2; attempt <= 5; attempt++) {
+      await fetch(`${BASE_URL}/api/kyc/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: testMobile, otp: '000000', purpose: 'MOBILE_VERIFICATION' }),
+      });
+    }
+
+    // 6th attempt: Must return HTTP 429 session locked
+    const lockedRes = await fetch(`${BASE_URL}/api/kyc/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: testMobile, otp: sendOtpData.test_otp, purpose: 'MOBILE_VERIFICATION' }),
+    });
+    assert(lockedRes.status === 429, 'Locked OTP session rejects even valid code with HTTP 429 (brute-force defense)');
+
+    // G. Successful verification on fresh session & Replay Prevention
+    const testMobile2 = `97${Date.now().toString().slice(-8)}`;
+    const sendOtp2Res = await fetch(`${BASE_URL}/api/kyc/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: testMobile2, purpose: 'MOBILE_VERIFICATION' }),
+    });
+    const sendOtp2Data = await sendOtp2Res.json();
+    const validVerifyRes = await fetch(`${BASE_URL}/api/kyc/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: testMobile2, otp: sendOtp2Data.test_otp, purpose: 'MOBILE_VERIFICATION' }),
+    });
+    const validVerifyData = await validVerifyRes.json();
+    assert(validVerifyRes.status === 200, 'Valid OTP verified successfully (HTTP 200)');
+    assert(validVerifyData.verified === true, 'Session marked verified');
+
+    // Replay check: attempting to reuse already-consumed OTP fails
+    const replayRes = await fetch(`${BASE_URL}/api/kyc/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: testMobile2, otp: sendOtp2Data.test_otp, purpose: 'MOBILE_VERIFICATION' }),
+    });
+    assert(replayRes.status === 400, 'Replayed/consumed OTP rejected with HTTP 400 Bad Request');
+
+    // TEST 22: Strict Monetary Input Validation Across Financial Endpoints
+    console.log('\n--- 22. Testing Strict Monetary Input Validation Across Financial Endpoints ---');
+
+    // A. Malformed monetary inputs on deposit
+    const malformedDeposit1 = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ amount: '100abc', pin: '1234' }),
+    });
+    assert(malformedDeposit1.status === 400, 'Deposit rejects amount with trailing characters ("100abc") with HTTP 400');
+
+    const malformedDeposit2 = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ amount: '1.2.3', pin: '1234' }),
+    });
+    assert(malformedDeposit2.status === 400, 'Deposit rejects multiple decimal points ("1.2.3") with HTTP 400');
+
+    const malformedDeposit3 = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ amount: -500, pin: '1234' }),
+    });
+    assert(malformedDeposit3.status === 400, 'Deposit rejects negative amount (-500) with HTTP 400');
+
+    const malformedDeposit4 = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ amount: '100.999', pin: '1234' }),
+    });
+    assert(malformedDeposit4.status === 400, 'Deposit rejects sub-cent precision ("100.999" > 2 decimal places) with HTTP 400');
+
+    const malformedDeposit5 = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ amount: '   ', pin: '1234' }),
+    });
+    assert(malformedDeposit5.status === 400, 'Deposit rejects whitespace-only amount with HTTP 400');
+
+    // B. Malformed monetary inputs on withdrawal
+    const malformedWithdraw1 = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ amount: '50xyz', pin: '1234' }),
+    });
+    assert(malformedWithdraw1.status === 400, 'Withdrawal rejects malformed string ("50xyz") with HTTP 400');
+
+    const malformedWithdraw2 = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ amount: -100, pin: '1234' }),
+    });
+    assert(malformedWithdraw2.status === 400, 'Withdrawal rejects negative amount with HTTP 400');
+
+    // C. Malformed monetary inputs on transfer
+    const malformedTransfer1 = await fetch(`${BASE_URL}/api/accounts/transfer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ from_account: aaravAccount, to_account: priyaAccount, amount: '200bad', pin: '1234' }),
+    });
+    assert(malformedTransfer1.status === 400, 'Transfer rejects malformed string ("200bad") with HTTP 400');
+
+    const malformedTransfer2 = await fetch(`${BASE_URL}/api/accounts/transfer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ from_account: aaravAccount, to_account: priyaAccount, amount: -50, pin: '1234' }),
+    });
+    assert(malformedTransfer2.status === 400, 'Transfer rejects negative amount with HTTP 400');
+
+    // D. Malformed monetary inputs on UPI receive
+    const malformedUpi = await fetch(`${BASE_URL}/api/upi/simulate-receive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({ account_number: aaravAccount, amount: '500.888' }),
+    });
+    assert(malformedUpi.status === 400, 'UPI receive rejects excessive precision with HTTP 400');
+
+    // E. Legitimate 2-decimal transfer works cleanly without floating point errors
+    const validDecimalTransfer = await fetch(`${BASE_URL}/api/accounts/transfer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aaravToken}` },
+      body: JSON.stringify({
+        from_account: aaravAccount,
+        to_account: priyaAccount,
+        amount: '125.50',
+        pin: '1234',
+        description: 'Decimal Precision Test',
+      }),
+    });
+    assert(validDecimalTransfer.status === 200, 'Valid 2-decimal transfer (₹125.50) processed accurately with HTTP 200');
+
+    // TEST 23: Accurate Constraint Violation Identification (Email Conflict vs Identifier Retries)
+    console.log('\n--- 23. Testing Accurate Constraint Violation Identification ---');
+    // A. Duplicate email registration triggers immediate HTTP 409 Conflict without retry loop
+    const dupStartTime = Date.now();
+    const dupSignupRes = await fetch(`${BASE_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        full_name: 'Duplicate Constraint Tester',
+        email: 'aarav@example.com', // Pre-existing email
+        password: 'Password123!',
+        card_pin: '1234',
+      }),
+    });
+    const dupDuration = Date.now() - dupStartTime;
+    assert(dupSignupRes.status === 409, 'Duplicate email registration returns immediate HTTP 409 Conflict');
+    assert(dupDuration < 500, `Immediate conflict response without retry delay (${dupDuration}ms < 500ms)`);
+
     verifyDb.close();
 
   } catch (error) {

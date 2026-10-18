@@ -141,3 +141,92 @@ export function generateTransactionReference(prefix = 'TXN'): { txnId: string; r
   const referenceNumber = `BTB${datePart}${rrnSuffix}`;
   return { txnId, referenceNumber };
 }
+
+/**
+ * Result of monetary validation
+ */
+export interface MonetaryValidationResult {
+  valid: boolean;
+  amount?: number;
+  amountPaise?: number;
+  error?: string;
+}
+
+/**
+ * Strictly validates a monetary amount.
+ * - Rejects malformed strings (e.g. "100abc", "1.2.3", "NaN", "Infinity", empty strings, negative values).
+ * - Enforces standard decimal format with at most 2 decimal places.
+ * - Normalizes to 2-decimal float and integer paise to avoid floating-point drift.
+ * - Enforces minimum and maximum limits.
+ */
+export function validateMonetaryAmount(
+  input: any,
+  options: { min?: number; max?: number; fieldName?: string } = {}
+): MonetaryValidationResult {
+  const fieldName = options.fieldName || 'Amount';
+  const min = options.min !== undefined ? options.min : 0.01;
+  const max = options.max !== undefined ? options.max : 500000;
+
+  if (input === null || input === undefined || input === '') {
+    return { valid: false, error: `${fieldName} is required` };
+  }
+
+  let str = '';
+  if (typeof input === 'number') {
+    if (!Number.isFinite(input) || Number.isNaN(input)) {
+      return { valid: false, error: `${fieldName} must be a valid finite number` };
+    }
+    str = input.toString();
+  } else if (typeof input === 'string') {
+    str = input.trim();
+  } else {
+    return { valid: false, error: `${fieldName} must be a number or numeric string` };
+  }
+
+  // Reject malformed patterns: letters, extra dots, negative numbers, scientific notation
+  // Exactly matching positive integer or decimal with at most 2 fractional digits
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(str)) {
+    return {
+      valid: false,
+      error: `${fieldName} is invalid. Must be a positive amount with at most 2 decimal places (e.g., 500 or 500.50)`
+    };
+  }
+
+  const num = parseFloat(str);
+  if (!Number.isFinite(num) || Number.isNaN(num)) {
+    return { valid: false, error: `${fieldName} is not a valid number` };
+  }
+
+  if (num < min) {
+    return { valid: false, error: `${fieldName} must be at least ₹${min.toLocaleString('en-IN')}` };
+  }
+
+  if (num > max) {
+    return { valid: false, error: `${fieldName} cannot exceed ₹${max.toLocaleString('en-IN')}` };
+  }
+
+  const amountPaise = Math.round(num * 100);
+  const normalizedAmount = amountPaise / 100;
+
+  return { valid: true, amount: normalizedAmount, amountPaise };
+}
+
+/**
+ * Generates cryptographic HMAC-SHA256 hash for OTP storage with session salt
+ */
+export function hashOtp(otp: string, salt: string = ''): string {
+  const secret = getJwtSecret();
+  return crypto.createHmac('sha256', secret).update(`${salt}:${otp.toString().trim()}`).digest('hex');
+}
+
+/**
+ * Constant-time verification of an entered OTP against the stored cryptographic hash
+ */
+export function verifyOtpHash(otp: string, storedHash: string, salt: string = ''): boolean {
+  if (!otp || !storedHash) return false;
+  const computed = hashOtp(otp, salt);
+  const a = Buffer.from(computed, 'hex');
+  const b = Buffer.from(storedHash, 'hex');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}

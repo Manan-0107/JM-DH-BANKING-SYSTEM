@@ -285,12 +285,57 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
       session_id TEXT PRIMARY KEY,
       identifier TEXT NOT NULL,
       purpose TEXT NOT NULL,
-      otp_code TEXT NOT NULL,
+      otp_code TEXT,
+      otp_hash TEXT,
       expires_at INTEGER NOT NULL,
       verified INTEGER DEFAULT 0,
+      attempts INTEGER DEFAULT 0,
+      last_sent_at INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  try {
+    await adapter.query("ALTER TABLE otp_sessions ADD COLUMN otp_hash TEXT");
+  } catch (e) {}
+  try {
+    await adapter.query("ALTER TABLE otp_sessions ADD COLUMN attempts INTEGER DEFAULT 0");
+  } catch (e) {}
+  try {
+    await adapter.query("ALTER TABLE otp_sessions ADD COLUMN last_sent_at INTEGER DEFAULT 0");
+  } catch (e) {}
+
+  // Migrate otp_sessions table to allow NULL otp_code (zero plaintext storage)
+  try {
+    if (adapter.isSqlite) {
+      const [cols] = await adapter.query("PRAGMA table_info(otp_sessions)");
+      const otpCodeCol = Array.isArray(cols) ? cols.find((c: any) => c.name === 'otp_code') : null;
+      if (otpCodeCol && otpCodeCol.notnull === 1) {
+        await adapter.query(`
+          CREATE TABLE IF NOT EXISTS otp_sessions_new (
+            session_id TEXT PRIMARY KEY,
+            identifier TEXT NOT NULL,
+            purpose TEXT NOT NULL,
+            otp_code TEXT,
+            otp_hash TEXT,
+            expires_at INTEGER NOT NULL,
+            verified INTEGER DEFAULT 0,
+            attempts INTEGER DEFAULT 0,
+            last_sent_at INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await adapter.query(`
+          INSERT OR IGNORE INTO otp_sessions_new (session_id, identifier, purpose, otp_code, otp_hash, expires_at, verified, attempts, last_sent_at, created_at)
+          SELECT session_id, identifier, purpose, NULL, otp_hash, expires_at, verified, attempts, last_sent_at, created_at FROM otp_sessions
+        `);
+        await adapter.query(`DROP TABLE otp_sessions`);
+        await adapter.query(`ALTER TABLE otp_sessions_new RENAME TO otp_sessions`);
+      }
+    } else {
+      await adapter.query("ALTER TABLE otp_sessions MODIFY COLUMN otp_code VARCHAR(10) NULL");
+    }
+  } catch (e) {}
 
   // 10. Individual PIN Migration for legacy records
   // Migrates each customer's individual plaintext PIN, hashes that specific credential,
