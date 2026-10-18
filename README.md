@@ -30,11 +30,11 @@ Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-By default, `USE_MYSQL=false` uses embedded SQLite (`bankist.sqlite`) with automatic table creation and demo seeding out of the box.
-
-To connect to a live MySQL 8.0 server, update `.env`:
+- By default, `USE_MYSQL=false` uses embedded SQLite (`bankist.sqlite`) with automatic table creation and demo seeding out of the box.
+- To connect to a live MySQL 8.0+ server, configure `.env`:
 ```env
 USE_MYSQL=true
+ALLOW_SQLITE_FALLBACK=false
 DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
@@ -42,6 +42,8 @@ DB_PASSWORD=your_mysql_password
 DB_NAME=bankist
 JWT_SECRET=your_secure_32_byte_secret_here
 ```
+> [!IMPORTANT]
+> When `USE_MYSQL=true`, the system strictly connects to MySQL and will abort startup if MySQL is unreachable. Automatic fallback to SQLite is only allowed if `ALLOW_SQLITE_FALLBACK=true` is explicitly enabled in development mode (prohibited in production to avoid silent data divergence).
 
 ### 3. Install & Start Development Server
 ```bash
@@ -54,8 +56,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🧪 Automated Verification Test Suites
 
-### Complete Backend Infrastructure Suite (44 Tests)
-Validates authentication, row-level authorization, overdraft prevention, multi-threaded concurrency, atomic transaction rollback, term deposits, and ATM operations:
+### Complete Backend Infrastructure Suite
+Validates authentication, row-level authorization, overdraft prevention, multi-threaded concurrency, atomic transaction failure-driven rollback, term deposits, and ATM operations:
 ```bash
 node test_backend_suite.js
 ```
@@ -70,6 +72,15 @@ node test_persistence.js
 ```bash
 npx tsc --noEmit
 ```
+
+---
+
+## ℹ️ Academic Simulation Notice
+
+For this college DBMS capstone project:
+- **Banking Rails**: Fund transfers, deposits, withdrawals, and UPI transactions execute against the real local relational database (SQLite/MySQL) using ACID transactions. They are not connected to live banking networks (RBI, NPCI, IMPS, NEFT, RTGS).
+- **OTP & 2FA**: One-time passcodes and verification sessions are modeled in the database for demonstration and do not dispatch external SMS or carrier messages.
+- **KYC & Identity**: PAN verification, Aadhaar demographic checks, and Video KYC flows create relational audit trail entries in `kyc_verifications` to demonstrate banking regulatory compliance schemas. They do not connect to external government identity databases (NSDL/UIDAI).
 
 ---
 

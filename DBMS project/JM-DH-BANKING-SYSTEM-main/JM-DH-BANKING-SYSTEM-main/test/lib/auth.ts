@@ -85,39 +85,39 @@ export function hashPin(pin: string): string {
 }
 
 /**
- * Verifies a PIN against a bcrypt hash, with backward-compatibility for legacy plaintext pins
+ * Verifies a 4-digit PIN against a bcrypt hash.
+ * Plaintext PIN equality is strictly disallowed to prevent credential leakage.
  */
-export function verifyPin(pin: string, storedHashOrPlain: string | null | undefined): boolean {
-  if (!storedHashOrPlain || !pin) return false;
+export function verifyPin(pin: string, storedHash: string | null | undefined): boolean {
+  if (!storedHash || !pin) return false;
   const trimmedPin = pin.toString().trim();
-  if (storedHashOrPlain.startsWith('$2a$') || storedHashOrPlain.startsWith('$2b$')) {
-    return bcrypt.compareSync(trimmedPin, storedHashOrPlain);
+  if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$')) {
+    return bcrypt.compareSync(trimmedPin, storedHash);
   }
-  return trimmedPin === storedHashOrPlain.trim();
+  return false;
 }
 
 /**
- * Verifies PIN against either the card PIN (hashed or plain) or the account password hash
+ * Verifies PIN against the card PIN hash (bcrypt) or the NetBanking password hash (bcrypt)
  */
 export function verifyTransactionPin(
   providedPin: string,
-  customer: { password_hash: string; card_pin?: string; card_pin_hash?: string }
+  customer: { password_hash: string; card_pin_hash?: string; card_pin?: string | null }
 ): boolean {
   if (!providedPin) return false;
   const pin = providedPin.toString().trim();
 
-  // 1. Check card_pin_hash if present
+  // 1. Primary check: card_pin_hash
   if (customer.card_pin_hash && verifyPin(pin, customer.card_pin_hash)) {
     return true;
   }
 
-  // 2. Check legacy card_pin if present
-  if (customer.card_pin && verifyPin(pin, customer.card_pin)) {
-    return true;
-  }
-
-  // 3. Fallback: check NetBanking password hash
-  if (customer.password_hash && bcrypt.compareSync(pin, customer.password_hash)) {
+  // 2. Fallback check: NetBanking password hash (if hashed with bcrypt)
+  if (
+    customer.password_hash &&
+    (customer.password_hash.startsWith('$2a$') || customer.password_hash.startsWith('$2b$')) &&
+    bcrypt.compareSync(pin, customer.password_hash)
+  ) {
     return true;
   }
 

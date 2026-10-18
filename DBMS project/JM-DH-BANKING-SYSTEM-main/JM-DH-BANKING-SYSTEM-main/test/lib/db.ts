@@ -126,7 +126,7 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
       vkyc_status TEXT DEFAULT 'Completed',
       signature_data TEXT,
       avatar_data TEXT,
-      card_pin TEXT DEFAULT '1234',
+      card_pin TEXT DEFAULT NULL,
       card_pin_hash TEXT
     );
   `);
@@ -145,7 +145,7 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
     "vkyc_status TEXT DEFAULT 'Completed'",
     'signature_data TEXT',
     'avatar_data TEXT',
-    "card_pin TEXT DEFAULT '1234'",
+    "card_pin TEXT DEFAULT NULL",
     'card_pin_hash TEXT'
   ];
   for (const col of customerColumns) {
@@ -167,14 +167,14 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
       branch_name TEXT NOT NULL DEFAULT 'Downtown Central',
       opening_date DATETIME DEFAULT CURRENT_TIMESTAMP,
       status TEXT DEFAULT 'Active',
-      card_pin TEXT DEFAULT '1234',
+      card_pin TEXT DEFAULT NULL,
       card_pin_hash TEXT,
       FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
     );
   `);
 
   try {
-    await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin TEXT DEFAULT '1234'");
+    await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin TEXT DEFAULT NULL");
   } catch (e) {}
   try {
     await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin_hash TEXT");
@@ -197,6 +197,9 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
 
   try {
     await adapter.query("ALTER TABLE transactions ADD COLUMN reference_number TEXT");
+  } catch (e) {}
+  try {
+    await adapter.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference_number)");
   } catch (e) {}
 
   // 4. KYC Verifications Table
@@ -310,15 +313,15 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
 
     // 10b. Migrate individual account plaintext PINs
     const [unhashedAccounts] = await adapter.query(
-      `SELECT id, account_number, card_pin FROM accounts WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
+      `SELECT account_number, card_pin FROM accounts WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
     );
     for (const acc of unhashedAccounts || []) {
       const rawPin = acc.card_pin ? acc.card_pin.toString().trim() : '';
       if (rawPin.length >= 4) {
         const hashed = bcrypt.hashSync(rawPin, 10);
         await adapter.query(
-          `UPDATE accounts SET card_pin_hash = ? WHERE id = ?`,
-          [hashed, acc.id]
+          `UPDATE accounts SET card_pin_hash = ? WHERE account_number = ?`,
+          [hashed, acc.account_number]
         );
       }
     }
@@ -326,8 +329,8 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
     // 10c. Scrub plaintext PIN columns to prevent credential leakage
     await adapter.query(`UPDATE customers SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''`);
     await adapter.query(`UPDATE accounts SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''`);
-  } catch (e) {
-    // Legacy columns might not exist in all database dialects; safely ignore
+  } catch (e: any) {
+    console.warn('[DB PIN Migration] Notice during legacy PIN migration/scrub:', e?.message || e);
   }
 
   // Seed baseline Customers if empty
@@ -497,14 +500,23 @@ export async function getDb(): Promise<DbAdapter> {
 
       await pool.query('SELECT 1');
       await runCommonMigrationsAndSeeds(pool);
+      (pool as any).isSqlite = false;
       dbInstance = pool;
       console.log(`[DB Engine] Connected successfully to MySQL 8.0+ (${host}:${port}/${dbName})`);
       return dbInstance;
     } catch (err: any) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error(`[DB ERROR] Fatal MySQL connection failure in production: ${err.message}`);
+        throw new Error(
+          `[Database Engine Error] USE_MYSQL=true is configured, but failed to connect to MySQL database at ${host}:${port}/${dbName}: ${err.message}. ` +
+          `Automatic SQLite fallback is strictly prohibited in production to prevent silent data divergence.`
+        );
+      }
+
       if (process.env.ALLOW_SQLITE_FALLBACK === 'true') {
         console.warn(
           `[DB WARNING] USE_MYSQL=true is configured, but MySQL connection failed: ${err.message}. ` +
-          `ALLOW_SQLITE_FALLBACK=true is enabled, falling back to embedded SQLite.`
+          `ALLOW_SQLITE_FALLBACK=true is enabled in development, falling back to embedded SQLite.`
         );
       } else {
         console.error(`[DB ERROR] Fatal MySQL connection failure: ${err.message}`);
@@ -519,5 +531,6 @@ export async function getDb(): Promise<DbAdapter> {
 
   // Explicit SQLite Engine
   dbInstance = await initSqliteDb();
+  console.log('[DB Engine] Active database engine: SQLite (embedded)');
   return dbInstance;
 }

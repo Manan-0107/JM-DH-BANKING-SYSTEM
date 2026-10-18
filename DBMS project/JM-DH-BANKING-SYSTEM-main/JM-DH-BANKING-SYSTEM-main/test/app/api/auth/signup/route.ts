@@ -109,100 +109,163 @@ export async function POST(request: Request) {
     }
 
     const cleanPan = pan_number ? pan_number.toString().trim().toUpperCase() : null;
-
-    // Generate unique account number and reference
-    const randomAccSuffix = crypto.randomInt(100000, 999999);
-    const accNum = `ACC-${randomAccSuffix}`;
     const finalBranch = branch_name || 'Mumbai Nariman Point Hub';
     const finalIfsc = ifsc_code || 'BTBI0001024';
     const finalType = account_type || 'Savings Account';
     const initialGrant = 10000.00;
 
-    const { txnId, referenceNumber } = generateTransactionReference('TXN-GRANT');
+    // Concurrency-safe bounded retry loop for unique customer ID and account number generation
+    let createdCustomerId = '';
+    let createdAccNum = '';
+    const maxRetries = 5;
+    let attempt = 0;
+    let success = false;
 
-    await db.transaction(async (conn) => {
-      // 1. Insert Customer Record
-      await conn.query(
-        `INSERT INTO customers (
-          customer_id, full_name, email, phone, dob, address, created_at,
-          status, kyc_status, password_hash, credit_score, tier,
-          pan_number, aadhaar_number, gender, father_name, marital_status,
-          occupation, annual_income, nominee_name, nominee_relation, nominee_dob,
-          vkyc_status, signature_data, avatar_data, card_pin, card_pin_hash
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', 'Verified', ?, 770, 'Silver', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          customer_id,
-          cleanName,
-          cleanEmail,
-          phone || null,
-          dob || null,
-          address || null,
-          created_at,
-          password_hash,
-          cleanPan,
-          maskedAadhaar,
-          gender || 'Not Specified',
-          father_name || null,
-          marital_status || 'Single',
-          occupation || 'Salaried',
-          annual_income || '₹3,00,000 - ₹10,00,000',
-          nominee_name || null,
-          nominee_relation || null,
-          nominee_dob || null,
-          vkyc_status || 'Completed',
-          signature_data || null,
-          avatar_data || null,
-          effectivePin,
-          card_pin_hash,
-        ]
-      );
+    while (attempt < maxRetries && !success) {
+      attempt++;
 
-      // 2. Insert Account Record
-      await conn.query(
-        `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, opening_date, status, card_pin, card_pin_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?)`,
-        [accNum, customer_id, finalType, initialGrant, finalIfsc, finalBranch, created_at, effectivePin, card_pin_hash]
-      );
+      // 1. Determine next sequential Customer ID
+      const [allCusts] = await db.query('SELECT customer_id FROM customers');
+      let nextNum = 106;
+      if (allCusts && allCusts.length > 0) {
+        const nums = allCusts
+          .map((c: any) => {
+            const parts = (c.customer_id || '').split('-');
+            return parts.length > 1 ? parseInt(parts[1], 10) : 0;
+          })
+          .filter((n: number) => !isNaN(n));
+        if (nums.length > 0) {
+          nextNum = Math.max(...nums) + 1;
+        }
+      }
+      const candidateCustomerId = `CUST-${nextNum + (attempt - 1)}`;
 
-      // 3. Insert Initial Welcome Balance Transaction
-      await conn.query(
-        `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
-         VALUES (?, NULL, ?, ?, 'Deposit', ?, 'Success', 'Welcome Opening Balance Grant - BTB DigiSave', ?)`,
-        [txnId, accNum, initialGrant, created_at, referenceNumber]
-      );
-
-      // 4. Record KYC Audit Trail
-      const auditLogs = [
-        { type: 'MOBILE_OTP', doc: phone || 'MOBILE', method: 'SMS_OTP_AUTHENTICATION', remarks: 'Simulated 2FA SMS verification' },
-        { type: 'PAN_CARD', doc: cleanPan || 'PAN_CARD', method: 'NSDL_TIN_API_SIMULATED', remarks: 'Simulated Income Tax database verification' },
-        { type: 'AADHAAR_UIDAI', doc: maskedAadhaar || 'AADHAAR', method: 'UIDAI_DEMOGRAPHIC_EKYC', remarks: 'Simulated Aadhaar demographic check' },
-        { type: 'VIDEO_KYC', doc: 'LIVE_FACIAL_CAPTURE', method: 'AI_FACIAL_LIVENESS_GEO_TAG', remarks: 'Simulated RBI officer video check' },
-        { type: 'DIGITAL_SIGNATURE', doc: 'CANVAS_SIGNATURE', method: 'TOUCH_CANVAS_DIGITAL_RECORD', remarks: 'Digital signature specimen captured' },
-      ];
-
-      for (let i = 0; i < auditLogs.length; i++) {
-        const item = auditLogs[i];
-        const verifId = `KYC-${Date.now().toString().slice(-6)}${i + 1}`;
-        await conn.query(
-          `INSERT INTO kyc_verifications (verification_id, customer_id, document_type, document_number, verification_method, status, verified_at, remarks)
-           VALUES (?, ?, ?, ?, ?, 'Verified', ?, ?)`,
-          [verifId, customer_id, item.type, item.doc, item.method, created_at, item.remarks]
-        );
+      // 2. Generate unique account number and ensure absence of collision
+      const randomAccSuffix = crypto.randomInt(100000, 999999);
+      const candidateAccNum = `ACC-${randomAccSuffix}`;
+      const [existingAcc] = await db.query('SELECT account_number FROM accounts WHERE account_number = ?', [candidateAccNum]);
+      if (existingAcc && existingAcc.length > 0) {
+        continue;
       }
 
-      // 5. Record System Audit Log
-      const auditId = generateAuditId();
-      await conn.query(
-        `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
-         VALUES (?, ?, 'CUSTOMER_SIGNUP', 'CUSTOMER', ?, ?, ?)`,
-        [auditId, customer_id, customer_id, `New customer onboarding completed. Primary account: ${accNum}`, created_at]
-      );
-    });
+      const { txnId, referenceNumber } = generateTransactionReference('TXN-GRANT');
 
-    const [newCustomer] = await db.query('SELECT * FROM customers WHERE customer_id = ?', [customer_id]);
-    delete newCustomer[0].password_hash;
+      try {
+        await db.transaction(async (conn) => {
+          // 1. Insert Customer Record (card_pin set to NULL to prevent plaintext storage)
+          await conn.query(
+            `INSERT INTO customers (
+              customer_id, full_name, email, phone, dob, address, created_at,
+              status, kyc_status, password_hash, credit_score, tier,
+              pan_number, aadhaar_number, gender, father_name, marital_status,
+              occupation, annual_income, nominee_name, nominee_relation, nominee_dob,
+              vkyc_status, signature_data, avatar_data, card_pin, card_pin_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', 'Verified', ?, 770, 'Silver', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+            [
+              candidateCustomerId,
+              cleanName,
+              cleanEmail,
+              phone || null,
+              dob || null,
+              address || null,
+              created_at,
+              password_hash,
+              cleanPan,
+              maskedAadhaar,
+              gender || 'Not Specified',
+              father_name || null,
+              marital_status || 'Single',
+              occupation || 'Salaried',
+              annual_income || '₹3,00,000 - ₹10,00,000',
+              nominee_name || null,
+              nominee_relation || null,
+              nominee_dob || null,
+              vkyc_status || 'Completed',
+              signature_data || null,
+              avatar_data || null,
+              card_pin_hash,
+            ]
+          );
 
-    const [newAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accNum]);
+          // 2. Insert Account Record (card_pin set to NULL to prevent plaintext storage)
+          await conn.query(
+            `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, opening_date, status, card_pin, card_pin_hash)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', NULL, ?)`,
+            [candidateAccNum, candidateCustomerId, finalType, initialGrant, finalIfsc, finalBranch, created_at, card_pin_hash]
+          );
+
+          // 3. Insert Initial Welcome Balance Transaction
+          await conn.query(
+            `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
+             VALUES (?, NULL, ?, ?, 'Deposit', ?, 'Success', 'Welcome Opening Balance Grant - BTB DigiSave', ?)`,
+            [txnId, candidateAccNum, initialGrant, created_at, referenceNumber]
+          );
+
+          // 4. Record KYC Audit Trail (with high-entropy collision-proof IDs)
+          const auditLogs = [
+            { type: 'MOBILE_OTP', doc: phone || 'MOBILE', method: 'SMS_OTP_AUTHENTICATION', remarks: 'Simulated 2FA SMS verification' },
+            { type: 'PAN_CARD', doc: cleanPan || 'PAN_CARD', method: 'NSDL_TIN_API_SIMULATED', remarks: 'Simulated Income Tax database verification' },
+            { type: 'AADHAAR_UIDAI', doc: maskedAadhaar || 'AADHAAR', method: 'UIDAI_DEMOGRAPHIC_EKYC', remarks: 'Simulated Aadhaar demographic check' },
+            { type: 'VIDEO_KYC', doc: 'LIVE_FACIAL_CAPTURE', method: 'AI_FACIAL_LIVENESS_GEO_TAG', remarks: 'Simulated RBI officer video check' },
+            { type: 'DIGITAL_SIGNATURE', doc: 'CANVAS_SIGNATURE', method: 'TOUCH_CANVAS_DIGITAL_RECORD', remarks: 'Digital signature specimen captured' },
+          ];
+
+          for (let i = 0; i < auditLogs.length; i++) {
+            const item = auditLogs[i];
+            const verifId = `KYC-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}-${i + 1}`;
+            await conn.query(
+              `INSERT INTO kyc_verifications (verification_id, customer_id, document_type, document_number, verification_method, status, verified_at, remarks)
+               VALUES (?, ?, ?, ?, ?, 'Verified', ?, ?)`,
+              [verifId, candidateCustomerId, item.type, item.doc, item.method, created_at, item.remarks]
+            );
+          }
+
+          // 5. Record System Audit Log
+          const auditId = generateAuditId();
+          await conn.query(
+            `INSERT INTO audit_logs (log_id, customer_id, action, entity_type, entity_id, details, timestamp)
+             VALUES (?, ?, 'CUSTOMER_SIGNUP', 'CUSTOMER', ?, ?, ?)`,
+            [auditId, candidateCustomerId, candidateCustomerId, `New customer onboarding completed. Primary account: ${candidateAccNum}`, created_at]
+          );
+        });
+
+        createdCustomerId = candidateCustomerId;
+        createdAccNum = candidateAccNum;
+        success = true;
+      } catch (insertErr: any) {
+        const errMsg = String(insertErr?.message || insertErr);
+        if (
+          errMsg.includes('UNIQUE') ||
+          errMsg.includes('Duplicate') ||
+          errMsg.includes('constraint') ||
+          errMsg.includes('PRIMARY')
+        ) {
+          if (attempt >= maxRetries) {
+            throw insertErr;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25 * attempt));
+          continue;
+        }
+        throw insertErr;
+      }
+    }
+
+    if (!success) {
+      throw new Error('Failed to generate unique customer/account identifier after retries');
+    }
+
+    const [newCustomer] = await db.query('SELECT * FROM customers WHERE customer_id = ?', [createdCustomerId]);
+    if (newCustomer && newCustomer[0]) {
+      delete newCustomer[0].password_hash;
+      delete newCustomer[0].card_pin;
+      delete newCustomer[0].card_pin_hash;
+    }
+
+    const [newAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [createdAccNum]);
+    if (newAccount && newAccount[0]) {
+      delete newAccount[0].card_pin;
+      delete newAccount[0].card_pin_hash;
+    }
 
     const token = generateToken(newCustomer[0]);
 
@@ -216,7 +279,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err: any) {
-    console.error('Signup error:', err);
+    console.error('Signup error:', err?.message || 'Unknown signup error');
     return NextResponse.json(
       { error: 'Failed to complete digital onboarding. Please try again.' },
       { status: 500 }

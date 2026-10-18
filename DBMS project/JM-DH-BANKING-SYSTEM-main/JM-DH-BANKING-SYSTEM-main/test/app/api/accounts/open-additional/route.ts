@@ -33,9 +33,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid 4-digit Debit Card PIN entered' }, { status: 401 });
     }
 
-    // 2. Generate unique account number and reference
-    const randomSuffix = crypto.randomInt(100000, 999999);
-    const accNum = `ACC-${randomSuffix}`;
+    // 2. Generate unique account number and reference with collision protection
+    let accNum = '';
+    for (let attempts = 0; attempts < 5; attempts++) {
+      const candidate = `ACC-${crypto.randomInt(100000, 999999)}`;
+      const [existing] = await db.query('SELECT account_number FROM accounts WHERE account_number = ?', [candidate]);
+      if (!existing || existing.length === 0) {
+        accNum = candidate;
+        break;
+      }
+    }
+    if (!accNum) {
+      return NextResponse.json({ error: 'System busy. Unable to allocate unique account number.' }, { status: 500 });
+    }
+
     const branch = branch_name || 'Mumbai Nariman Point Hub';
     const ifsc = 'BTBI0001024';
     const initialGrant = chosenType === 'Current Account' ? 25000.0 : 10000.0;
@@ -43,14 +54,13 @@ export async function POST(request: Request) {
 
     const { txnId, referenceNumber } = generateTransactionReference('TXN-GRANT');
     const pinHashToUse = custRows[0].card_pin_hash || null;
-    const plainPinToUse = custRows[0].card_pin || '1234';
 
     await db.transaction(async (conn) => {
-      // 1. Create account
+      // 1. Create account (card_pin is explicitly NULL)
       await conn.query(
         `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, opening_date, status, card_pin, card_pin_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?)`,
-        [accNum, authUser.customer_id, chosenType, initialGrant, ifsc, branch, nowTime, plainPinToUse, pinHashToUse]
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', NULL, ?)`,
+        [accNum, authUser.customer_id, chosenType, initialGrant, ifsc, branch, nowTime, pinHashToUse]
       );
 
       // 2. Initial welcome funding transaction

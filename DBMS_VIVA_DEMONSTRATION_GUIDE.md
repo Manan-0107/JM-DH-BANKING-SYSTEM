@@ -11,6 +11,8 @@
 
 Bharat Trust Bank is a database-driven core banking prototype engineered to simulate production banking mechanics while strictly maintaining the aesthetic integrity of its modern Next.js 14 frontend.
 
+> **Academic Simulation Scope**: All ACID transaction semantics, ledger writes, constraints, row-level authorization, and balances execute against authentic relational database engines (SQLite / MySQL). External payment rails (NPCI/RBI/IMPS), SMS carrier dispatch for OTP, and external government identity verification (NSDL/UIDAI) are simulated internally within the DBMS for academic capstone demonstration.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        NEXT.JS 14 FRONTEND (UI/UX)                     │
@@ -67,14 +69,14 @@ erDiagram
     }
 
     ACCOUNTS {
-        string id PK "System Account ID"
-        string account_number UK "ACC-XXXXXX"
+        string account_number PK "ACC-XXXXXX"
         string customer_id FK "References CUSTOMERS"
         string account_type "'Savings Account' | 'Current Account'"
         decimal balance "Balance >= 0.00 (CHECK)"
         string branch_name "Managing Branch"
         string ifsc_code "BTBI0001024"
         string status "'Active' | 'Dormant' | 'Frozen'"
+        string card_pin_hash "Bcrypt Hash (Cost 10)"
         datetime opening_date "Date Opened"
     }
 
