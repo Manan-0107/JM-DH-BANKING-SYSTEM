@@ -17,9 +17,16 @@ export async function GET(request: Request) {
       [authUser.customer_id]
     );
 
+    const sanitizedAccounts = (accounts || []).map((acc: any) => {
+      const copy = { ...acc };
+      delete copy.card_pin;
+      delete copy.card_pin_hash;
+      return copy;
+    });
+
     return NextResponse.json({
-      accounts: accounts || [],
-      total: (accounts || []).length
+      accounts: sanitizedAccounts,
+      total: sanitizedAccounts.length
     });
   } catch (err: any) {
     console.error('Get my-accounts error:', err);

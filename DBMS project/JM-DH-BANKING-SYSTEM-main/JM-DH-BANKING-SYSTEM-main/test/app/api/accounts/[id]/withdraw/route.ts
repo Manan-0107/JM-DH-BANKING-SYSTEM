@@ -99,6 +99,10 @@ export async function POST(
     });
 
     const [updatedAcc] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accountId]);
+    if (updatedAcc && updatedAcc[0]) {
+      delete updatedAcc[0].card_pin;
+      delete updatedAcc[0].card_pin_hash;
+    }
 
     return NextResponse.json({
       message: `₹${numAmount.toLocaleString('en-IN')} cash withdrawal completed successfully`,

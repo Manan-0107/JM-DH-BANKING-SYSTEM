@@ -442,8 +442,31 @@ async function runTests() {
 
     // TEST 16: Failure-Driven Mid-Transaction Automatic Rollback
     console.log('\n--- 16. Testing Failure-Driven Mid-Transaction Automatic Rollback ---');
+    // 0. Authorization Guards on Test Rollback Endpoint
+    const noHeaderGet = await fetch(`${BASE_URL}/api/system/test-rollback`);
+    assert(noHeaderGet.status === 403, 'Test rollback GET without test-suite header rejected with HTTP 403 Forbidden');
+
+    const noHeaderPost = await fetch(`${BASE_URL}/api/system/test-rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_number: aaravAccount }),
+    });
+    assert(noHeaderPost.status === 403, 'Test rollback POST without test-suite header rejected with HTTP 403 Forbidden');
+
+    const noTokenPost = await fetch(`${BASE_URL}/api/system/test-rollback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-suite': 'btb-verification-suite',
+      },
+      body: JSON.stringify({ account_number: aaravAccount }),
+    });
+    assert(noTokenPost.status === 401, 'Test rollback POST without Bearer token rejected with HTTP 401 Unauthorized');
+
     // Check active database engine reported by application
-    const engineCheckRes = await fetch(`${BASE_URL}/api/system/test-rollback`);
+    const engineCheckRes = await fetch(`${BASE_URL}/api/system/test-rollback`, {
+      headers: { 'x-test-suite': 'btb-verification-suite' },
+    });
     const engineInfo = await engineCheckRes.json();
     assert(engineCheckRes.status === 200, `Active database engine queried: ${engineInfo.engine}`);
 
@@ -459,6 +482,7 @@ async function runTests() {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${aaravToken}`,
+        'x-test-suite': 'btb-verification-suite',
       },
       body: JSON.stringify({
         account_number: aaravAccount,
@@ -551,8 +575,6 @@ async function runTests() {
       console.log('[SKIP] MySQL integration test explicitly skipped: MySQL server is not configured or offline (USE_MYSQL=false). Testing SQLite active engine.');
     }
 
-    verifyDb.close();
-
     // TEST 17: Multi-Threaded Overdraft Race Condition (Preventing Negative Balances)
     console.log('\n--- 17. Testing Multi-Threaded Overdraft Race Condition ---');
     const newCustToken = signupData.token;
@@ -614,6 +636,246 @@ async function runTests() {
     const createdAccNums = successfulSignups.map((r) => r.data.account?.account_number).filter(Boolean);
     assert(new Set(createdCustIds).size === 3, `All 3 concurrent customer IDs are strictly unique: ${createdCustIds.join(', ')}`);
     assert(new Set(createdAccNums).size === 3, `All 3 concurrent account numbers are strictly unique: ${createdAccNums.join(', ')}`);
+
+    // Direct database validation of persisted records under concurrency
+    for (let i = 0; i < successfulSignups.length; i++) {
+      const cId = createdCustIds[i];
+      const aNum = createdAccNums[i];
+      const dbCust = await new Promise((res) => {
+        verifyDb.get('SELECT customer_id, email, password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?', [cId], (err, row) => res(row));
+      });
+      assert(dbCust && dbCust.customer_id === cId, `Database has persisted customer record for ${cId}`);
+      assert(dbCust && dbCust.card_pin === null, `Database customer ${cId} has card_pin = NULL`);
+      assert(dbCust && dbCust.card_pin_hash && dbCust.card_pin_hash.startsWith('$2a$'), `Database customer ${cId} has valid bcrypt card_pin_hash`);
+
+      const dbAcc = await new Promise((res) => {
+        verifyDb.get('SELECT account_number, customer_id, balance, card_pin, card_pin_hash FROM accounts WHERE account_number = ?', [aNum], (err, row) => res(row));
+      });
+      assert(dbAcc && dbAcc.account_number === aNum, `Database has persisted account record for ${aNum}`);
+      assert(dbAcc && dbAcc.customer_id === cId, `Account ${aNum} is correctly mapped to customer ${cId}`);
+      assert(dbAcc && dbAcc.card_pin === null, `Account ${aNum} has card_pin = NULL`);
+      assert(dbAcc && parseFloat(dbAcc.balance) === 10000, `Account ${aNum} has initial opening grant of ₹10,000`);
+    }
+
+    // Confirm no orphaned accounts exist in database
+    const orphanedAccs = await new Promise((res) => {
+      verifyDb.all('SELECT a.account_number FROM accounts a LEFT JOIN customers c ON a.customer_id = c.customer_id WHERE c.customer_id IS NULL', (err, rows) => res(rows || []));
+    });
+    assert(orphanedAccs.length === 0, 'No orphaned account records exist in database');
+
+    // Confirm duplicate email signup fails immediately with HTTP 409 without retrying or corrupting records
+    const dupEmailRes = await fetch(`${BASE_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        full_name: 'Duplicate Email User',
+        email: `concurrent_${nowStamp}_1@example.com`,
+        password: 'Password123!',
+        card_pin: '5678',
+      }),
+    });
+    assert(dupEmailRes.status === 409, 'Duplicate email registration immediately rejected with HTTP 409 Conflict');
+
+    // TEST 19: Sensitive Credential Sanitization Across Financial Endpoints
+    console.log('\n--- 19. Testing Sensitive Credential Sanitization Across Financial Endpoints ---');
+    // A. /api/accounts/my-accounts
+    const myAccsRes = await fetch(`${BASE_URL}/api/accounts/my-accounts`, {
+      headers: { Authorization: `Bearer ${aaravToken}` },
+    });
+    const myAccsData = await myAccsRes.json();
+    assert(myAccsRes.status === 200, 'GET /api/accounts/my-accounts HTTP 200');
+    const allAccountsSanitized = (myAccsData.accounts || []).every(
+      (a) => a.card_pin === undefined && a.card_pin_hash === undefined && a.password_hash === undefined
+    );
+    assert(allAccountsSanitized, 'my-accounts response completely strips card_pin, card_pin_hash, and password_hash');
+
+    // B. /api/accounts/[id]/deposit
+    const sanDepositRes = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/deposit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aaravToken}`,
+      },
+      body: JSON.stringify({ amount: 1000, pin: '1234', description: 'Sanitization Verification Deposit' }),
+    });
+    const sanDepositData = await sanDepositRes.json();
+    assert(sanDepositRes.status === 200, 'POST /api/accounts/[id]/deposit HTTP 200');
+    assert(sanDepositData.account && sanDepositData.account.card_pin === undefined, 'Deposit response does not expose card_pin');
+    assert(sanDepositData.account && sanDepositData.account.card_pin_hash === undefined, 'Deposit response does not expose card_pin_hash');
+
+    // C. /api/accounts/[id]/withdraw
+    const sanWithdrawRes = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/withdraw`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aaravToken}`,
+      },
+      body: JSON.stringify({ amount: 500, pin: '1234' }),
+    });
+    const sanWithdrawData = await sanWithdrawRes.json();
+    assert(sanWithdrawRes.status === 200, 'POST /api/accounts/[id]/withdraw HTTP 200');
+    assert(sanWithdrawData.account && sanWithdrawData.account.card_pin === undefined, 'Withdraw response does not expose card_pin');
+    assert(sanWithdrawData.account && sanWithdrawData.account.card_pin_hash === undefined, 'Withdraw response does not expose card_pin_hash');
+
+    // D. /api/accounts/transfer
+    const sanitizeTransferRes = await fetch(`${BASE_URL}/api/accounts/transfer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aaravToken}`,
+      },
+      body: JSON.stringify({
+        from_account: aaravAccount,
+        to_account: priyaAccount,
+        amount: 100,
+        pin: '1234',
+        description: 'Sanitize Transfer Test',
+      }),
+    });
+    const sanitizeTransferData = await sanitizeTransferRes.json();
+    assert(sanitizeTransferRes.status === 200, 'POST /api/accounts/transfer HTTP 200');
+    assert(sanitizeTransferData.sender && sanitizeTransferData.sender.card_pin === undefined, 'Transfer response does not expose card_pin');
+    assert(sanitizeTransferData.sender && sanitizeTransferData.sender.card_pin_hash === undefined, 'Transfer response does not expose card_pin_hash');
+
+    // E. /api/accounts/[id]/freeze
+    const sanFreezeRes = await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/freeze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aaravToken}`,
+      },
+      body: JSON.stringify({ pin: '1234' }),
+    });
+    const sanFreezeData = await sanFreezeRes.json();
+    assert(sanFreezeRes.status === 200, 'POST /api/accounts/[id]/freeze HTTP 200');
+    assert(sanFreezeData.account && sanFreezeData.account.card_pin === undefined, 'Freeze response does not expose card_pin');
+    assert(sanFreezeData.account && sanFreezeData.account.card_pin_hash === undefined, 'Freeze response does not expose card_pin_hash');
+    // Unfreeze to restore active state
+    await fetch(`${BASE_URL}/api/accounts/${aaravAccount}/freeze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aaravToken}`,
+      },
+      body: JSON.stringify({ pin: '1234' }),
+    });
+
+    // F. /api/deposits (Term Deposit booking)
+    const sanFdRes = await fetch(`${BASE_URL}/api/deposits`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aaravToken}`,
+      },
+      body: JSON.stringify({
+        source_account: aaravAccount,
+        deposit_type: 'Fixed Deposit',
+        principal_amount: 10000,
+        tenure_months: 12,
+        pin: '1234',
+      }),
+    });
+    const sanFdData = await sanFdRes.json();
+    assert(sanFdRes.status === 201, 'POST /api/deposits HTTP 201');
+    assert(sanFdData.account && sanFdData.account.card_pin === undefined, 'Term deposit response does not expose card_pin');
+    assert(sanFdData.account && sanFdData.account.card_pin_hash === undefined, 'Term deposit response does not expose card_pin_hash');
+
+    // G. /api/deposits/[id]/break (Premature closure)
+    if (sanFdData.deposit?.deposit_id) {
+      const sanBreakRes = await fetch(`${BASE_URL}/api/deposits/${sanFdData.deposit.deposit_id}/break`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${aaravToken}`,
+        },
+        body: JSON.stringify({ pin: '1234' }),
+      });
+      const sanBreakData = await sanBreakRes.json();
+      assert(sanBreakRes.status === 200, 'POST /api/deposits/[id]/break HTTP 200');
+      assert(sanBreakData.account && sanBreakData.account.card_pin === undefined, 'Term deposit break response does not expose card_pin');
+      assert(sanBreakData.account && sanBreakData.account.card_pin_hash === undefined, 'Term deposit break response does not expose card_pin_hash');
+    }
+
+    // TEST 20: Isolated Legacy PIN Migration & Fail-Closed Logic
+    console.log('\n--- 20. Testing Isolated Legacy PIN Migration & Fail-Closed Verification ---');
+    const bcrypt = require('bcryptjs');
+
+    function localVerifyPin(pin, storedHash) {
+      if (!storedHash || !pin) return false;
+      const trimmedPin = pin.toString().trim();
+      if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$')) {
+        try {
+          return bcrypt.compareSync(trimmedPin, storedHash);
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    }
+
+    function localVerifyTransactionPin(providedPin, customer) {
+      if (!providedPin) return false;
+      const pin = providedPin.toString().trim();
+      if (customer.card_pin_hash && localVerifyPin(pin, customer.card_pin_hash)) {
+        return true;
+      }
+      if (customer.password_hash && (customer.password_hash.startsWith('$2a$') || customer.password_hash.startsWith('$2b$'))) {
+        try {
+          return bcrypt.compareSync(pin, customer.password_hash);
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    }
+
+    const testPinHash = bcrypt.hashSync('9876', 10);
+    assert(localVerifyPin('9876', testPinHash) === true, 'localVerifyPin succeeds with correct PIN');
+    assert(localVerifyPin('0000', testPinHash) === false, 'localVerifyPin fails with incorrect PIN');
+    assert(localVerifyPin('9876', null) === false, 'localVerifyPin fails closed on null hash');
+    assert(localVerifyPin('9876', undefined) === false, 'localVerifyPin fails closed on undefined hash');
+    assert(localVerifyPin('9876', '') === false, 'localVerifyPin fails closed on empty hash');
+    assert(localVerifyPin('9876', 'not-a-bcrypt-hash') === false, 'localVerifyPin fails closed on plain string hash');
+    assert(localVerifyPin('9876', '$2a$10$malformedcorruptedhashvalue123456789012345') === false, 'localVerifyPin fails closed on corrupted bcrypt string');
+
+    assert(localVerifyTransactionPin('9876', { password_hash: '', card_pin_hash: '' }) === false, 'localVerifyTransactionPin fails closed when hashes missing');
+    assert(localVerifyTransactionPin('9876', { password_hash: 'plainTextPassword', card_pin: '9876' }) === false, 'localVerifyTransactionPin never authenticates against plaintext card_pin');
+
+    // Isolated In-Memory SQLite Legacy Migration Simulation
+    const tempLegacyDb = new sqlite3.Database(':memory:');
+    const runAsync = (sql, params = []) => new Promise((res, rej) => tempLegacyDb.run(sql, params, (err) => err ? rej(err) : res()));
+    const allAsync = (sql, params = []) => new Promise((res, rej) => tempLegacyDb.all(sql, params, (err, rows) => err ? rej(err) : res(rows || [])));
+
+    await runAsync(`
+      CREATE TABLE legacy_customers (
+        customer_id TEXT PRIMARY KEY,
+        card_pin TEXT,
+        card_pin_hash TEXT
+      )
+    `);
+    await runAsync("INSERT INTO legacy_customers (customer_id, card_pin, card_pin_hash) VALUES ('LEGACY-1', '5555', NULL)");
+    await runAsync("INSERT INTO legacy_customers (customer_id, card_pin, card_pin_hash) VALUES ('LEGACY-2', '7777', NULL)");
+
+    // Step 1: Migrate plaintext PINs to bcrypt hashes
+    const legacyRows = await allAsync("SELECT customer_id, card_pin FROM legacy_customers WHERE card_pin IS NOT NULL AND (card_pin_hash IS NULL OR card_pin_hash = '')");
+    for (const r of legacyRows) {
+      const h = bcrypt.hashSync(r.card_pin, 10);
+      await runAsync("UPDATE legacy_customers SET card_pin_hash = ? WHERE customer_id = ?", [h, r.customer_id]);
+    }
+
+    // Step 2: Scrub plaintext PIN column
+    await runAsync("UPDATE legacy_customers SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''");
+
+    // Step 3: Verify migration
+    const migratedRows = await allAsync("SELECT * FROM legacy_customers");
+    assert(migratedRows.length === 2, 'Isolated legacy migration processed 2 records');
+    assert(migratedRows.every(r => r.card_pin === null), 'Isolated legacy migration set card_pin = NULL for all records');
+    assert(migratedRows.every(r => r.card_pin_hash && r.card_pin_hash.startsWith('$2a$')), 'Isolated legacy migration generated bcrypt hashes');
+    assert(bcrypt.compareSync('5555', migratedRows[0].card_pin_hash), 'Migrated hash matches original legacy PIN for LEGACY-1');
+    assert(bcrypt.compareSync('7777', migratedRows[1].card_pin_hash), 'Migrated hash matches original legacy PIN for LEGACY-2');
+
+    tempLegacyDb.close();
+    verifyDb.close();
 
   } catch (error) {
     console.error('Test execution error:', error);

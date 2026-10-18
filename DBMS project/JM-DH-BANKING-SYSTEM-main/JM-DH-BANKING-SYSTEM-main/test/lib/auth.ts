@@ -92,7 +92,12 @@ export function verifyPin(pin: string, storedHash: string | null | undefined): b
   if (!storedHash || !pin) return false;
   const trimmedPin = pin.toString().trim();
   if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$')) {
-    return bcrypt.compareSync(trimmedPin, storedHash);
+    try {
+      return bcrypt.compareSync(trimmedPin, storedHash);
+    } catch {
+      // Malformed or invalid bcrypt format fails closed
+      return false;
+    }
   }
   return false;
 }
@@ -115,10 +120,13 @@ export function verifyTransactionPin(
   // 2. Fallback check: NetBanking password hash (if hashed with bcrypt)
   if (
     customer.password_hash &&
-    (customer.password_hash.startsWith('$2a$') || customer.password_hash.startsWith('$2b$')) &&
-    bcrypt.compareSync(pin, customer.password_hash)
+    (customer.password_hash.startsWith('$2a$') || customer.password_hash.startsWith('$2b$'))
   ) {
-    return true;
+    try {
+      return bcrypt.compareSync(pin, customer.password_hash);
+    } catch {
+      return false;
+    }
   }
 
   return false;

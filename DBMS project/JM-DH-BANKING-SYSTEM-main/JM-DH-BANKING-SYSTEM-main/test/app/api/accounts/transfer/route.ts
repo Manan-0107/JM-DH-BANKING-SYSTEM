@@ -140,6 +140,10 @@ export async function POST(request: Request) {
 
     // Fetch updated sender account
     const [updatedSender] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [cleanFrom]);
+    if (updatedSender && updatedSender[0]) {
+      delete updatedSender[0].card_pin;
+      delete updatedSender[0].card_pin_hash;
+    }
 
     return NextResponse.json({
       message: `₹${numAmount.toLocaleString('en-IN')} transferred successfully to ${cleanTo}`,

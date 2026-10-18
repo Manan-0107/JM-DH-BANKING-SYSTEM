@@ -147,6 +147,10 @@ export async function POST(request: Request) {
 
     const [newDeposit] = await db.query(`SELECT * FROM deposits WHERE deposit_id = ?`, [depositId]);
     const [updatedAccount] = await db.query(`SELECT * FROM accounts WHERE account_number = ?`, [source_account]);
+    if (updatedAccount && updatedAccount[0]) {
+      delete updatedAccount[0].card_pin;
+      delete updatedAccount[0].card_pin_hash;
+    }
 
     return NextResponse.json({
       message: `${finalType} certificate ${depositId} booked successfully! Maturity value: ₹${maturityAmount.toLocaleString('en-IN')}`,

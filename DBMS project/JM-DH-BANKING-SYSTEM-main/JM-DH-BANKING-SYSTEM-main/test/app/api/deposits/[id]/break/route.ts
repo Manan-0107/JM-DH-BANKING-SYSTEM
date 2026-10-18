@@ -90,6 +90,10 @@ export async function POST(
     });
 
     const [updatedAccount] = await db.query(`SELECT * FROM accounts WHERE account_number = ?`, [targetAccount]);
+    if (updatedAccount && updatedAccount[0]) {
+      delete updatedAccount[0].card_pin;
+      delete updatedAccount[0].card_pin_hash;
+    }
 
     return NextResponse.json({
       message: `Deposit ${id} successfully liquidated. ₹${totalPayout.toLocaleString('en-IN')} credited to ${targetAccount}`,

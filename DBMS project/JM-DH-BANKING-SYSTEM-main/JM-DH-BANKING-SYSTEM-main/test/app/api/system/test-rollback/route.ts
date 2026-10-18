@@ -2,7 +2,25 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getUserFromRequest, generateTransactionReference } from '@/lib/auth';
 
+/**
+ * Internal Automated Test Endpoint for Failure-Driven Transaction Rollback Verification.
+ * Strictly disabled in production environments.
+ */
 export async function POST(request: Request) {
+  // 1. Strict Production Guard: Endpoint is disabled in production environments
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 });
+  }
+
+  // 2. Test Execution Header Guard: Prevents inadvertent invocation
+  const testHeader = request.headers.get('x-test-suite');
+  if (testHeader !== 'btb-verification-suite') {
+    return NextResponse.json(
+      { error: 'Forbidden: Test execution authorization required' },
+      { status: 403 }
+    );
+  }
+
   try {
     const authUser = getUserFromRequest(request);
     if (!authUser) {
@@ -10,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { account_number, amount = 1000, trigger_failure = true } = body;
+    const { account_number, amount = 1000 } = body;
 
     if (!account_number) {
       return NextResponse.json({ error: 'account_number is required' }, { status: 400 });
@@ -18,7 +36,7 @@ export async function POST(request: Request) {
 
     const db = await getDb();
 
-    // 1. Fetch current account and verify ownership
+    // 3. Verify account ownership
     const [accRows] = await db.query(
       'SELECT account_number, balance FROM accounts WHERE account_number = ? AND customer_id = ?',
       [account_number, authUser.customer_id]
@@ -32,9 +50,9 @@ export async function POST(request: Request) {
     const { txnId, referenceNumber } = generateTransactionReference('TXN-ROLLBACK-PROBE');
     const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    // 2. Execute via the application's real transaction abstraction
-    let transactionErrorCaught: any = null;
+    let rollbackSuccessful = false;
 
+    // 4. Execute via application's real transaction abstraction with guaranteed failure & rollback
     try {
       await db.transaction(async (conn) => {
         // Step A: Apply debit write
@@ -51,37 +69,36 @@ export async function POST(request: Request) {
           [txnId, account_number, amount, nowTime, referenceNumber]
         );
 
-        // Step C: Trigger deliberate database error before commit if requested
-        if (trigger_failure) {
-          await conn.query(
-            'INSERT INTO non_existent_table_for_rollback_verification (invalid_column) VALUES (?)',
-            ['deliberate_error_trigger']
-          );
-        }
+        // Step C: Trigger deliberate SQL error to force automatic transaction rollback
+        await conn.query(
+          'INSERT INTO non_existent_table_for_rollback_verification (invalid_column) VALUES (?)',
+          ['deliberate_error_trigger']
+        );
       });
     } catch (txErr: any) {
-      transactionErrorCaught = txErr;
+      // Log failure safely on server without leaking raw error to client
+      console.log('[Test Rollback] Deliberate transaction failure caught and rolled back successfully.');
+      rollbackSuccessful = true;
     }
 
-    // 3. Re-query account balance after transaction has concluded
+    // 5. Verify post-rollback account balance and ledger state
     const [postAccRows] = await db.query(
       'SELECT balance FROM accounts WHERE account_number = ?',
       [account_number]
     );
-    const postBalance = parseFloat(postAccRows[0].balance);
+    const postBalance = parseFloat(postAccRows[0]?.balance || '0');
 
-    // 4. Verify whether ledger record exists in database
     const [txRows] = await db.query(
       'SELECT transaction_id FROM transactions WHERE transaction_id = ? OR reference_number = ?',
       [txnId, referenceNumber]
     );
     const ledgerRecordRemains = txRows && txRows.length > 0;
 
-    if (transactionErrorCaught) {
+    if (rollbackSuccessful) {
       return NextResponse.json(
         {
-          message: 'Deliberate transaction failure triggered and caught by db.transaction abstraction',
-          error: transactionErrorCaught.message,
+          message: 'Deliberate transaction failure caught and rolled back automatically',
+          error: 'Deliberate transaction failure triggered for rollback verification',
           rolledBack: true,
           starting_balance: startingBalance,
           post_balance: postBalance,
@@ -95,33 +112,42 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({
-      message: 'Transaction committed successfully without injected error',
-      starting_balance: startingBalance,
-      post_balance: postBalance,
-      probe_txn_id: txnId,
-      probe_reference_number: referenceNumber,
-      engine: db.isSqlite ? 'sqlite' : 'mysql',
-    });
-  } catch (err: any) {
     return NextResponse.json(
-      { error: err?.message || 'Server error during rollback test' },
+      { error: 'Rollback verification probe failed to trigger expected failure' },
+      { status: 500 }
+    );
+  } catch (err: any) {
+    console.error('Test rollback endpoint error:', err?.message || 'Server error');
+    return NextResponse.json(
+      { error: 'An internal error occurred during test verification' },
       { status: 500 }
     );
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 });
+  }
+
+  const testHeader = request.headers.get('x-test-suite');
+  if (testHeader !== 'btb-verification-suite') {
+    return NextResponse.json(
+      { error: 'Forbidden: Test execution authorization required' },
+      { status: 403 }
+    );
+  }
+
   try {
     const db = await getDb();
     return NextResponse.json({
       engine: db.isSqlite ? 'sqlite' : 'mysql',
       isSqlite: !!db.isSqlite,
-      status: 'active',
+      status: 'active-test-environment',
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: err?.message || 'Database unavailable' },
+      { error: 'Database service unavailable' },
       { status: 503 }
     );
   }

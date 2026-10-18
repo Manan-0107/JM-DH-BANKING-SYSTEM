@@ -234,24 +234,47 @@ export async function POST(request: Request) {
         success = true;
       } catch (insertErr: any) {
         const errMsg = String(insertErr?.message || insertErr);
-        if (
+
+        // If the conflict is specifically on email, return HTTP 409 Conflict immediately (do not retry)
+        if (errMsg.toLowerCase().includes('email')) {
+          return NextResponse.json(
+            { error: 'This email is already registered with Bharat Trust Bank. Please login instead.' },
+            { status: 409 }
+          );
+        }
+
+        // Specifically recognize ID / reference number uniqueness collisions
+        const isIdCollision =
           errMsg.includes('UNIQUE') ||
           errMsg.includes('Duplicate') ||
+          errMsg.includes('PRIMARY') ||
           errMsg.includes('constraint') ||
-          errMsg.includes('PRIMARY')
-        ) {
+          errMsg.includes('customer_id') ||
+          errMsg.includes('account_number') ||
+          errMsg.includes('reference_number');
+
+        if (isIdCollision) {
           if (attempt >= maxRetries) {
-            throw insertErr;
+            console.error('[Signup Collision Exhaustion] Failed to allocate unique ID after max retries:', candidateCustomerId);
+            return NextResponse.json(
+              { error: 'Registration service temporarily busy. Unable to allocate unique account identifier. Please retry.' },
+              { status: 503 }
+            );
           }
           await new Promise((resolve) => setTimeout(resolve, 25 * attempt));
           continue;
         }
+
+        // Unrelated database failures should NOT be retried
         throw insertErr;
       }
     }
 
     if (!success) {
-      throw new Error('Failed to generate unique customer/account identifier after retries');
+      return NextResponse.json(
+        { error: 'Registration service temporarily busy. Unable to complete onboarding.' },
+        { status: 503 }
+      );
     }
 
     const [newCustomer] = await db.query('SELECT * FROM customers WHERE customer_id = ?', [createdCustomerId]);

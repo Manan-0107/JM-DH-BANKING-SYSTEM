@@ -29,6 +29,10 @@ export async function POST(
     await db.query("UPDATE accounts SET status = ? WHERE account_number = ?", [newStatus, accountId]);
 
     const [updated] = await db.query("SELECT * FROM accounts WHERE account_number = ?", [accountId]);
+    if (updated && updated[0]) {
+      delete updated[0].card_pin;
+      delete updated[0].card_pin_hash;
+    }
 
     return NextResponse.json({
       message: `Card and account status changed to ${newStatus}`,

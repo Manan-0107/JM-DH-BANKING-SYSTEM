@@ -44,14 +44,21 @@ export async function POST(request: Request) {
       channelMessage = `Simulated SMS OTP sent to +91 ${cleanIdentifier}`;
     }
 
-    return NextResponse.json({
+    const responsePayload: any = {
       success: true,
       session_id: sessionId,
       message: channelMessage,
-      test_otp: generatedOtp,
       expires_in_sec: 300,
-      disclaimer: 'College DBMS Project Simulation: OTP generated in-memory/database for testing.',
-    });
+      disclaimer: 'College DBMS Project Simulation: OTP recorded in database for verification.',
+    };
+
+    // In development and testing, supply the simulated OTP for evaluation convenience.
+    // In production, OTPs are strictly confidential and must never be echoed in JSON responses.
+    if (process.env.NODE_ENV !== 'production') {
+      responsePayload.test_otp = generatedOtp;
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (error: any) {
     console.error('Send OTP Error:', error);
     return NextResponse.json(

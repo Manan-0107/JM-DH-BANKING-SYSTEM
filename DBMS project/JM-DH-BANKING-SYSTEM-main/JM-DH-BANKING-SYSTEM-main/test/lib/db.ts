@@ -329,8 +329,32 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
     // 10c. Scrub plaintext PIN columns to prevent credential leakage
     await adapter.query(`UPDATE customers SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''`);
     await adapter.query(`UPDATE accounts SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''`);
+
+    // 10d. Verification: Fail safely if any unmigrated plaintext PINs remain
+    const [remainingCustomers] = await adapter.query(
+      `SELECT COUNT(*) as count FROM customers WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
+    );
+    const [remainingAccounts] = await adapter.query(
+      `SELECT COUNT(*) as count FROM accounts WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
+    );
+
+    const custPending = remainingCustomers[0]?.count || 0;
+    const accPending = remainingAccounts[0]?.count || 0;
+
+    if (custPending > 0 || accPending > 0) {
+      throw new Error(
+        `[PIN Migration Incomplete] Critical integrity check failed: ${custPending} customer(s) and ${accPending} account(s) retain unmigrated plaintext PINs.`
+      );
+    }
   } catch (e: any) {
-    console.warn('[DB PIN Migration] Notice during legacy PIN migration/scrub:', e?.message || e);
+    const msg = String(e?.message || e);
+    // Safe to ignore only if the legacy column does not exist in the database engine
+    if (msg.includes('no such column') || msg.includes("Unknown column 'card_pin'")) {
+      // Benign: schema dialect already has no legacy plaintext card_pin column
+    } else {
+      console.error('[DB PIN Migration] Critical failure during PIN migration:', e?.message || e);
+      throw e;
+    }
   }
 
   // Seed baseline Customers if empty
