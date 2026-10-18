@@ -72,33 +72,36 @@ export async function GET(request: Request) {
     const [countRows] = await db.query(countSql, params);
     const total = countRows[0]?.total || 0;
 
-    // 4. Fetch Paginated Records with Flow calculation
+    // 4. Fetch Paginated Records
     const querySql = `
-      SELECT t.*,
-        CASE
-          WHEN t.sender_account IN (${placeholders}) AND t.receiver_account IN (${placeholders}) THEN 'Self Transfer'
-          WHEN t.receiver_account IN (${placeholders}) THEN 'Credit'
-          ELSE 'Debit'
-        END AS flow
+      SELECT t.*
       FROM transactions t
       WHERE ${whereClause}
       ORDER BY t.date_time DESC
       LIMIT ? OFFSET ?
     `;
 
-    const queryParams = [...accountNumbers, ...accountNumbers, ...params, limit, offset];
+    const queryParams = [...params, limit, offset];
     const [transactions] = await db.query(querySql, queryParams);
 
-    // Optional flow filtering in memory if database dialect doesn't support HAVING flow
-    let filteredTxns = transactions || [];
+    // Compute transaction flow accurately and format records
+    let computedTxns = (transactions || []).map((t: any) => {
+      const isSender = accountNumbers.includes(t.sender_account);
+      const isReceiver = accountNumbers.includes(t.receiver_account);
+      let flow = 'Debit';
+      if (isSender && isReceiver) flow = 'Self Transfer';
+      else if (isReceiver) flow = 'Credit';
+      return { ...t, flow };
+    });
+
     if (filterFlow === 'credit') {
-      filteredTxns = filteredTxns.filter((t: any) => t.flow === 'Credit');
+      computedTxns = computedTxns.filter((t: any) => t.flow === 'Credit');
     } else if (filterFlow === 'debit') {
-      filteredTxns = filteredTxns.filter((t: any) => t.flow === 'Debit');
+      computedTxns = computedTxns.filter((t: any) => t.flow === 'Debit');
     }
 
     return NextResponse.json({
-      transactions: filteredTxns,
+      transactions: computedTxns,
       total,
       page,
       limit,

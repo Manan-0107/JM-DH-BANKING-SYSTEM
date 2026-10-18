@@ -326,6 +326,81 @@ async function runTests() {
     });
     assert(newLoginRes.status === 200, 'New customer login HTTP 200');
 
+    // TEST 15: Invalid & Expired Token Authentication
+    console.log('\n--- 15. Testing Invalid & Tampered Authentication Tokens ---');
+    const fakeToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjdXN0b21lcl9pZCI6IkNVU1QtOTk5IiwiaWF0IjoxNTE2MjM5MDIyfQ.invalidSignatureKeyHere1234567890';
+    const fakeTokenRes = await fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${fakeToken}` },
+    });
+    assert(fakeTokenRes.status === 401, 'Tampered JWT token rejected with HTTP 401 Unauthorized');
+
+    const noTokenRes = await fetch(`${BASE_URL}/api/auth/me`);
+    assert(noTokenRes.status === 401, 'Missing Authorization header rejected with HTTP 401 Unauthorized');
+
+    // TEST 16: Failed Transaction Rollback Verification
+    console.log('\n--- 16. Testing Atomic Rollback on Failed Transfer ---');
+    const preRollbackMe = await fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${aaravToken}` },
+    }).then(r => r.json());
+    const preRollbackBalance = parseFloat(preRollbackMe.accounts[0].balance);
+
+    const rollbackAttemptRes = await fetch(`${BASE_URL}/api/accounts/transfer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aaravToken}`,
+      },
+      body: JSON.stringify({
+        from_account: aaravAccount,
+        to_account: 'NON_EXISTENT_ACC_99999999',
+        amount: 2500,
+        pin: '1234',
+      }),
+    });
+    assert(rollbackAttemptRes.status === 404, 'Transfer to non-existent account rejected with HTTP 404');
+
+    const postRollbackMe = await fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${aaravToken}` },
+    }).then(r => r.json());
+    const postRollbackBalance = parseFloat(postRollbackMe.accounts[0].balance);
+    assert(preRollbackBalance === postRollbackBalance, `Atomic Rollback verified: sender balance untouched (₹${postRollbackBalance} === ₹${preRollbackBalance})`);
+
+    // TEST 17: Multi-Threaded Overdraft Race Condition (Preventing Negative Balances)
+    console.log('\n--- 17. Testing Multi-Threaded Overdraft Race Condition ---');
+    const newCustToken = signupData.token;
+    const newCustAcc = signupData.account.account_number; // has ₹10,000
+    // Launch 3 simultaneous transfers of ₹6,000 each (Total ₹18,000 > ₹10,000 balance).
+    // Exactly 1 must succeed and 2 must be rejected with HTTP 400. Balance must NEVER go below 0!
+    const racePromises = [1, 2, 3].map((idx) =>
+      fetch(`${BASE_URL}/api/accounts/transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${newCustToken}`,
+        },
+        body: JSON.stringify({
+          from_account: newCustAcc,
+          to_account: aaravAccount,
+          amount: 6000,
+          pin: '4321',
+          description: `Race test ${idx}`,
+        }),
+      }).then(async (r) => ({ status: r.status, data: await r.json() }))
+    );
+
+    const raceResults = await Promise.all(racePromises);
+    const raceSuccesses = raceResults.filter((r) => r.status === 200);
+    const raceFailures = raceResults.filter((r) => r.status === 400);
+
+    assert(raceSuccesses.length === 1, `Exactly 1 transfer succeeded (${raceSuccesses.length}/3)`);
+    assert(raceFailures.length === 2, `Exactly 2 transfers blocked by overdraft check (${raceFailures.length}/3)`);
+
+    const finalRaceMe = await fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${newCustToken}` },
+    }).then(r => r.json());
+    const finalRaceBalance = parseFloat(finalRaceMe.accounts[0].balance);
+    assert(finalRaceBalance === 4000, `Post-race balance is exactly ₹4,000 (never negative): ₹${finalRaceBalance}`);
+
   } catch (error) {
     console.error('Test execution error:', error);
     failed++;
