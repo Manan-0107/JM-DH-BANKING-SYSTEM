@@ -11,6 +11,17 @@ async function verifyPersistence() {
   console.log('   BTB END-TO-END DATABASE PERSISTENCE VERIFICATION   ');
   console.log('======================================================\n');
 
+  // 0. Safety Guard & Engine Detection: Verify test authorization & active engine
+  const engineCheckRes = await fetch(`${BASE_URL}/api/system/test-rollback`, {
+    headers: { 'x-test-suite': 'btb-verification-suite' }
+  });
+  if (!engineCheckRes.ok) {
+    throw new Error(`Persistence verification aborted: Test authorization failed (HTTP ${engineCheckRes.status}). Endpoint disabled in production.`);
+  }
+  const engineInfo = await engineCheckRes.json();
+  console.log(`[Safety Guard] Active Database Engine: ${engineInfo.engine.toUpperCase()}`);
+  console.log(`[Safety Guard] Environment Status: ${engineInfo.status}\n`);
+
   const email = `pers_eval_${Date.now()}@btb.in`;
   const password = 'Password@123';
   const card_pin = '4321';

@@ -17,7 +17,88 @@
  * 14. Administrative Dashboard Aggregations
  */
 
+try {
+  require('dotenv').config();
+} catch (e) {}
+
+const sqlite3 = require('sqlite3').verbose();
 const BASE_URL = 'http://localhost:3000';
+
+function createTestDbVerifier(engineInfo) {
+  if (engineInfo && engineInfo.engine === 'mysql') {
+    const mysql = require('mysql2/promise');
+    const pool = mysql.createPool({
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || 'bankist',
+      port: parseInt(process.env.DB_PORT || '3306', 10),
+      waitForConnections: true,
+      connectionLimit: 5,
+    });
+
+    return {
+      engine: 'mysql',
+      get: (sql, ...args) => {
+        let params = [];
+        let cb = null;
+        if (typeof args[0] === 'function') {
+          cb = args[0];
+        } else if (Array.isArray(args[0])) {
+          params = args[0];
+          cb = typeof args[1] === 'function' ? args[1] : null;
+        }
+        return pool.query(sql, params)
+          .then(([rows]) => {
+            const row = (rows && rows.length > 0) ? rows[0] : null;
+            if (cb) cb(null, row);
+            return row;
+          })
+          .catch((err) => {
+            if (cb) cb(err, null);
+            else throw err;
+          });
+      },
+      all: (sql, ...args) => {
+        let params = [];
+        let cb = null;
+        if (typeof args[0] === 'function') {
+          cb = args[0];
+        } else if (Array.isArray(args[0])) {
+          params = args[0];
+          cb = typeof args[1] === 'function' ? args[1] : null;
+        }
+        return pool.query(sql, params)
+          .then(([rows]) => {
+            if (cb) cb(null, rows || []);
+            return rows || [];
+          })
+          .catch((err) => {
+            if (cb) cb(err, []);
+            else throw err;
+          });
+      },
+      getConnection: () => pool.getConnection(),
+      close: (cb) => {
+        pool.end()
+          .then(() => { if (cb) cb(null); })
+          .catch((err) => { if (cb) cb(err); });
+      },
+    };
+  }
+
+  // SQLite engine
+  const db = new sqlite3.Database('bankist.sqlite');
+  db.on('error', () => {});
+  return {
+    engine: 'sqlite',
+    get: function (sql, ...args) { return db.get(sql, ...args); },
+    all: function (sql, ...args) { return db.all(sql, ...args); },
+    serialize: function (fn) { return db.serialize(fn); },
+    run: function (sql, ...args) { return db.run(sql, ...args); },
+    close: function (cb) { return db.close(cb); },
+  };
+}
 
 async function runTests() {
   console.log('====================================================');
@@ -38,6 +119,29 @@ async function runTests() {
   }
 
   try {
+    // 0. Safety Guard & Engine Detection: Query active engine and environment authorization
+    const engineCheckRes = await fetch(`${BASE_URL}/api/system/test-rollback`, {
+      headers: { 'x-test-suite': 'btb-verification-suite' },
+    });
+    if (!engineCheckRes.ok) {
+      throw new Error(`Test execution aborted: Server rejected authorization header (HTTP ${engineCheckRes.status}). Test execution is disabled in production.`);
+    }
+    const engineInfo = await engineCheckRes.json();
+    console.log(`[Safety Guard] Active Application Engine: ${engineInfo.engine.toUpperCase()}`);
+    console.log(`[Safety Guard] Environment Mode: ${engineInfo.status}`);
+
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Test execution aborted: Running test suites against NODE_ENV=production is strictly prohibited!');
+    }
+
+    // Fallback Guard: Fail closed if MySQL was explicitly requested via USE_MYSQL=true, but server is running SQLite
+    if (process.env.USE_MYSQL === 'true' && engineInfo.engine !== 'mysql') {
+      assert(false, 'Silent Fallback Guard: USE_MYSQL=true was configured, but server silently fell back to SQLite!');
+      return;
+    }
+
+    const verifyDb = createTestDbVerifier(engineInfo);
+
     // TEST 1: Login with seeded customer Aarav Lynn
     console.log('\n--- 1. Testing Customer Authentication ---');
     const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
@@ -325,8 +429,7 @@ async function runTests() {
     assert(!signupData.account.card_pin_hash, 'Account card_pin_hash is not exposed in API response');
 
     // Direct Database Integrity Verification: Confirm card_pin is NULL and card_pin_hash is bcrypt
-    const sqlite3 = require('sqlite3').verbose();
-    const verifyDb = new sqlite3.Database('bankist.sqlite');
+    // Uses the database-aware verifier connected to the active server engine (SQLite or MySQL)
 
     const dbCustRow = await new Promise((res) => {
       verifyDb.get(
@@ -464,11 +567,11 @@ async function runTests() {
     assert(noTokenPost.status === 401, 'Test rollback POST without Bearer token rejected with HTTP 401 Unauthorized');
 
     // Check active database engine reported by application
-    const engineCheckRes = await fetch(`${BASE_URL}/api/system/test-rollback`, {
+    const midTestEngineCheckRes = await fetch(`${BASE_URL}/api/system/test-rollback`, {
       headers: { 'x-test-suite': 'btb-verification-suite' },
     });
-    const engineInfo = await engineCheckRes.json();
-    assert(engineCheckRes.status === 200, `Active database engine queried: ${engineInfo.engine}`);
+    const midTestEngineInfo = await midTestEngineCheckRes.json();
+    assert(midTestEngineCheckRes.status === 200, `Active database engine queried: ${midTestEngineInfo.engine}`);
 
     // 1. Record starting account balance
     const preRollbackMe = await fetch(`${BASE_URL}/api/auth/me`, {
@@ -535,64 +638,57 @@ async function runTests() {
     assert(!probeTxnRecord, 'Failure-Driven Rollback: Uncommitted transaction/ledger record was completely rolled back from database');
 
     // 5. Engine-Specific Rollback Verification
-    // Direct SQLite transaction failure test using the same transaction pattern
-    let sqliteEngineRollbackPassed = false;
-    try {
-      await new Promise((resolve, reject) => {
-        verifyDb.serialize(() => {
-          verifyDb.run("BEGIN IMMEDIATE TRANSACTION");
-          verifyDb.run("UPDATE accounts SET balance = balance - 1000 WHERE account_number = ?", [aaravAccount]);
-          verifyDb.run(
-            "INSERT INTO transactions (transaction_id, reference_number, sender_account, amount, type, date_time, status, description) VALUES (?, ?, ?, 1000, 'Transfer', datetime('now'), 'Pending', 'Engine Probe')",
-            [`TXN-SQLITE-${Date.now()}`, `PROBE-${Date.now()}`, aaravAccount]
-          );
-          // Trigger deliberate SQL failure
-          verifyDb.run("INSERT INTO non_existent_table_direct_sqlite VALUES (1)", function (err) {
-            if (err) {
-              // Engine error caught; rollback
-              verifyDb.run("ROLLBACK", (rbErr) => {
-                if (rbErr) reject(rbErr);
-                else {
-                  sqliteEngineRollbackPassed = true;
-                  resolve(true);
-                }
-              });
-            } else {
-              reject(new Error('Expected SQL error was not triggered'));
-            }
+    if (engineInfo.engine === 'sqlite') {
+      let sqliteEngineRollbackPassed = false;
+      try {
+        await new Promise((resolve, reject) => {
+          verifyDb.serialize(() => {
+            verifyDb.run("BEGIN IMMEDIATE TRANSACTION");
+            verifyDb.run("UPDATE accounts SET balance = balance - 1000 WHERE account_number = ?", [aaravAccount]);
+            verifyDb.run(
+              "INSERT INTO transactions (transaction_id, reference_number, sender_account, amount, type, date_time, status, description) VALUES (?, ?, ?, 1000, 'Transfer', datetime('now'), 'Pending', 'Engine Probe')",
+              [`TXN-SQLITE-${Date.now()}`, `PROBE-${Date.now()}`, aaravAccount]
+            );
+            // Trigger deliberate SQL failure
+            verifyDb.run("INSERT INTO non_existent_table_direct_sqlite VALUES (1)", function (err) {
+              if (err) {
+                // Engine error caught; rollback
+                verifyDb.run("ROLLBACK", (rbErr) => {
+                  if (rbErr) reject(rbErr);
+                  else {
+                    sqliteEngineRollbackPassed = true;
+                    resolve(true);
+                  }
+                });
+              } else {
+                reject(new Error('Expected SQL error was not triggered'));
+              }
+            });
           });
         });
-      });
-    } catch (e) {
-      sqliteEngineRollbackPassed = false;
-    }
-    assert(sqliteEngineRollbackPassed, 'Direct SQLite engine: Caught failure after writes and rolled back atomically');
-
-    // Check MySQL engine availability
-    if (process.env.USE_MYSQL === 'true') {
+      } catch (e) {
+        sqliteEngineRollbackPassed = false;
+      }
+      assert(sqliteEngineRollbackPassed, 'Direct SQLite engine: Caught failure after writes and rolled back atomically');
+      console.log('[SKIP] MySQL integration test explicitly skipped: MySQL server is not configured or offline (USE_MYSQL=false). Testing SQLite active engine.');
+    } else {
+      let mysqlEngineRollbackPassed = false;
       try {
-        const mysql = require('mysql2/promise');
-        const mConn = await mysql.createConnection({
-          host: process.env.DB_HOST || 'localhost',
-          user: process.env.DB_USER || 'root',
-          password: process.env.DB_PASSWORD || '',
-          database: process.env.DB_NAME || 'bankist',
-          port: parseInt(process.env.DB_PORT || '3306', 10),
-        });
+        const mConn = await verifyDb.getConnection();
         await mConn.beginTransaction();
         await mConn.query('UPDATE accounts SET balance = balance - 500 WHERE account_number = ?', [aaravAccount]);
         try {
           await mConn.query('INSERT INTO non_existent_table_mysql_probe VALUES (1)');
         } catch (mErr) {
           await mConn.rollback();
-          assert(true, 'Direct MySQL engine: Caught failure after writes and rolled back atomically');
+          mysqlEngineRollbackPassed = true;
         }
-        await mConn.end();
+        await mConn.release();
       } catch (mysqlErr) {
-        console.log(`[SKIP] MySQL engine rollback test skipped: ${mysqlErr.message}`);
+        mysqlEngineRollbackPassed = false;
       }
-    } else {
-      console.log('[SKIP] MySQL integration test explicitly skipped: MySQL server is not configured or offline (USE_MYSQL=false). Testing SQLite active engine.');
+      assert(mysqlEngineRollbackPassed, 'Direct MySQL engine: Caught failure after writes and rolled back atomically');
+      console.log('[SKIP] SQLite direct rollback test skipped: Active engine is MySQL.');
     }
 
     // TEST 17: Multi-Threaded Overdraft Race Condition (Preventing Negative Balances)
@@ -1108,7 +1204,15 @@ async function runTests() {
     assert(dupSignupRes.status === 409, 'Duplicate email registration returns immediate HTTP 409 Conflict');
     assert(dupDuration < 500, `Immediate conflict response without retry delay (${dupDuration}ms < 500ms)`);
 
-    verifyDb.close();
+    if (verifyDb && verifyDb.close) {
+      await new Promise((res) => {
+        try {
+          verifyDb.close(() => res());
+        } catch (e) {
+          res();
+        }
+      });
+    }
 
   } catch (error) {
     console.error('Test execution error:', error);
