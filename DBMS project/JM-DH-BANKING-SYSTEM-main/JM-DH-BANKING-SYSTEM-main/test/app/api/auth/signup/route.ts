@@ -114,8 +114,11 @@ export async function POST(request: Request) {
     const finalIfsc = ifsc_code || 'BTBI0001024';
     const finalType = account_type || 'Savings Account';
     const isProduction = process.env.NODE_ENV === 'production';
-    // Demonstration grant of ₹10,000 is enabled in development/evaluation mode, but strictly prohibited in production
-    const allowDemoGrant = !isProduction && (process.env.ENABLE_DEMO_GRANT === 'true' || process.env.ENABLE_DEMO_GRANT === undefined);
+    // Demonstration grant of ₹10,000 is enabled in development/evaluation mode, but strictly prohibited in production.
+    // Supports both ENABLE_DEMO_GRANT and ALLOW_DEMO_GRANT configuration variables seamlessly.
+    const isExplicitlyDisabled = process.env.ENABLE_DEMO_GRANT === 'false' || process.env.ALLOW_DEMO_GRANT === 'false';
+    const isExplicitlyEnabled = process.env.ENABLE_DEMO_GRANT === 'true' || process.env.ALLOW_DEMO_GRANT === 'true';
+    const allowDemoGrant = !isProduction && !isExplicitlyDisabled && (isExplicitlyEnabled || (process.env.ENABLE_DEMO_GRANT === undefined && process.env.ALLOW_DEMO_GRANT === undefined));
     const initialGrant = allowDemoGrant ? 10000.00 : 0.00;
     const initialKycStatus = isProduction ? 'Pending' : 'Verified';
     const initialVkycStatus = isProduction ? 'Pending' : (vkyc_status || 'Completed');
