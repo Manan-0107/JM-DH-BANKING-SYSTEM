@@ -1,9 +1,0 @@
-node_modules/
-.next/
-*.sqlite
-*.sqlite3
-*.db
-.env
-.env.local
-.env*.local
-!.env.example

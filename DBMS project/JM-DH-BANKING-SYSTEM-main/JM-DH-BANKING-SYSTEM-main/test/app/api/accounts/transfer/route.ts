@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
+import { generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
+import { requireAuth, verifyCustomerCredentials, formatDbDateTime, sanitizeAccount } from '@/lib/api-helpers';
 
 export async function POST(request: Request) {
   try {
-    const authUser = getUserFromRequest(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid or expired' }, { status: 401 });
-    }
+    const auth = requireAuth(request);
+    if (auth.errorResponse) return auth.errorResponse;
+    const authUser = auth.user;
 
     const body = await request.json().catch(() => ({}));
     const { from_account, to_account, amount, description, pin } = body;
@@ -81,23 +81,12 @@ export async function POST(request: Request) {
     }
 
     // 4. Verify Customer PIN or NetBanking Password
-    const [custRows] = await db.query(
-      'SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?',
-      [authUser.customer_id]
-    );
-
-    if (!custRows || custRows.length === 0) {
-      return NextResponse.json({ error: 'Customer verification failed' }, { status: 404 });
-    }
-
-    const isValidPin = verifyTransactionPin(pin, custRows[0]);
-    if (!isValidPin) {
-      return NextResponse.json({ error: 'Invalid 4-digit Debit Card PIN entered' }, { status: 401 });
-    }
+    const credCheck = await verifyCustomerCredentials(db, authUser.customer_id, pin);
+    if (credCheck.errorResponse) return credCheck.errorResponse;
 
     // 5. Generate Collision-Proof Transaction Reference
     const { txnId, referenceNumber } = generateTransactionReference('TXN');
-    const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const nowTime = formatDbDateTime();
     const finalDesc = description ? description.trim() : `IMPS Fund Transfer to ${cleanTo}`;
 
     // 6. Execute Concurrency-Safe Atomic Transfer
@@ -137,10 +126,7 @@ export async function POST(request: Request) {
 
     // Fetch updated sender account
     const [updatedSender] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [cleanFrom]);
-    if (updatedSender && updatedSender[0]) {
-      delete updatedSender[0].card_pin;
-      delete updatedSender[0].card_pin_hash;
-    }
+    const cleanSender = sanitizeAccount(updatedSender?.[0]);
 
     return NextResponse.json({
       message: `₹${numAmount.toLocaleString('en-IN')} transferred successfully to ${cleanTo}`,
@@ -155,7 +141,7 @@ export async function POST(request: Request) {
         status: 'Success',
         description: finalDesc,
       },
-      sender: updatedSender[0],
+      sender: cleanSender,
     });
   } catch (err: any) {
     if (err.message === 'INSUFFICIENT_FUNDS') {

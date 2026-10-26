@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateToken, hashPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
+import { sanitizeCustomer, sanitizeAccount } from '@/lib/api-helpers';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -302,26 +303,19 @@ export async function POST(request: Request) {
     }
 
     const [newCustomer] = await db.query('SELECT * FROM customers WHERE customer_id = ?', [createdCustomerId]);
-    if (newCustomer && newCustomer[0]) {
-      delete newCustomer[0].password_hash;
-      delete newCustomer[0].card_pin;
-      delete newCustomer[0].card_pin_hash;
-    }
+    const cleanCustomer = sanitizeCustomer(newCustomer?.[0]);
 
     const [newAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [createdAccNum]);
-    if (newAccount && newAccount[0]) {
-      delete newAccount[0].card_pin;
-      delete newAccount[0].card_pin_hash;
-    }
+    const cleanAccount = sanitizeAccount(newAccount?.[0]);
 
-    const token = generateToken(newCustomer[0]);
+    const token = generateToken(cleanCustomer!);
 
     return NextResponse.json(
       {
         message: 'Account created and digital onboarding completed successfully',
         token,
-        customer: newCustomer[0],
-        account: newAccount[0],
+        customer: cleanCustomer,
+        account: cleanAccount,
       },
       { status: 201 }
     );

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateToken, verifyTransactionPin, generateAuditId } from '@/lib/auth';
+import { sanitizeCustomer, sanitizeAccounts } from '@/lib/api-helpers';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
 
     const db = await getDb();
     const [rows] = await db.query(
-      "SELECT * FROM customers WHERE LOWER(email) = LOWER(?) OR customer_id = ? OR phone = ?",
+      'SELECT * FROM customers WHERE LOWER(email) = LOWER(?) OR customer_id = ? OR phone = ?',
       [email, email, email]
     );
 
@@ -57,29 +58,20 @@ export async function POST(request: Request) {
       [auditId, customer.customer_id, customer.customer_id]
     );
 
-    delete customer.password_hash;
-    delete customer.card_pin;
-    delete customer.card_pin_hash;
-
     const token = generateToken(customer);
+    const cleanCustomer = sanitizeCustomer(customer);
 
     const [accounts] = await db.query(
-      "SELECT * FROM accounts WHERE customer_id = ? ORDER BY opening_date DESC",
-      [customer.customer_id]
+      'SELECT * FROM accounts WHERE customer_id = ? ORDER BY opening_date DESC',
+      [cleanCustomer!.customer_id]
     );
 
-    // Sanitize account pins from response
-    const sanitizedAccounts = (accounts || []).map((acc: any) => {
-      const copy = { ...acc };
-      delete copy.card_pin;
-      delete copy.card_pin_hash;
-      return copy;
-    });
+    const sanitizedAccounts = sanitizeAccounts(accounts);
 
     return NextResponse.json({
       message: 'Login successful',
       token,
-      customer,
+      customer: cleanCustomer,
       accounts: sanitizedAccounts,
     });
   } catch (err: any) {

@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
+import { generateTransactionReference, generateAuditId } from '@/lib/auth';
+import { requireAuth, verifyCustomerCredentials, formatDbDateTime, sanitizeAccount } from '@/lib/api-helpers';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
-    const authUser = getUserFromRequest(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
-    }
+    const auth = requireAuth(request, 'Unauthorized: Session invalid');
+    if (auth.errorResponse) return auth.errorResponse;
+    const authUser = auth.user;
 
     const body = await request.json().catch(() => ({}));
     const { account_type, branch_name, pin } = body;
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
     // 1. Verify PIN
     const [custRows] = await db.query(
-      `SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?`,
+      'SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?',
       [authUser.customer_id]
     );
 
@@ -28,10 +28,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Customer record not found' }, { status: 404 });
     }
 
-    const isValidPin = verifyTransactionPin(pin, custRows[0]);
-    if (!isValidPin) {
-      return NextResponse.json({ error: 'Invalid 4-digit Debit Card PIN entered' }, { status: 401 });
-    }
+    const credCheck = await verifyCustomerCredentials(db, authUser.customer_id, pin);
+    if (credCheck.errorResponse) return credCheck.errorResponse;
 
     // 2. Generate unique account number and reference with collision protection
     let accNum = '';
@@ -50,7 +48,7 @@ export async function POST(request: Request) {
     const branch = branch_name || 'Mumbai Nariman Point Hub';
     const ifsc = 'BTBI0001024';
     const initialGrant = chosenType === 'Current Account' ? 25000.0 : 10000.0;
-    const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const nowTime = formatDbDateTime();
 
     const { txnId, referenceNumber } = generateTransactionReference('TXN-GRANT');
     const pinHashToUse = custRows[0].card_pin_hash || null;
@@ -79,13 +77,12 @@ export async function POST(request: Request) {
       );
     });
 
-    const [newAccount] = await db.query(`SELECT * FROM accounts WHERE account_number = ?`, [accNum]);
-    delete newAccount[0].card_pin;
-    delete newAccount[0].card_pin_hash;
+    const [newAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accNum]);
+    const cleanAccount = sanitizeAccount(newAccount?.[0]);
 
     return NextResponse.json({
       message: `Congratulations! Your new ${chosenType} (${accNum}) is now active with ₹${initialGrant.toLocaleString('en-IN')} opening balance.`,
-      account: newAccount[0],
+      account: cleanAccount,
     }, { status: 201 });
   } catch (err: any) {
     console.error('Open additional account error:', err);
