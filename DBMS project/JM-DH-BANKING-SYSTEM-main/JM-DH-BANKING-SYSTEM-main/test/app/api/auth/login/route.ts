@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { generateToken, verifyTransactionPin, generateAuditId } from '@/lib/auth';
-import { sanitizeCustomer, sanitizeAccounts } from '@/lib/api-helpers';
+import { generateToken, verifyPin, generateAuditId } from '@/lib/auth';
+import { sanitizeCustomer, sanitizeAccounts, checkRateLimit, recordFailedAttempt, resetRateLimit } from '@/lib/api-helpers';
 import bcrypt from 'bcryptjs';
+
+const loginRateLimitOptions = {
+  maxAttempts: 5,
+  windowMs: 15 * 60 * 1000,       // 15 minutes
+  lockDurationMs: 15 * 60 * 1000, // 15 minutes lock
+};
 
 export async function POST(request: Request) {
   try {
@@ -18,12 +24,32 @@ export async function POST(request: Request) {
     }
 
     const db = await getDb();
+    const rateLimitKey = `login:id:${email.toLowerCase()}`;
+
+    // 1. Check Rate Limit / Account Lockout
+    const rateLimit = await checkRateLimit(db, rateLimitKey, loginRateLimitOptions);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many failed login attempts. Account temporarily locked for security. Please try again in ${rateLimit.retryAfterSec || 900} seconds.`,
+        },
+        { status: 429 }
+      );
+    }
+
     const [rows] = await db.query(
       'SELECT * FROM customers WHERE LOWER(email) = LOWER(?) OR customer_id = ? OR phone = ?',
       [email, email, email]
     );
 
     if (!rows || rows.length === 0) {
+      const failedInfo = await recordFailedAttempt(db, rateLimitKey, loginRateLimitOptions);
+      if (failedInfo.locked) {
+        return NextResponse.json(
+          { error: 'Maximum login attempts exceeded. Account is now locked for 15 minutes.' },
+          { status: 429 }
+        );
+      }
       return NextResponse.json(
         { error: 'Invalid credentials. Please verify your Email/User ID and password/PIN.' },
         { status: 401 }
@@ -32,16 +58,26 @@ export async function POST(request: Request) {
 
     const customer = rows[0];
 
-    // Check credentials against password_hash or card_pin_hash / card_pin
+    // Check credentials against password_hash or card_pin_hash
     const isPasswordMatch = customer.password_hash && bcrypt.compareSync(password, customer.password_hash);
-    const isPinMatch = verifyTransactionPin(password, customer);
+    const isPinMatch = customer.card_pin_hash && verifyPin(password, customer.card_pin_hash);
 
     if (!isPasswordMatch && !isPinMatch) {
+      const failedInfo = await recordFailedAttempt(db, rateLimitKey, loginRateLimitOptions);
+      if (failedInfo.locked) {
+        return NextResponse.json(
+          { error: 'Maximum login attempts exceeded. Account is now locked for 15 minutes.' },
+          { status: 429 }
+        );
+      }
       return NextResponse.json(
         { error: 'Invalid credentials. Please verify your Email/User ID and password/PIN.' },
         { status: 401 }
       );
     }
+
+    // Reset rate limit on successful authentication
+    await resetRateLimit(db, rateLimitKey);
 
     if (customer.status === 'Blocked' || customer.status === 'Suspended') {
       return NextResponse.json(

@@ -295,6 +295,16 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // 10. Security Rate Limits Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS security_rate_limits (
+        key_id TEXT PRIMARY KEY,
+        attempts INTEGER DEFAULT 1,
+        last_attempt_at INTEGER NOT NULL,
+        locked_until INTEGER DEFAULT 0
+      );
+    `);
   } else {
     // MySQL 8.0 DDL & Migration
     await adapter.query(`
@@ -334,6 +344,15 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
         \`attempts\` INT DEFAULT 0,
         \`last_sent_at\` BIGINT DEFAULT 0,
         \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`security_rate_limits\` (
+        \`key_id\` VARCHAR(191) NOT NULL PRIMARY KEY,
+        \`attempts\` INT DEFAULT 1,
+        \`last_attempt_at\` BIGINT NOT NULL,
+        \`locked_until\` BIGINT DEFAULT 0
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
@@ -601,10 +620,16 @@ export async function getDb(): Promise<DbAdapter> {
     try {
       const mysql = require('mysql2/promise');
       
-      // Check database existence / create if absent
-      const initConnection = await mysql.createConnection({ host, user, password, port });
-      await initConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-      await initConnection.end();
+      // Least-Privilege Support: Check database existence or create if privileged,
+      // but do not fail if running under a restricted non-root runtime account.
+      try {
+        const initConnection = await mysql.createConnection({ host, user, password, port });
+        await initConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+        await initConnection.end();
+      } catch (privErr: any) {
+        // Benign for least-privilege users without global CREATE DATABASE privileges
+        console.warn(`[DB Engine] Note: Proceeding without CREATE DATABASE privilege: ${privErr.message}`);
+      }
 
       const pool = mysql.createPool({
         host,
