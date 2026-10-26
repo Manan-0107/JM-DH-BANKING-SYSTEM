@@ -43,7 +43,13 @@ export async function POST(request: Request) {
     );
 
     if (!rows || rows.length === 0) {
-      await recordFailedAttempt(db, rateLimitKey, loginRateLimitOptions);
+      const failedInfo = await recordFailedAttempt(db, rateLimitKey, loginRateLimitOptions);
+      if (failedInfo.locked) {
+        return NextResponse.json(
+          { error: 'Maximum login attempts exceeded. Account is now locked for 15 minutes.' },
+          { status: 429 }
+        );
+      }
       return NextResponse.json(
         { error: 'Invalid credentials. Please verify your Email/User ID and password/PIN.' },
         { status: 401 }
@@ -65,7 +71,7 @@ export async function POST(request: Request) {
         );
       }
       return NextResponse.json(
-        { error: `Invalid credentials. Please verify your Email/User ID and password/PIN. ${failedInfo.remaining} attempt(s) remaining.` },
+        { error: 'Invalid credentials. Please verify your Email/User ID and password/PIN.' },
         { status: 401 }
       );
     }
