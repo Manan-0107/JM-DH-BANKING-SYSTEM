@@ -5,14 +5,14 @@ import { requireAuth, verifyAccountOwnership, verifyCustomerCredentials, formatD
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = requireAuth(request);
     if (auth.errorResponse) return auth.errorResponse;
     const authUser = auth.user;
 
-    const accountId = params.id;
+    const { id: accountId } = await params;
     const body = await request.json().catch(() => ({}));
     const { amount, description, pin } = body;
 

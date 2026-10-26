@@ -5,14 +5,14 @@ import { requireAuth, verifyCustomerCredentials, formatDbDateTime, sanitizeAccou
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = requireAuth(request, 'Unauthorized: Session invalid');
     if (auth.errorResponse) return auth.errorResponse;
     const authUser = auth.user;
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const { pin } = body;
 

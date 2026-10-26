@@ -312,6 +312,39 @@ async function runSecuritySuite() {
     assert(!('card_pin_hash' in accItem), `card_pin_hash stripped from account payload`);
     assert(!('password_hash' in accItem), `password_hash stripped from account payload`);
 
+    // --------------------------------------------------------------------------
+    // 8. Demo Grant & KYC Strict Environment Invariant Enforcement
+    // --------------------------------------------------------------------------
+    console.log('\n--- 8. Testing Demo Grant & KYC Configuration Matrix ---');
+    function testEvalDemo(nodeEnv, enableGrant, allowGrant) {
+      const isProduction = nodeEnv === 'production';
+      const isExplicitlyDisabled = enableGrant === 'false' || allowGrant === 'false';
+      const isExplicitlyEnabled = enableGrant === 'true' || allowGrant === 'true';
+      const allowDemoGrant = !isProduction && !isExplicitlyDisabled && (isExplicitlyEnabled || (enableGrant === undefined && allowGrant === undefined));
+      const initialGrant = allowDemoGrant ? 10000.00 : 0.00;
+      const initialKycStatus = isProduction ? 'Pending' : 'Verified';
+      const initialVkycStatus = isProduction ? 'Pending' : 'Completed';
+      return { allowDemoGrant, initialGrant, initialKycStatus, initialVkycStatus };
+    }
+
+    // Production MUST NEVER grant credits or auto-verify KYC
+    const prod1 = testEvalDemo('production', undefined, undefined);
+    assert(prod1.initialGrant === 0 && prod1.initialKycStatus === 'Pending', 'Production default rejects demo grant (₹0.00) and marks KYC Pending');
+    const prod2 = testEvalDemo('production', 'true', 'true');
+    assert(prod2.initialGrant === 0 && prod2.initialKycStatus === 'Pending', 'Production with flags strictly overrides and blocks demo grant (₹0.00)');
+
+    // Non-production explicitly disabled
+    const devDisabled1 = testEvalDemo('development', 'false', undefined);
+    assert(devDisabled1.initialGrant === 0, 'Development with ENABLE_DEMO_GRANT=false blocks grant');
+    const devDisabled2 = testEvalDemo('development', undefined, 'false');
+    assert(devDisabled2.initialGrant === 0, 'Development with ALLOW_DEMO_GRANT=false blocks grant');
+
+    // Non-production explicitly enabled
+    const devEnabled1 = testEvalDemo('development', 'true', undefined);
+    assert(devEnabled1.initialGrant === 10000, 'Development with ENABLE_DEMO_GRANT=true issues demo grant');
+    const devEnabled2 = testEvalDemo('development', undefined, 'true');
+    assert(devEnabled2.initialGrant === 10000, 'Development with ALLOW_DEMO_GRANT=true issues demo grant');
+
   } catch (err) {
     console.error('[FATAL EXCEPTION IN SECURITY SUITE]', err);
     failed++;
