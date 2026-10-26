@@ -4,7 +4,7 @@ import { getUserFromRequest } from '@/lib/auth';
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authUser = getUserFromRequest(request);
@@ -12,7 +12,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const db = await getDb();
 
     // Verify ownership

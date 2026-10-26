@@ -4,14 +4,14 @@ import { requireAuth, verifyAccountOwnership, sanitizeAccount } from '@/lib/api-
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = requireAuth(request, 'Unauthorized');
     if (auth.errorResponse) return auth.errorResponse;
     const authUser = auth.user;
 
-    const accountId = params.id;
+    const { id: accountId } = await params;
     const db = await getDb();
 
     const accCheck = await verifyAccountOwnership(db, accountId, authUser.customer_id);

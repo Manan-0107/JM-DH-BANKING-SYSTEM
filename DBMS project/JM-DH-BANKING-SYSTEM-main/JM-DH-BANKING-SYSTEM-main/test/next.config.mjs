@@ -6,9 +6,7 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['sqlite3', 'mysql2', 'bcryptjs'],
-  },
+  serverExternalPackages: ['sqlite3', 'mysql2', 'bcryptjs'],
   webpack: (config) => {
     config.resolve.alias['@'] = path.resolve(__dirname);
     return config;
