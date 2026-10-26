@@ -103,32 +103,23 @@ export function verifyPin(pin: string, storedHash: string | null | undefined): b
 }
 
 /**
- * Verifies PIN against the card PIN hash (bcrypt) or the NetBanking password hash (bcrypt)
+ * Verifies transaction authorization against the 4-digit Debit Card PIN hash (bcrypt).
+ * Strictly enforces separation of credentials: NetBanking login password is not accepted
+ * as a transaction PIN.
  */
 export function verifyTransactionPin(
   providedPin: string,
-  customer: { password_hash: string; card_pin_hash?: string; card_pin?: string | null }
+  customer: { password_hash?: string; card_pin_hash?: string; card_pin?: string | null }
 ): boolean {
   if (!providedPin) return false;
   const pin = providedPin.toString().trim();
 
-  // 1. Primary check: card_pin_hash
+  // Primary check: 4-digit card_pin_hash (bcrypt)
   if (customer.card_pin_hash && verifyPin(pin, customer.card_pin_hash)) {
     return true;
   }
 
-  // 2. Fallback check: NetBanking password hash (if hashed with bcrypt)
-  if (
-    customer.password_hash &&
-    (customer.password_hash.startsWith('$2a$') || customer.password_hash.startsWith('$2b$'))
-  ) {
-    try {
-      return bcrypt.compareSync(pin, customer.password_hash);
-    } catch {
-      return false;
-    }
-  }
-
+  // Strictly enforce credential separation: do NOT fall back to login password_hash
   return false;
 }
 

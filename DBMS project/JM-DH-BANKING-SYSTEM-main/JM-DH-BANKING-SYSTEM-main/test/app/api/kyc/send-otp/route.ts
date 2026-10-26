@@ -93,9 +93,13 @@ export async function POST(request: Request) {
       disclaimer: 'College DBMS Project Simulation: OTP recorded in database for verification.',
     };
 
-    // In development and testing only, supply test_otp for evaluation convenience.
-    // In production, OTPs are strictly confidential and must never be echoed in JSON responses.
-    if (process.env.NODE_ENV !== 'production') {
+    // Strict OTP Disclosure Control:
+    // In production, test_otp is unconditionally suppressed and strictly confidential.
+    // In local development/test environments, test_otp is provided ONLY when explicitly enabled
+    // via ALLOW_TEST_OTP=true or NODE_ENV=test.
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowTestOtp = !isProduction && (process.env.ALLOW_TEST_OTP === 'true' || process.env.NODE_ENV === 'test');
+    if (allowTestOtp) {
       responsePayload.test_otp = generatedOtp;
     }
 

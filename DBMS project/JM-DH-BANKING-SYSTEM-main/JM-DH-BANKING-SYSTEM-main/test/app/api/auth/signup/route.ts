@@ -113,7 +113,12 @@ export async function POST(request: Request) {
     const finalBranch = branch_name || 'Mumbai Nariman Point Hub';
     const finalIfsc = ifsc_code || 'BTBI0001024';
     const finalType = account_type || 'Savings Account';
-    const initialGrant = 10000.00;
+    const isProduction = process.env.NODE_ENV === 'production';
+    // Demonstration grant of ₹10,000 is enabled in development/evaluation mode, but strictly prohibited in production
+    const allowDemoGrant = !isProduction && (process.env.ENABLE_DEMO_GRANT === 'true' || process.env.ENABLE_DEMO_GRANT === undefined);
+    const initialGrant = allowDemoGrant ? 10000.00 : 0.00;
+    const initialKycStatus = isProduction ? 'Pending' : 'Verified';
+    const initialVkycStatus = isProduction ? 'Pending' : (vkyc_status || 'Completed');
 
     // Concurrency-safe bounded retry loop for unique customer ID and account number generation
     let createdCustomerId = '';
@@ -161,7 +166,7 @@ export async function POST(request: Request) {
               pan_number, aadhaar_number, gender, father_name, marital_status,
               occupation, annual_income, nominee_name, nominee_relation, nominee_dob,
               vkyc_status, signature_data, avatar_data, card_pin, card_pin_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', 'Verified', ?, 770, 'Silver', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, 770, 'Silver', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
             [
               candidateCustomerId,
               cleanName,
@@ -170,6 +175,7 @@ export async function POST(request: Request) {
               dob || null,
               address || null,
               created_at,
+              initialKycStatus,
               password_hash,
               cleanPan,
               maskedAadhaar,
@@ -181,7 +187,7 @@ export async function POST(request: Request) {
               nominee_name || null,
               nominee_relation || null,
               nominee_dob || null,
-              vkyc_status || 'Completed',
+              initialVkycStatus,
               signature_data || null,
               avatar_data || null,
               card_pin_hash,
@@ -195,12 +201,14 @@ export async function POST(request: Request) {
             [candidateAccNum, candidateCustomerId, finalType, initialGrant, finalIfsc, finalBranch, created_at, card_pin_hash]
           );
 
-          // 3. Insert Initial Welcome Balance Transaction
-          await conn.query(
-            `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
-             VALUES (?, NULL, ?, ?, 'Deposit', ?, 'Success', 'Welcome Opening Balance Grant - BTB DigiSave', ?)`,
-            [txnId, candidateAccNum, initialGrant, created_at, referenceNumber]
-          );
+          // 3. Insert Initial Welcome Balance Transaction (if demo grant enabled)
+          if (initialGrant > 0) {
+            await conn.query(
+              `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
+               VALUES (?, NULL, ?, ?, 'Deposit', ?, 'Success', 'Welcome Opening Balance Grant - BTB DigiSave', ?)`,
+              [txnId, candidateAccNum, initialGrant, created_at, referenceNumber]
+            );
+          }
 
           // 4. Record KYC Audit Trail (with high-entropy collision-proof IDs)
           const auditLogs = [
