@@ -98,202 +98,258 @@ function createSqliteAdapter(sqliteDb: any): DbAdapter {
 }
 
 async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
-  // 1. Customers Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS customers (
-      customer_id TEXT PRIMARY KEY,
-      full_name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      phone TEXT,
-      dob TEXT,
-      address TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      status TEXT DEFAULT 'Active',
-      kyc_status TEXT DEFAULT 'Pending',
-      password_hash TEXT NOT NULL,
-      credit_score INTEGER DEFAULT 700,
-      tier TEXT DEFAULT 'Silver',
-      pan_number TEXT,
-      aadhaar_number TEXT,
-      gender TEXT,
-      father_name TEXT,
-      marital_status TEXT,
-      occupation TEXT,
-      annual_income TEXT,
-      nominee_name TEXT,
-      nominee_relation TEXT,
-      nominee_dob TEXT,
-      vkyc_status TEXT DEFAULT 'Completed',
-      signature_data TEXT,
-      avatar_data TEXT,
-      card_pin TEXT DEFAULT NULL,
-      card_pin_hash TEXT
-    );
-  `);
+  if (adapter.isSqlite) {
+    // 1. Customers Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS customers (
+        customer_id TEXT PRIMARY KEY,
+        full_name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        phone TEXT,
+        dob TEXT,
+        address TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'Active',
+        kyc_status TEXT DEFAULT 'Pending',
+        password_hash TEXT NOT NULL,
+        credit_score INTEGER DEFAULT 700,
+        tier TEXT DEFAULT 'Silver',
+        pan_number TEXT,
+        aadhaar_number TEXT,
+        gender TEXT,
+        father_name TEXT,
+        marital_status TEXT,
+        occupation TEXT,
+        annual_income TEXT,
+        nominee_name TEXT,
+        nominee_relation TEXT,
+        nominee_dob TEXT,
+        vkyc_status TEXT DEFAULT 'Completed',
+        signature_data TEXT,
+        avatar_data TEXT,
+        card_pin TEXT DEFAULT NULL,
+        card_pin_hash TEXT
+      );
+    `);
 
-  const customerColumns = [
-    'pan_number TEXT',
-    'aadhaar_number TEXT',
-    'gender TEXT',
-    'father_name TEXT',
-    'marital_status TEXT',
-    'occupation TEXT',
-    'annual_income TEXT',
-    'nominee_name TEXT',
-    'nominee_relation TEXT',
-    'nominee_dob TEXT',
-    "vkyc_status TEXT DEFAULT 'Completed'",
-    'signature_data TEXT',
-    'avatar_data TEXT',
-    "card_pin TEXT DEFAULT NULL",
-    'card_pin_hash TEXT'
-  ];
-  for (const col of customerColumns) {
-    try {
-      await adapter.query(`ALTER TABLE customers ADD COLUMN ${col}`);
-    } catch (e) {
-      // Column already exists
+    const customerColumns = [
+      'pan_number TEXT',
+      'aadhaar_number TEXT',
+      'gender TEXT',
+      'father_name TEXT',
+      'marital_status TEXT',
+      'occupation TEXT',
+      'annual_income TEXT',
+      'nominee_name TEXT',
+      'nominee_relation TEXT',
+      'nominee_dob TEXT',
+      "vkyc_status TEXT DEFAULT 'Completed'",
+      'signature_data TEXT',
+      'avatar_data TEXT',
+      "card_pin TEXT DEFAULT NULL",
+      'card_pin_hash TEXT'
+    ];
+    for (const col of customerColumns) {
+      try {
+        await adapter.query(`ALTER TABLE customers ADD COLUMN ${col}`);
+      } catch (e) {
+        // Column already exists
+      }
     }
+
+    // 2. Accounts Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        account_number TEXT PRIMARY KEY,
+        customer_id TEXT NOT NULL,
+        account_type TEXT NOT NULL,
+        balance REAL NOT NULL DEFAULT 0.00,
+        ifsc_code TEXT NOT NULL DEFAULT 'BTBI0001024',
+        branch_name TEXT NOT NULL DEFAULT 'Downtown Central',
+        opening_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'Active',
+        card_pin TEXT DEFAULT NULL,
+        card_pin_hash TEXT,
+        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+      );
+    `);
+
+    try {
+      await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin TEXT DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin_hash TEXT");
+    } catch (e) {}
+
+    // 3. Transactions Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        transaction_id TEXT PRIMARY KEY,
+        sender_account TEXT,
+        receiver_account TEXT,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL,
+        date_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'Success',
+        description TEXT,
+        reference_number TEXT
+      );
+    `);
+
+    try {
+      await adapter.query("ALTER TABLE transactions ADD COLUMN reference_number TEXT");
+    } catch (e) {}
+    try {
+      await adapter.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference_number)");
+    } catch (e) {}
+
+    // 4. KYC Verifications Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS kyc_verifications (
+        verification_id TEXT PRIMARY KEY,
+        customer_id TEXT NOT NULL,
+        document_type TEXT NOT NULL,
+        document_number TEXT,
+        verification_method TEXT NOT NULL,
+        status TEXT DEFAULT 'Verified',
+        verified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        remarks TEXT,
+        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+      );
+    `);
+
+    // 5. Beneficiaries Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS beneficiaries (
+        beneficiary_id TEXT PRIMARY KEY,
+        customer_id TEXT NOT NULL,
+        beneficiary_name TEXT NOT NULL,
+        account_number TEXT NOT NULL,
+        ifsc_code TEXT NOT NULL,
+        bank_name TEXT NOT NULL,
+        transfer_limit REAL DEFAULT 100000.00,
+        cooling_until DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        is_active INTEGER DEFAULT 1,
+        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+      );
+    `);
+
+    // 6. Deposits Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS deposits (
+        deposit_id TEXT PRIMARY KEY,
+        customer_id TEXT NOT NULL,
+        linked_account TEXT NOT NULL,
+        deposit_type TEXT NOT NULL,
+        principal_amount REAL NOT NULL,
+        interest_rate REAL NOT NULL,
+        tenure_months INTEGER NOT NULL,
+        maturity_amount REAL NOT NULL,
+        maturity_date DATETIME NOT NULL,
+        status TEXT DEFAULT 'Active',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+      );
+    `);
+
+    // 7. National Branches Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS branches (
+        branch_id TEXT PRIMARY KEY,
+        branch_name TEXT NOT NULL,
+        ifsc_code TEXT UNIQUE NOT NULL,
+        city TEXT NOT NULL,
+        address TEXT NOT NULL,
+        timing TEXT DEFAULT '09:30 AM - 04:30 PM',
+        phone TEXT,
+        status TEXT DEFAULT 'Active'
+      );
+    `);
+
+    // 8. Security & Admin Audit Log Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        log_id TEXT PRIMARY KEY,
+        customer_id TEXT,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        details TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 9. OTP Sessions Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS otp_sessions (
+        session_id TEXT PRIMARY KEY,
+        identifier TEXT NOT NULL,
+        purpose TEXT NOT NULL,
+        otp_code TEXT,
+        otp_hash TEXT,
+        expires_at INTEGER NOT NULL,
+        verified INTEGER DEFAULT 0,
+        attempts INTEGER DEFAULT 0,
+        last_sent_at INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } else {
+    // MySQL 8.0 DDL & Migration
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`branches\` (
+        \`branch_id\` VARCHAR(50) PRIMARY KEY,
+        \`branch_name\` VARCHAR(100) NOT NULL,
+        \`ifsc_code\` VARCHAR(20) NOT NULL UNIQUE,
+        \`city\` VARCHAR(100) NOT NULL,
+        \`address\` TEXT NOT NULL,
+        \`timing\` VARCHAR(50) DEFAULT '09:30 AM - 04:30 PM',
+        \`phone\` VARCHAR(30) DEFAULT NULL,
+        \`status\` VARCHAR(20) DEFAULT 'Active'
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`audit_logs\` (
+        \`log_id\` VARCHAR(50) PRIMARY KEY,
+        \`customer_id\` VARCHAR(50) DEFAULT NULL,
+        \`action\` VARCHAR(100) NOT NULL,
+        \`entity_type\` VARCHAR(50) NOT NULL,
+        \`entity_id\` VARCHAR(50) DEFAULT NULL,
+        \`details\` TEXT DEFAULT NULL,
+        \`timestamp\` DATETIME DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`otp_sessions\` (
+        \`session_id\` VARCHAR(50) PRIMARY KEY,
+        \`identifier\` VARCHAR(150) NOT NULL,
+        \`purpose\` VARCHAR(50) NOT NULL,
+        \`otp_code\` VARCHAR(10) DEFAULT NULL,
+        \`otp_hash\` VARCHAR(255) DEFAULT NULL,
+        \`expires_at\` BIGINT NOT NULL,
+        \`verified\` INT DEFAULT 0,
+        \`attempts\` INT DEFAULT 0,
+        \`last_sent_at\` BIGINT DEFAULT 0,
+        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    try {
+      await adapter.query("ALTER TABLE transactions ADD COLUMN reference_number VARCHAR(100) DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await adapter.query("CREATE UNIQUE INDEX idx_transactions_reference ON transactions(reference_number)");
+    } catch (e) {}
+    try {
+      await adapter.query("ALTER TABLE customers ADD COLUMN card_pin_hash VARCHAR(255) DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin_hash VARCHAR(255) DEFAULT NULL");
+    } catch (e) {}
   }
-
-  // 2. Accounts Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      account_number TEXT PRIMARY KEY,
-      customer_id TEXT NOT NULL,
-      account_type TEXT NOT NULL,
-      balance REAL NOT NULL DEFAULT 0.00,
-      ifsc_code TEXT NOT NULL DEFAULT 'BTBI0001024',
-      branch_name TEXT NOT NULL DEFAULT 'Downtown Central',
-      opening_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-      status TEXT DEFAULT 'Active',
-      card_pin TEXT DEFAULT NULL,
-      card_pin_hash TEXT,
-      FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-    );
-  `);
-
-  try {
-    await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin TEXT DEFAULT NULL");
-  } catch (e) {}
-  try {
-    await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin_hash TEXT");
-  } catch (e) {}
-
-  // 3. Transactions Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS transactions (
-      transaction_id TEXT PRIMARY KEY,
-      sender_account TEXT,
-      receiver_account TEXT,
-      amount REAL NOT NULL,
-      type TEXT NOT NULL,
-      date_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-      status TEXT DEFAULT 'Success',
-      description TEXT,
-      reference_number TEXT
-    );
-  `);
-
-  try {
-    await adapter.query("ALTER TABLE transactions ADD COLUMN reference_number TEXT");
-  } catch (e) {}
-  try {
-    await adapter.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference_number)");
-  } catch (e) {}
-
-  // 4. KYC Verifications Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS kyc_verifications (
-      verification_id TEXT PRIMARY KEY,
-      customer_id TEXT NOT NULL,
-      document_type TEXT NOT NULL,
-      document_number TEXT,
-      verification_method TEXT NOT NULL,
-      status TEXT DEFAULT 'Verified',
-      verified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      remarks TEXT,
-      FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-    );
-  `);
-
-  // 5. Beneficiaries Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS beneficiaries (
-      beneficiary_id TEXT PRIMARY KEY,
-      customer_id TEXT NOT NULL,
-      beneficiary_name TEXT NOT NULL,
-      account_number TEXT NOT NULL,
-      ifsc_code TEXT NOT NULL,
-      bank_name TEXT NOT NULL,
-      transfer_limit REAL DEFAULT 100000.00,
-      cooling_until DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      is_active INTEGER DEFAULT 1,
-      FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-    );
-  `);
-
-  // 6. Deposits Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS deposits (
-      deposit_id TEXT PRIMARY KEY,
-      customer_id TEXT NOT NULL,
-      linked_account TEXT NOT NULL,
-      deposit_type TEXT NOT NULL,
-      principal_amount REAL NOT NULL,
-      interest_rate REAL NOT NULL,
-      tenure_months INTEGER NOT NULL,
-      maturity_amount REAL NOT NULL,
-      maturity_date DATETIME NOT NULL,
-      status TEXT DEFAULT 'Active',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-    );
-  `);
-
-  // 7. National Branches Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS branches (
-      branch_id TEXT PRIMARY KEY,
-      branch_name TEXT NOT NULL,
-      ifsc_code TEXT UNIQUE NOT NULL,
-      city TEXT NOT NULL,
-      address TEXT NOT NULL,
-      timing TEXT DEFAULT '09:30 AM - 04:30 PM',
-      phone TEXT,
-      status TEXT DEFAULT 'Active'
-    );
-  `);
-
-  // 8. Security & Admin Audit Log Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS audit_logs (
-      log_id TEXT PRIMARY KEY,
-      customer_id TEXT,
-      action TEXT NOT NULL,
-      entity_type TEXT NOT NULL,
-      entity_id TEXT,
-      details TEXT,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-
-  // 9. OTP Sessions Table
-  await adapter.query(`
-    CREATE TABLE IF NOT EXISTS otp_sessions (
-      session_id TEXT PRIMARY KEY,
-      identifier TEXT NOT NULL,
-      purpose TEXT NOT NULL,
-      otp_code TEXT,
-      otp_hash TEXT,
-      expires_at INTEGER NOT NULL,
-      verified INTEGER DEFAULT 0,
-      attempts INTEGER DEFAULT 0,
-      last_sent_at INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
 
   try {
     await adapter.query("ALTER TABLE otp_sessions ADD COLUMN otp_hash TEXT");
@@ -474,11 +530,19 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
   try {
     const [depRows] = await adapter.query("SELECT COUNT(*) as count FROM deposits");
     if (!depRows[0] || depRows[0].count === 0) {
-      await adapter.query(`
-        INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status) VALUES
-        ('FD-2024-8841', 'CUST-101', 'ACC-772910', 'Fixed Deposit', 50000.00, 7.50, 12, 53890.00, date('now', '+1 year'), 'Active'),
-        ('RD-2024-9122', 'CUST-101', 'ACC-772910', 'Recurring Deposit', 5000.00, 7.20, 6, 30650.00, date('now', '+6 months'), 'Active');
-      `);
+      if (adapter.isSqlite) {
+        await adapter.query(`
+          INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status) VALUES
+          ('FD-2024-8841', 'CUST-101', 'ACC-772910', 'Fixed Deposit', 50000.00, 7.50, 12, 53890.00, date('now', '+1 year'), 'Active'),
+          ('RD-2024-9122', 'CUST-101', 'ACC-772910', 'Recurring Deposit', 5000.00, 7.20, 6, 30650.00, date('now', '+6 months'), 'Active');
+        `);
+      } else {
+        await adapter.query(`
+          INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status) VALUES
+          ('FD-2024-8841', 'CUST-101', 'ACC-772910', 'Fixed Deposit', 50000.00, 7.50, 12, 53890.00, DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'Active'),
+          ('RD-2024-9122', 'CUST-101', 'ACC-772910', 'Recurring Deposit', 5000.00, 7.20, 6, 30650.00, DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 'Active');
+        `);
+      }
     }
   } catch (e) {
     console.warn('Deposits seed check:', e);
@@ -486,8 +550,9 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
 
   // Setup Relational Database Views
   try {
+    const viewPrefix = adapter.isSqlite ? 'CREATE VIEW IF NOT EXISTS' : 'CREATE OR REPLACE VIEW';
     await adapter.query(`
-      CREATE VIEW IF NOT EXISTS v_customer_portfolio AS
+      ${viewPrefix} v_customer_portfolio AS
       SELECT 
           c.customer_id,
           c.full_name,
