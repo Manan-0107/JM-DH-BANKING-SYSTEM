@@ -52,7 +52,8 @@ const globalIgnores = [
   'staging_submission',
   'scratch',
   'banking.db',
-  'bankist.sqlite'
+  'bankist.sqlite',
+  'archive'
 ];
 
 console.log('1. Copying root documentation & SQL scripts...');
@@ -61,8 +62,6 @@ copyFiltered(path.join(projectRoot, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'), path.jo
 copyFiltered(path.join(projectRoot, 'database'), path.join(stagingDir, 'database'), globalIgnores);
 copyFiltered(path.join(projectRoot, 'docs'), path.join(stagingDir, 'docs'), globalIgnores);
 copyFiltered(path.join(projectRoot, 'scripts'), path.join(stagingDir, 'scripts'), globalIgnores);
-copyFiltered(path.join(projectRoot, 'og'), path.join(stagingDir, 'og'), globalIgnores);
-copyFiltered(path.join(projectRoot, 'test'), path.join(stagingDir, 'test'), globalIgnores);
 
 console.log('2. Copying authoritative Next.js application & schemas...');
 copyFiltered(

@@ -11,10 +11,10 @@ This repository preserves legacy project iterations while establishing the moder
 | Directory | Status | Description |
 | :--- | :--- | :--- |
 | **`DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/`** | **⭐ AUTHORITATIVE** | **Active Modern Application**: Next.js 14 App Router, dual-engine database adapter (SQLite/MySQL), Tailwind CSS, API endpoints, and verification test suites. |
-| `DBMS project/bankist.sql` | Supporting | Production MySQL 8.0 schema and seed DDL script. |
-| `DBMS_VIVA_DEMONSTRATION_GUIDE.md` | Documentation | Comprehensive DBMS Viva preparation guide with ER diagrams, 3NF schema, joins, views, and Q&A. |
-| `test/` | Legacy Prototype | Earlier Express.js backend prototype (Dhrumil). |
-| `og/` | Reference Archive | Original static HTML/CSS/JS frontend mockup (Bankist). |
+| `DBMS project/bankist.sql` | Authoritative DDL | Canonical MySQL 8.0 schema and seed DDL script. |
+| `docs/DBMS_VIVA_AND_EVALUATION_GUIDE.md` | Authoritative Guide | Comprehensive 27-point DBMS viva and evaluation guide. |
+| `archive/legacy-prototype-express/` | Archived Reference | Historical Express.js prototype from earlier project iteration. |
+| `archive/legacy-mockup-og/` | Archived Reference | Historical static HTML/CSS/JS frontend mockup. |
 
 ---
 

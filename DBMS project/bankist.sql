@@ -39,7 +39,8 @@ CREATE TABLE `customers` (
   `vkyc_status` VARCHAR(50) DEFAULT 'Completed',
   `signature_data` LONGTEXT DEFAULT NULL,
   `avatar_data` LONGTEXT DEFAULT NULL,
-  `card_pin` VARCHAR(10) DEFAULT '1234',
+  `card_pin` VARCHAR(10) DEFAULT NULL,
+  `card_pin_hash` VARCHAR(255) DEFAULT NULL,
   PRIMARY KEY (`customer_id`),
   INDEX `idx_cust_email` (`email`),
   INDEX `idx_cust_phone` (`phone`)
@@ -58,7 +59,8 @@ CREATE TABLE `accounts` (
   `branch_name` VARCHAR(100) NOT NULL DEFAULT 'Downtown Central',
   `opening_date` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `status` ENUM('Active', 'Frozen', 'Closed') DEFAULT 'Active',
-  `card_pin` VARCHAR(10) DEFAULT '1234',
+  `card_pin` VARCHAR(10) DEFAULT NULL,
+  `card_pin_hash` VARCHAR(255) DEFAULT NULL,
   PRIMARY KEY (`account_number`),
   INDEX `idx_acc_customer` (`customer_id`),
   CONSTRAINT `fk_accounts_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`) ON DELETE CASCADE

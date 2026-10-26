@@ -83,3 +83,131 @@ Every required database management concept is documented below with its exact fi
 
 ### Q10: How does your system ensure zero plaintext credentials are stored?
 **Answer**: All passwords and 4-digit debit PINs are hashed using Bcrypt (`bcryptjs`, work factor 10) before insertion. Plaintext columns (`card_pin`, `otp_code`) are completely scrubbed from the database schema during startup migration.
+
+---
+
+## 3. End-to-End Architecture & Security Boundaries
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        NEXT.JS 14 FRONTEND (UI/UX)                     │
+│  - Landing Portal (/)                - Personal NetBanking (/personal) │
+│  - Institutional Catalog (/table-detail)  - Tailwind CSS + Glassmorphism│
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ JSON REST APIs (Bearer JWT)
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                       NEXT.JS ROUTE HANDLERS                           │
+│  - Auth (/api/auth/*)                - Transfers (/api/accounts/transfer)│
+│  - ATM (/api/accounts/[id]/*)        - Deposits (/api/deposits/*)      │
+│  - Statements (/api/transactions/*)  - Branches (/api/institutional)   │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Atomic Mutex Transaction Queue
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                       DUAL-MODE DATABASE ADAPTER (`lib/db.ts`)         │
+│  - MySQL 8.0+ Connection Pool (`mysql2/promise`)                       │
+│  - SQLite 3 Persistent File Adapter (`sqlite3` / `bankist.sqlite`)    │
+│  - Relational Schema DDL + 3 Pre-Compiled Views + Seed Logic           │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Key SQL Joins & Live Queries for Viva Demonstration
+
+Examiners frequently request students to write or explain SQL joins and aggregations on the spot. Below are ready-to-use production queries tested directly against the MySQL 8.0 database:
+
+### A. Inner Join: Customer Consolidated Passbook Statement
+Joins `customers`, `accounts`, and `transactions` to generate a comprehensive account statement displaying the customer's identity, source account, beneficiary, and transaction status:
+
+```sql
+SELECT 
+    c.customer_id,
+    c.full_name AS customer_name,
+    a.account_number,
+    a.account_type,
+    t.transaction_id,
+    t.reference_number,
+    t.type AS txn_type,
+    t.amount,
+    t.receiver_account,
+    t.date_time,
+    t.status
+FROM customers c
+INNER JOIN accounts a ON c.customer_id = a.customer_id
+INNER JOIN transactions t ON a.account_number = t.sender_account
+WHERE c.customer_id = 'CUST-101'
+ORDER BY t.date_time DESC;
+```
+
+### B. Left Outer Join: Customer Wealth Portfolio with Optional Term Deposits
+Retrieves all customers and accounts, showing their fixed deposits if they have any, or `NULL` / ₹0 if they haven't booked any deposits:
+
+```sql
+SELECT 
+    c.customer_id,
+    c.full_name,
+    c.tier,
+    a.account_number,
+    a.balance AS liquid_savings,
+    COALESCE(d.deposit_id, 'NO_ACTIVE_FD') AS deposit_id,
+    COALESCE(d.principal_amount, 0.00) AS fd_principal,
+    COALESCE(d.maturity_amount, 0.00) AS fd_maturity,
+    COALESCE(d.status, 'N/A') AS fd_status
+FROM customers c
+INNER JOIN accounts a ON c.customer_id = a.customer_id
+LEFT OUTER JOIN deposits d ON a.account_number = d.linked_account AND d.status = 'Active'
+ORDER BY c.customer_id ASC;
+```
+
+### C. Self-Join / Reconciliation: Inter-Account Transfer Pairing
+Matches debits and credits on internal transfers to verify that every debit from an internal account has an exact corresponding record:
+
+```sql
+SELECT 
+    t1.reference_number,
+    t1.transaction_id AS debit_txn_id,
+    t1.sender_account AS debited_account,
+    t1.receiver_account AS credited_account,
+    t1.amount AS transfer_amount,
+    t1.date_time
+FROM transactions t1
+WHERE t1.type = 'Transfer' 
+  AND t1.status = 'Success'
+ORDER BY t1.date_time DESC;
+```
+
+### D. Aggregate Query with GROUP BY and HAVING
+Calculates total capital, average customer balance, and count of accounts per branch, filtering only branches that manage over ₹100,000 in liquid assets:
+
+```sql
+SELECT 
+    a.branch_name,
+    COUNT(a.account_number) AS total_accounts,
+    COUNT(DISTINCT a.customer_id) AS distinct_customers,
+    ROUND(SUM(a.balance), 2) AS total_branch_liquidity,
+    ROUND(AVG(a.balance), 2) AS average_account_balance,
+    MAX(a.balance) AS highest_individual_balance
+FROM accounts a
+GROUP BY a.branch_name
+HAVING SUM(a.balance) >= 100000.00
+ORDER BY total_branch_liquidity DESC;
+```
+
+### E. Nested Correlated Subquery: High-Net-Worth Account Detection
+Finds all accounts whose balance is strictly higher than the average balance of all accounts in their specific branch:
+
+```sql
+SELECT 
+    a1.account_number,
+    a1.customer_id,
+    a1.branch_name,
+    a1.balance
+FROM accounts a1
+WHERE a1.balance > (
+    SELECT AVG(a2.balance)
+    FROM accounts a2
+    WHERE a2.branch_name = a1.branch_name
+)
+ORDER BY a1.balance DESC;
+```
+
