@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
+import { generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
+import { requireAuth, verifyAccountOwnership, verifyCustomerCredentials, formatDbDateTime, sanitizeAccount } from '@/lib/api-helpers';
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const authUser = getUserFromRequest(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid or expired' }, { status: 401 });
-    }
+    const auth = requireAuth(request);
+    if (auth.errorResponse) return auth.errorResponse;
+    const authUser = auth.user;
 
     const accountId = params.id;
     const body = await request.json().catch(() => ({}));
@@ -28,39 +28,20 @@ export async function POST(
 
     const db = await getDb();
 
-    // 1. Verify account exists & ownership
-    const [accRows] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accountId]);
-    if (!accRows || accRows.length === 0) {
-      return NextResponse.json({ error: 'Account not found' }, { status: 404 });
-    }
-
-    const account = accRows[0];
-    if (account.customer_id !== authUser.customer_id) {
-      return NextResponse.json({ error: 'Access Denied: You do not own this account' }, { status: 403 });
-    }
-
-    if (account.status !== 'Active') {
-      return NextResponse.json({ error: `Account is ${account.status.toLowerCase()}. Please unfreeze before depositing.` }, { status: 400 });
-    }
+    // 1. Verify account exists & ownership & active status
+    const accCheck = await verifyAccountOwnership(db, accountId, authUser.customer_id, {
+      requireActive: true,
+      activeActionName: 'depositing',
+    });
+    if (accCheck.errorResponse) return accCheck.errorResponse;
 
     // 2. Verify PIN
-    const [custRows] = await db.query(
-      'SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?',
-      [authUser.customer_id]
-    );
-
-    if (!custRows || custRows.length === 0) {
-      return NextResponse.json({ error: 'Customer verification failed' }, { status: 404 });
-    }
-
-    const isValidPin = verifyTransactionPin(pin, custRows[0]);
-    if (!isValidPin) {
-      return NextResponse.json({ error: 'Invalid 4-digit Debit Card PIN entered' }, { status: 401 });
-    }
+    const credCheck = await verifyCustomerCredentials(db, authUser.customer_id, pin);
+    if (credCheck.errorResponse) return credCheck.errorResponse;
 
     // 3. Generate Reference
     const { txnId, referenceNumber } = generateTransactionReference('TXN-DEP');
-    const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const nowTime = formatDbDateTime();
     const finalDesc = description ? description.trim() : 'Direct Cash / Cheque Deposit';
 
     // 4. Atomic Execution
@@ -85,10 +66,7 @@ export async function POST(
     });
 
     const [updatedAcc] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accountId]);
-    if (updatedAcc && updatedAcc[0]) {
-      delete updatedAcc[0].card_pin;
-      delete updatedAcc[0].card_pin_hash;
-    }
+    const cleanAccount = sanitizeAccount(updatedAcc?.[0]);
 
     return NextResponse.json({
       message: `₹${numAmount.toLocaleString('en-IN')} deposited successfully into ${accountId}`,
@@ -103,7 +81,7 @@ export async function POST(
         status: 'Success',
         description: finalDesc,
       },
-      account: updatedAcc[0],
+      account: cleanAccount,
     });
   } catch (err: any) {
     console.error('Deposit API Error:', err);

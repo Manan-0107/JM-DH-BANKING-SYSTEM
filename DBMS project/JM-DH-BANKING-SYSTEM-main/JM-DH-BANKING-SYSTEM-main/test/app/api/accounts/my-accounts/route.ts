@@ -1,32 +1,26 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest } from '@/lib/auth';
+import { requireAuth, sanitizeAccounts } from '@/lib/api-helpers';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const authUser = getUserFromRequest(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session expired or invalid' }, { status: 401 });
-    }
+    const auth = requireAuth(request, 'Unauthorized: Session expired or invalid');
+    if (auth.errorResponse) return auth.errorResponse;
+    const authUser = auth.user;
 
     const db = await getDb();
     const [accounts] = await db.query(
-      "SELECT * FROM accounts WHERE customer_id = ? ORDER BY opening_date DESC",
+      'SELECT * FROM accounts WHERE customer_id = ? ORDER BY opening_date DESC',
       [authUser.customer_id]
     );
 
-    const sanitizedAccounts = (accounts || []).map((acc: any) => {
-      const copy = { ...acc };
-      delete copy.card_pin;
-      delete copy.card_pin_hash;
-      return copy;
-    });
+    const sanitizedAccounts = sanitizeAccounts(accounts);
 
     return NextResponse.json({
       accounts: sanitizedAccounts,
-      total: sanitizedAccounts.length
+      total: sanitizedAccounts.length,
     });
   } catch (err: any) {
     console.error('Get my-accounts error:', err);

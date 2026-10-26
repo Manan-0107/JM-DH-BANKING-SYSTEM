@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId } from '@/lib/auth';
+import { generateTransactionReference, generateAuditId } from '@/lib/auth';
+import { requireAuth, verifyCustomerCredentials, formatDbDateTime, sanitizeAccount } from '@/lib/api-helpers';
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const authUser = getUserFromRequest(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
-    }
+    const auth = requireAuth(request, 'Unauthorized: Session invalid');
+    if (auth.errorResponse) return auth.errorResponse;
+    const authUser = auth.user;
 
     const { id } = params;
     const body = await request.json().catch(() => ({}));
@@ -20,7 +20,7 @@ export async function POST(
 
     // 1. Verify deposit ownership
     const [depRows] = await db.query(
-      `SELECT * FROM deposits WHERE deposit_id = ? AND customer_id = ?`,
+      'SELECT * FROM deposits WHERE deposit_id = ? AND customer_id = ?',
       [id, authUser.customer_id]
     );
 
@@ -33,21 +33,10 @@ export async function POST(
       return NextResponse.json({ error: `This deposit certificate is already ${deposit.status.toLowerCase()}.` }, { status: 400 });
     }
 
-    // 2. Verify PIN
-    const [custRows] = await db.query(
-      `SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?`,
-      [authUser.customer_id]
-    );
-
-    if (!custRows || custRows.length === 0) {
-      return NextResponse.json({ error: 'Customer verification failed' }, { status: 404 });
-    }
-
+    // 2. Verify PIN if provided
     if (pin) {
-      const isValidPin = verifyTransactionPin(pin, custRows[0]);
-      if (!isValidPin) {
-        return NextResponse.json({ error: 'Invalid PIN entered for liquidation' }, { status: 401 });
-      }
+      const credCheck = await verifyCustomerCredentials(db, authUser.customer_id, pin, 'Invalid PIN entered for liquidation');
+      if (credCheck.errorResponse) return credCheck.errorResponse;
     }
 
     // 3. Payout calculation
@@ -56,7 +45,7 @@ export async function POST(
     const prematureInterest = Math.round((principal * (nominalRate / 100) * 0.5) * 100) / 100;
     const totalPayout = principal + prematureInterest;
 
-    const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const nowTime = formatDbDateTime();
     const targetAccount = deposit.linked_account;
 
     const { txnId, referenceNumber } = generateTransactionReference('TXN-LIQ');
@@ -73,7 +62,7 @@ export async function POST(
         throw new Error('ALREADY_LIQUIDATED');
       }
 
-      await conn.query(`UPDATE accounts SET balance = balance + ? WHERE account_number = ?`, [totalPayout, targetAccount]);
+      await conn.query('UPDATE accounts SET balance = balance + ? WHERE account_number = ?', [totalPayout, targetAccount]);
 
       await conn.query(
         `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
@@ -89,16 +78,13 @@ export async function POST(
       );
     });
 
-    const [updatedAccount] = await db.query(`SELECT * FROM accounts WHERE account_number = ?`, [targetAccount]);
-    if (updatedAccount && updatedAccount[0]) {
-      delete updatedAccount[0].card_pin;
-      delete updatedAccount[0].card_pin_hash;
-    }
+    const [updatedAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [targetAccount]);
+    const cleanAccount = sanitizeAccount(updatedAccount?.[0]);
 
     return NextResponse.json({
       message: `Deposit ${id} successfully liquidated. ₹${totalPayout.toLocaleString('en-IN')} credited to ${targetAccount}`,
       payout: totalPayout,
-      account: updatedAccount[0],
+      account: cleanAccount,
     });
   } catch (err: any) {
     if (err.message === 'ALREADY_LIQUIDATED') {

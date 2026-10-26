@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getUserFromRequest, verifyTransactionPin, generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
+import { generateTransactionReference, generateAuditId, validateMonetaryAmount } from '@/lib/auth';
+import { requireAuth, verifyCustomerCredentials, formatDbDateTime, sanitizeAccount } from '@/lib/api-helpers';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const authUser = getUserFromRequest(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
-    }
+    const auth = requireAuth(request, 'Unauthorized: Session invalid');
+    if (auth.errorResponse) return auth.errorResponse;
+    const authUser = auth.user;
 
     const db = await getDb();
     const [deposits] = await db.query(
-      `SELECT * FROM deposits WHERE customer_id = ? ORDER BY created_at DESC`,
+      'SELECT * FROM deposits WHERE customer_id = ? ORDER BY created_at DESC',
       [authUser.customer_id]
     );
 
@@ -29,10 +29,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const authUser = getUserFromRequest(request);
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
-    }
+    const auth = requireAuth(request, 'Unauthorized: Session invalid');
+    if (auth.errorResponse) return auth.errorResponse;
+    const authUser = auth.user;
 
     const body = await request.json().catch(() => ({}));
     const { source_account, deposit_type, principal_amount, tenure_months, pin } = body;
@@ -62,7 +61,7 @@ export async function POST(request: Request) {
 
     // 1. Verify source account
     const [accRows] = await db.query(
-      `SELECT * FROM accounts WHERE account_number = ? AND customer_id = ?`,
+      'SELECT * FROM accounts WHERE account_number = ? AND customer_id = ?',
       [source_account, authUser.customer_id]
     );
 
@@ -82,19 +81,8 @@ export async function POST(request: Request) {
     }
 
     // 2. Verify PIN
-    const [custRows] = await db.query(
-      `SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?`,
-      [authUser.customer_id]
-    );
-
-    if (!custRows || custRows.length === 0) {
-      return NextResponse.json({ error: 'Customer verification failed' }, { status: 404 });
-    }
-
-    const isValidPin = verifyTransactionPin(pin, custRows[0]);
-    if (!isValidPin) {
-      return NextResponse.json({ error: 'Invalid 4-digit Debit Card PIN entered' }, { status: 401 });
-    }
+    const credCheck = await verifyCustomerCredentials(db, authUser.customer_id, pin);
+    if (credCheck.errorResponse) return credCheck.errorResponse;
 
     // 3. Determine Interest Rate
     let rate = 6.5;
@@ -114,14 +102,14 @@ export async function POST(request: Request) {
     const maturityDate = new Date();
     maturityDate.setMonth(maturityDate.getMonth() + tenure);
     const maturityDateStr = maturityDate.toISOString().slice(0, 10);
-    const nowTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const nowTime = formatDbDateTime();
 
     const { txnId, referenceNumber } = generateTransactionReference('TXN-BOOK');
 
     // 4. Atomic Execution with Concurrency Protection
     await db.transaction(async (conn) => {
       const [debitResult] = await conn.query(
-        `UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND balance >= ? AND status = ?`,
+        'UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND balance >= ? AND status = ?',
         [amount, source_account, amount, 'Active']
       );
 
@@ -150,17 +138,14 @@ export async function POST(request: Request) {
       );
     });
 
-    const [newDeposit] = await db.query(`SELECT * FROM deposits WHERE deposit_id = ?`, [depositId]);
-    const [updatedAccount] = await db.query(`SELECT * FROM accounts WHERE account_number = ?`, [source_account]);
-    if (updatedAccount && updatedAccount[0]) {
-      delete updatedAccount[0].card_pin;
-      delete updatedAccount[0].card_pin_hash;
-    }
+    const [newDeposit] = await db.query('SELECT * FROM deposits WHERE deposit_id = ?', [depositId]);
+    const [updatedAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [source_account]);
+    const cleanAccount = sanitizeAccount(updatedAccount?.[0]);
 
     return NextResponse.json({
       message: `${finalType} certificate ${depositId} booked successfully! Maturity value: ₹${maturityAmount.toLocaleString('en-IN')}`,
       deposit: newDeposit[0],
-      account: updatedAccount[0],
+      account: cleanAccount,
     }, { status: 201 });
   } catch (err: any) {
     if (err.message === 'INSUFFICIENT_FUNDS') {
