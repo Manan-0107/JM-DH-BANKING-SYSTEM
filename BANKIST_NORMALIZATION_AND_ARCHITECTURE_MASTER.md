@@ -8,7 +8,7 @@
 **Authoritative Migration:** `DBMS project/bankist_migration.sql`  
 **Authoritative Test Suite:** `DBMS project/bankist_normalization_tests.sql`  
 **Execution Timestamp:** 2026-10-29  
-**Certification:** BOYCE-CODD NORMAL FORM (BCNF) CERTIFIED — ZERO REDUNDANCY — ZERO DATA LOSS
+**Certification status (static review):** BCNF is not runtime-certified. See `NORMALIZATION_CONSISTENCY_FIX_2026-10-29.md` for the latest corrections and verification limits.
 
 ---
 
@@ -18,10 +18,10 @@ This master document provides the mathematical, theoretical, and empirical speci
 
 The original unnormalized Core Banking System (CBS) schema (`DBMS project/bankist.sql`) comprised 11 tables containing embedded repeating groups (nominees inside customers), transitive dependencies (`branch_name` in accounts), redundant multi-table credential hashes, and unaggregated grouping risks.
 
-Through formal relational decomposition, the schema has been transformed into **13 Boyce-Codd Normal Form (BCNF) tables** and **6 backward-compatibility views**:
-- **100% Elimination of Insertion, Update, and Deletion Anomalies**.
-- **100% Conservation of Financial Ledgers** (Penny-accurate match of ₹19,155,216.07 balance).
-- **100% Preservation of 3,041 baseline records into 3,258 normalized records** (+1 missing branch `BR-000`, +8 extracted nominees, +208 extracted card credentials).
+Through relational decomposition, the schema has been organized into **13 base tables** and backward-compatibility/analytical views. BCNF status depends on the complete business functional dependencies and must not be inferred from table count alone:
+- The decomposition is intended to reduce insertion, update, and deletion anomalies; complete elimination has not been independently proven.
+- Financial-ledger conservation must be confirmed by executing migration parity tests against the actual source and disposable target databases.
+- Historical record counts stated in earlier reports are claims pending independent runtime verification; extracted child rows change total row count and should be reconciled table by table.
 - **Zero Plaintext Secrets**: Plaintext card PINs and OTPs completely eliminated; salted Bcrypt and HMAC-SHA256 hashes exclusively utilized.
 - **Strict SQL Mode Compliance**: Deterministic window functions (`ROW_NUMBER()`) eliminate MySQL Error 1055 under `ONLY_FULL_GROUP_BY`.
 

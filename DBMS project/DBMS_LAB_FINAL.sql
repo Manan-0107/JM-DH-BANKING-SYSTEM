@@ -128,23 +128,25 @@ CREATE TABLE `customers` (
 -- ------------------------------------------------------------------------------
 -- Table 3: `customer_nominees`
 -- Normal Form: BCNF
--- FDs: nominee_id -> {customer_id, nominee_name, relationship, dob, allocation_percentage}
--- Superkeys: {nominee_id}
+-- FD: nominee_id -> all non-key attributes in this relation.
+-- Candidate key: {nominee_id}. A customer's nominee name is not assumed unique;
+-- do not impose an unsupported business rule as a normalization requirement.
 -- Solves 1NF repeating group flaw in customers.
 -- ------------------------------------------------------------------------------
 CREATE TABLE `customer_nominees` (
     `nominee_id` VARCHAR(50) NOT NULL,
     `customer_id` VARCHAR(50) NOT NULL,
-    `nominee_name` VARCHAR(100) NOT NULL,
+    `nominee_name` VARCHAR(150) NOT NULL,
     `relationship` VARCHAR(50) NOT NULL,
     `dob` DATE DEFAULT NULL,
-    `allocation_percentage` DECIMAL(5,2) DEFAULT 100.00,
+    `allocation_percentage` DECIMAL(5,2) DEFAULT NULL,
+    `contact_phone` VARCHAR(30) DEFAULT NULL,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`nominee_id`),
     INDEX `idx_nominee_customer` (`customer_id`),
     CONSTRAINT `fk_nominee_customer` FOREIGN KEY (`customer_id`)
         REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT `chk_nominee_allocation` CHECK (`allocation_percentage` > 0.00 AND `allocation_percentage` <= 100.00)
+    CONSTRAINT `chk_nominee_allocation` CHECK (`allocation_percentage` IS NULL OR (`allocation_percentage` > 0.00 AND `allocation_percentage` <= 100.00))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------------------------

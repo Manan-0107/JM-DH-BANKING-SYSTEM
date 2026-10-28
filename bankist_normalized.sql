@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS `customers` (
 -- 3. Table structure for `customer_nominees`
 -- Decomposed 1:N normalized nominee relation (BCNF)
 -- Supports multiple nominees per customer with fractional allocation percentages
--- Candidate Keys: CK1 = {nominee_id}, CK2 = {customer_id, nominee_name}
+-- Candidate Key: {nominee_id}. Do not assume nominee names are unique per customer.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `customer_nominees` (
   `nominee_id` VARCHAR(50) NOT NULL,
@@ -90,7 +90,6 @@ CREATE TABLE IF NOT EXISTS `customer_nominees` (
   `contact_phone` VARCHAR(30) DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`nominee_id`),
-  UNIQUE KEY `uk_cust_nominee_name` (`customer_id`, `nominee_name`),
   INDEX `idx_nominee_customer` (`customer_id`),
   CONSTRAINT `fk_nominee_customer` FOREIGN KEY (`customer_id`) 
     REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE,

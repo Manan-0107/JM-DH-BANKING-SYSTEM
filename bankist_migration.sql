@@ -175,7 +175,7 @@ DEALLOCATE PREPARE stmt;
 
 -- ----------------------------------------------------------------------------
 -- Step 3: Decompose & Migrate `customer_nominees`
--- Migrates only genuine source nominee records (8 rows) without inventing fake allocations
+-- Migrates only genuine source nominee records; leaves unstated allocation percentages NULL
 -- ----------------------------------------------------------------------------
 SET @sql_nominees = CONCAT('
 INSERT INTO `customer_nominees` (
@@ -188,7 +188,7 @@ SELECT
     TRIM(`nominee_name`),
     COALESCE(NULLIF(TRIM(`nominee_relation`), ""), "Nominee") AS `relationship`,
     `nominee_dob` AS `dob`,
-    100.00 AS `allocation_percentage`,
+    NULL AS `allocation_percentage`, -- Source has no contractual split; do not fabricate one.
     `phone` AS `contact_phone`,
     COALESCE(`created_at`, CURRENT_TIMESTAMP) AS `created_at`
 FROM `', @SRC_DB, '`.`customers`

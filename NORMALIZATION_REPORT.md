@@ -15,7 +15,7 @@
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 | **`branches`** | $\{branch\_id\}$, $\{ifsc\_code\}$ | $branch\_id \leftrightarrow ifsc\_code \to \{bank\_name, branch\_name, city, address, timing, phone, status\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Every determinant is a candidate key. |
 | **`customers`** | $\{customer\_id\}$, $\{email\}$, $\{pan\_number\}$ | $customer\_id \to \{full\_name, email, phone, dob, address, status, kyc\_status, password\_hash, credit\_score, tier, pan\_number, aadhaar\_number\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Multi-valued nominee and card PIN facts decomposed. |
-| **`customer_nominees`** | $\{nominee\_id\}$, $\{customer\_id, nominee\_name\}$ | $nominee\_id \leftrightarrow \{customer\_id, nominee\_name\} \to \{relationship, dob, allocation\_percentage\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Resolves 1NF repeating group in customer profile. |
+| **`customer_nominees`** | $\{nominee\_id\}$ | $nominee\_id \to \{customer\_id, nominee\_name, relationship, dob, allocation\_percentage, contact\_phone\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Resolves 1NF repeating group; no unproven name uniqueness assumed. |
 | **`accounts`** | $\{account\_number\}$ | $account\_number \to \{customer\_id, account\_type, balance, ifsc\_code, opening\_date, status\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Branch details normalized via `ifsc_code` FK. |
 | **`account_card_credentials`** | $\{credential\_id\}$, $\{account\_number\}$ | $credential\_id \leftrightarrow account\_number \to \{card\_pin\_hash, status, created\_at, updated\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Customer ownership redundancy eliminated; derived via `accounts`. |
 | **`transactions`** | $\{transaction\_id\}$, $\{reference\_number\}$ | $transaction\_id \leftrightarrow reference\_number \to \{sender\_account, receiver\_account, channel, amount, type, date\_time, status, description\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Atomic double-entry financial ledger. |
@@ -79,9 +79,8 @@
 - **After Normalization:**
   - Decomposed into 1:N relation `customer_nominees(nominee_id PK, customer_id FK, nominee_name, relationship, dob, allocation_percentage, contact_phone, created_at)`.
   - **Candidate Keys & Functional Dependencies Justification:**
-    - Primary Key: {nominee_id} is a minimal surrogate key ensuring that entity identity is decoupled from human names.
-    - Business Alternate Key: {customer_id, nominee_name} is enforced via unique constraint `uk_cust_nominee_name`. Under Bankist business rules, a single customer cannot register duplicate nominee records under the exact same name string. In situations where two beneficiaries share a family name (e.g., Senior and Junior), distinct suffixes are required.
-    - Because both {nominee_id} and {customer_id, nominee_name} are superkeys, every non-trivial functional dependency X -> Y has a determinant X that is a superkey. Therefore, `customer_nominees` strictly satisfies **BCNF**.
+    - Candidate Key: {nominee_id}. The current schema does not assume that `(customer_id, nominee_name)` is unique because people may share the same name and the rule was not established by source data.
+    - Under the functional dependency `nominee_id -> all non-key attributes`, the relation satisfies BCNF for the dependencies currently declared. Any additional business dependencies must be documented before making a stronger certification.
   - Preserved 100% backward compatibility via `v_customers_legacy` view using `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY allocation_percentage DESC)` window function without triggering MySQL Error 1055 (`ONLY_FULL_GROUP_BY`).
 
 ### E. Table: `accounts` & `branches`
