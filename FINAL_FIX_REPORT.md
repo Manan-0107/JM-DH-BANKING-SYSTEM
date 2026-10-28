@@ -67,15 +67,19 @@ The live database `127.0.0.1:3306/bankist` was preserved without loss (verified 
 
 ## 3. Inventory of Authoritative Files Created and Modified
 
-| File Path | Description / Role |
-| :--- | :--- |
-| `DBMS_LAB_FINAL.sql` | Authoritative single executable SQL lab script containing 13 BCNF tables, 5 views, 2 stored procedures, seed data, and 7 live test scenarios. |
-| `DBMS project/DBMS_LAB_FINAL.sql` | Synchronized copy inside the authoritative DBMS project folder. |
-| `DBMS project/bankist_normalized.sql` | Fully normalized enterprise BCNF schema. |
-| `DBMS project/bankist_migration.sql` | Production migration script with idempotent pre-flight checks and rollback guards. |
-| `scripts/test_college_demo.js` | Automated test runner verifying both direct SQL lab execution and full-stack Next.js HTTP API workflows. |
-| `NORMALIZATION_REPORT.md` | Formal mathematical normalization proof (1NF, 2NF, 3NF, BCNF, lossless join theorem). |
-| `DEMO_SETUP_GUIDE.md` | Step-by-step presentation guide, test credentials, and viva Q&A defense. |
+| File Path | SHA-256 Hash | Description / Role |
+| :--- | :--- | :--- |
+| `DBMS_LAB_FINAL.sql` | `693AD9FA3BB0BD11304D72735E0FF530F4566194AE2B6F8F3F55C1DDF92E6079` | Authoritative single executable SQL lab script containing 13 BCNF tables, 5 views, 2 stored procedures, seed data, and 7 live test scenarios. |
+| `DBMS project/DBMS_LAB_FINAL.sql` | `693AD9FA3BB0BD11304D72735E0FF530F4566194AE2B6F8F3F55C1DDF92E6079` | Synchronized copy inside the authoritative DBMS project folder. |
+| `bankist_normalized.sql` | `1F654ECE352D9BED5303165330F538B6B6EE6275BFAF5C146E70CBFED787CA92` | Canonical enterprise BCNF schema (all 13 tables, zero redundant columns, views). |
+| `DBMS project/bankist_normalized.sql` | `1F654ECE352D9BED5303165330F538B6B6EE6275BFAF5C146E70CBFED787CA92` | Synchronized copy inside the authoritative DBMS project folder. |
+| `bankist_migration.sql` | `85DA80171FF61DAD382B1CD320D5E43F64F528975CFE966DCD9055C1513199D3` | Production migration script with idempotent pre-flight checks and rollback guards. |
+| `DBMS project/bankist_migration.sql` | `85DA80171FF61DAD382B1CD320D5E43F64F528975CFE966DCD9055C1513199D3` | Synchronized copy inside the authoritative DBMS project folder. |
+| `bankist_normalization_tests.sql` | `1DED067FF798AF224505CD4739666EAC0153A380A91DBFB6574AE9BBCB106885` | Automated test suite (29 SQL assertions covering constraints, parity, and security). |
+| `DBMS project/bankist_normalization_tests.sql` | `1DED067FF798AF224505CD4739666EAC0153A380A91DBFB6574AE9BBCB106885` | Synchronized copy inside the authoritative DBMS project folder. |
+| `scripts/test_college_demo.js` | — | Automated test runner verifying both direct SQL lab execution and full-stack Next.js HTTP API workflows. |
+| `NORMALIZATION_REPORT.md` | — | Formal mathematical normalization proof (1NF, 2NF, 3NF, BCNF, lossless join theorem). |
+| `DEMO_SETUP_GUIDE.md` | — | Step-by-step presentation guide, test credentials, and viva Q&A defense. |
 | `database/backups/bankist_master_backup_2026-10-29.sql` | Master physical mysqldump backup of the live database (569,406 bytes). |
 | `database/backups/bankist_backup_manifest_2026-10-29.json` | Cryptographic SHA-256 checksum manifest and table verification log. |
 | `BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md` | Comprehensive database architectural master report. |

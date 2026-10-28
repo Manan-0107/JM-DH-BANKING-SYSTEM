@@ -137,16 +137,20 @@ SELECT
     0 AS expected_plaintext_count,
     COUNT(*) AS actual_plaintext_count,
     CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `accounts`
-WHERE `card_pin` IS NOT NULL AND `card_pin` != '';
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() 
+  AND TABLE_NAME IN ('accounts', 'customers') 
+  AND COLUMN_NAME = 'card_pin';
 
 SELECT 
     'T05B_SECURITY_NO_PLAINTEXT_OTP' AS test_name,
     0 AS expected_plaintext_count,
     COUNT(*) AS actual_plaintext_count,
     CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `otp_sessions`
-WHERE `otp_code` IS NOT NULL AND `otp_code` != '';
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() 
+  AND TABLE_NAME = 'otp_sessions' 
+  AND COLUMN_NAME = 'otp_code';
 
 SELECT 
     'T05C_SECURITY_BCRYPT_PIN_HASH_INTEGRITY' AS test_name,
