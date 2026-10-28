@@ -22,10 +22,10 @@
 | **`deposits`** | $\{deposit\_id\}$ | $deposit\_id \to \{linked\_account, deposit\_type, principal\_amount, interest\_rate, tenure\_months, maturity\_amount, maturity\_date, status\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Redundant `customer_id` removed; resolved via `linked_account -> accounts`. |
 | **`beneficiaries`** | $\{beneficiary\_id\}$, $\{customer\_id, account\_number, ifsc\_code\}$ | $beneficiary\_id \leftrightarrow \{customer\_id, account\_number, ifsc\_code\} \to \{beneficiary\_name, transfer\_limit, cooling\_until, is\_active\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Transitive `bank_name` removed; resolved via `branches(ifsc_code)`. |
 | **`audit_logs`** | $\{log\_id\}$ | $log\_id \to \{customer\_id, action, entity\_type, entity\_id, details, timestamp\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Immutable compliance audit log. |
-| **`account_liens`** | $\{lien\_id\}$ | $lien\_id \to \{account\_number, lien\_amount, reason, placed_by, status, placed\_at, released\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Legal encumbrance holds. |
-| **`customer_kyc`** | $\{kyc\_id\}$, $\{customer\_id\}$ | $kyc\_id \leftrightarrow customer\_id \to \{document\_type, document\_number, verification\_method, status, verified\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. 1:1 regulatory identity relation. |
-| **`security_rate_limits`** | $\{rate\_key\}$ | $rate\_key \to \{failed\_attempts, first\_attempt\_at, last\_attempt\_at, locked\_until\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Anti-brute-force defense state. |
-| **`branch_summary_mv`** | $\{ifsc\_code\}$ | $ifsc\_code \to \{branch\_name, total\_accounts, total\_balance, total\_active\_customers, last\_refreshed\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Materialized view table for branch aggregations. |
+| **`account_lien_records`** | $\{lien\_id\}$ | $lien\_id \to \{account\_number, lien\_amount, lien\_reason, created\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Legal encumbrance holds with `ON DELETE RESTRICT`. |
+| **`kyc_verifications`** | $\{verification\_id\}$ | $verification\_id \to \{customer\_id, document\_type, document\_number, verification\_method, status, verified\_at, remarks\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Regulatory identity compliance log. |
+| **`otp_sessions`** | $\{session\_id\}$ | $session\_id \to \{identifier, purpose, otp\_hash, expires\_at, verified, attempts, last\_sent\_at, created\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Plaintext `otp_code` eliminated; salted HMAC-SHA256 enforced. |
+| **`security_rate_limits`** | $\{key\_id\}$ | $key\_id \to \{attempts, last\_attempt\_at, locked\_until\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Anti-brute-force defense state. |
 
 ---
 
@@ -76,9 +76,27 @@
 - **Before Normalization:**
   - Stored repeating nominee columns `(nominee_name, nominee_relation, nominee_dob)` inside the customer master table.
   - Violated **1NF** (repeating groups and restriction to single nominee).
-  - **After Normalization:**
-    - Decomposed into 1:N relation `customer_nominees(nominee_id PK, customer_id FK, nominee_name, relationship, dob, allocation_percentage)`.
-    - Preserved 100% backward compatibility via `v_customers_legacy` view using `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY allocation_percentage DESC)` window function without triggering MySQL Error 1055 (`ONLY_FULL_GROUP_BY`).
+- **After Normalization:**
+  - Decomposed into 1:N relation `customer_nominees(nominee_id PK, customer_id FK, nominee_name, relationship, dob, allocation_percentage)`.
+  - Preserved 100% backward compatibility via `v_customers_legacy` view using `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY allocation_percentage DESC)` window function without triggering MySQL Error 1055 (`ONLY_FULL_GROUP_BY`).
+
+### E. Table: `accounts` & `branches`
+- **Before Normalization:**
+  - `accounts` relation stored `branch_name` alongside `ifsc_code`.
+  - Functional dependency $ifsc\_code \to branch\_name$ was transitive since $ifsc\_code$ was not a candidate key of `accounts`.
+  - Violated **3NF** and **BCNF**, introducing update anomalies whenever branch titles changed.
+- **After Normalization:**
+  - `branch_name` removed from `accounts`.
+  - Stored strictly in `branches(branch_id PK, ifsc_code UQ, bank_name, branch_name, city, address, ...)`.
+  - Derived dynamically via `v_accounts_legacy` joining `branches` on `ifsc_code`. **BCNF Achieved**.
+
+### F. Table: `otp_sessions` (Plaintext OTP Elimination)
+- **Before Normalization:**
+  - Stored plaintext `otp_code` alongside `otp_hash`.
+  - Plaintext OTP column posed PCI-DSS and security compliance violations and introduced redundant dependency $otp\_code \to otp\_hash$.
+- **After Normalization:**
+  - Plaintext `otp_code` column completely eliminated from base table.
+  - Verification uses salted HMAC-SHA256 comparison with rate-limited attempts and expiration timestamps. **BCNF Achieved**.
 
 ---
 

@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS `branches` (
 -- Boyce-Codd Normal Form (BCNF)
 -- Core demographic profile and net-banking authentication
 -- Candidate Keys: CK1 = {customer_id}, CK2 = {email}, CK3 = {pan_number}
--- Backward Compatibility: Retains nominee/card columns for zero-breakage Next.js API compatibility
+-- Nominees and Card Credentials decomposed into separate child relations
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `customers` (
   `customer_id` VARCHAR(50) NOT NULL,
@@ -63,14 +63,9 @@ CREATE TABLE IF NOT EXISTS `customers` (
   `marital_status` VARCHAR(30) DEFAULT NULL,
   `occupation` VARCHAR(100) DEFAULT NULL,
   `annual_income` VARCHAR(100) DEFAULT NULL,
-  `nominee_name` VARCHAR(150) DEFAULT NULL,
-  `nominee_relation` VARCHAR(50) DEFAULT NULL,
-  `nominee_dob` DATE DEFAULT NULL,
   `vkyc_status` VARCHAR(50) DEFAULT 'Completed',
   `signature_data` LONGTEXT DEFAULT NULL,
   `avatar_data` LONGTEXT DEFAULT NULL,
-  `card_pin` VARCHAR(10) DEFAULT NULL,
-  `card_pin_hash` VARCHAR(255) DEFAULT NULL,
   PRIMARY KEY (`customer_id`),
   UNIQUE KEY `uk_customers_email` (`email`),
   UNIQUE KEY `uk_customers_pan` (`pan_number`),
@@ -107,7 +102,7 @@ CREATE TABLE IF NOT EXISTS `customer_nominees` (
 -- Boyce-Codd Normal Form (BCNF)
 -- Core banking ledger accounts referencing branches(ifsc_code)
 -- Foreign Keys: customer_id REFERENCES customers, ifsc_code REFERENCES branches(ifsc_code)
--- Backward Compatibility: Retains branch_name/card_pin_hash columns for existing Next.js routes
+-- Transitive branch_name and card credentials decomposed to separate BCNF relations
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `accounts` (
   `account_number` VARCHAR(50) NOT NULL,
@@ -115,11 +110,8 @@ CREATE TABLE IF NOT EXISTS `accounts` (
   `account_type` VARCHAR(50) NOT NULL DEFAULT 'Savings Account',
   `balance` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   `ifsc_code` VARCHAR(20) NOT NULL DEFAULT 'BTBI0001024',
-  `branch_name` VARCHAR(100) NOT NULL DEFAULT 'Downtown Central',
   `opening_date` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `status` ENUM('Active', 'Frozen', 'Closed') DEFAULT 'Active',
-  `card_pin` VARCHAR(10) DEFAULT NULL,
-  `card_pin_hash` VARCHAR(255) DEFAULT NULL,
   PRIMARY KEY (`account_number`),
   INDEX `idx_acc_customer` (`customer_id`),
   INDEX `idx_acc_ifsc` (`ifsc_code`),
@@ -254,13 +246,12 @@ CREATE TABLE IF NOT EXISTS `kyc_verifications` (
 -- ----------------------------------------------------------------------------
 -- 10. Table structure for `otp_sessions`
 -- Two-factor challenge table in BCNF
--- Plaintext OTP strictly scrubbed; salted bcrypt hash enforced; replay protected
+-- Plaintext OTP strictly scrubbed; salted HMAC-SHA256 hash enforced; replay protected
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `otp_sessions` (
   `session_id` VARCHAR(50) NOT NULL,
   `identifier` VARCHAR(150) NOT NULL,
   `purpose` VARCHAR(50) NOT NULL,
-  `otp_code` VARCHAR(10) DEFAULT NULL,
   `otp_hash` VARCHAR(255) DEFAULT NULL,
   `expires_at` BIGINT NOT NULL,
   `verified` INT DEFAULT 0,
@@ -344,7 +335,7 @@ SELECT
     b.branch_name,
     a.opening_date,
     a.status,
-    COALESCE(c.card_pin_hash, a.card_pin_hash) AS card_pin_hash
+    c.card_pin_hash
 FROM `accounts` a
 JOIN `branches` b ON a.ifsc_code = b.ifsc_code
 LEFT JOIN `account_card_credentials` c ON a.account_number = c.account_number;
@@ -352,6 +343,7 @@ LEFT JOIN `account_card_credentials` c ON a.account_number = c.account_number;
 -- ----------------------------------------------------------------------------
 -- View: `v_customers_legacy`
 -- Seamlessly provides joined nominee details matching original customer shape
+-- Resolves MySQL Error 1055 under strict ONLY_FULL_GROUP_BY via ROW_NUMBER()
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW `v_customers_legacy` AS
 SELECT 
@@ -374,13 +366,12 @@ SELECT
     c.marital_status,
     c.occupation,
     c.annual_income,
-    COALESCE(n.nominee_name, c.nominee_name) AS nominee_name,
-    COALESCE(n.relationship, c.nominee_relation) AS nominee_relation,
-    COALESCE(n.dob, c.nominee_dob) AS nominee_dob,
+    n.nominee_name,
+    n.relationship AS nominee_relation,
+    n.dob AS nominee_dob,
     c.vkyc_status,
     c.signature_data,
-    c.avatar_data,
-    c.card_pin_hash
+    c.avatar_data
 FROM `customers` c
 LEFT JOIN (
     SELECT 
@@ -499,6 +490,7 @@ ORDER BY date_time DESC;
 -- ----------------------------------------------------------------------------
 -- View: `v_active_deposits_summary`
 -- Term deposit portfolio yield summary
+-- Derives customer dynamically via linked_account -> accounts(customer_id)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW `v_active_deposits_summary` AS
 SELECT 
@@ -513,7 +505,8 @@ SELECT
     (d.maturity_amount - d.principal_amount) AS expected_interest_yield,
     d.maturity_date
 FROM `deposits` d
-JOIN `customers` c ON d.customer_id = c.customer_id
+JOIN `accounts` a ON d.linked_account = a.account_number
+JOIN `customers` c ON a.customer_id = c.customer_id
 WHERE d.status = 'Active';
 
 -- ----------------------------------------------------------------------------

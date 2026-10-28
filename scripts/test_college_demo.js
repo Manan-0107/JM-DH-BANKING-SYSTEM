@@ -167,21 +167,23 @@ async function runApplicationWorkflowTest() {
   assert(overdraftRes.status === 400, 'Overdraft transfer strictly rejected with HTTP 400 Bad Request');
 
   // TEST 6: Atomic Rollback Invariant
+  // Strictly executed against isolated demo database bankist_college_demo to keep live bankist pristine
   console.log('\n--- DEMO TEST 6: Atomic Transaction Rollback Invariant ---');
   const db = await mysql.createConnection({
     host: process.env.DB_HOST || '127.0.0.1',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD,
     port: parseInt(process.env.DB_PORT || '3306'),
-    database: process.env.DB_NAME || 'bankist'
+    database: 'bankist_college_demo'
   });
 
-  const [[{ preBal }]] = await db.query('SELECT balance AS preBal FROM accounts WHERE account_number = ?', [aaravAccount]);
+  const demoTestAccount = 'ACC-1001';
+  const [[{ preBal }]] = await db.query('SELECT balance AS preBal FROM accounts WHERE account_number = ?', [demoTestAccount]);
   let rollbackCaught = false;
   try {
     await db.query('START TRANSACTION');
-    await db.query('UPDATE accounts SET balance = balance - 100 WHERE account_number = ?', [aaravAccount]);
-    // Deliberately trigger syntax/runtime error
+    await db.query('UPDATE accounts SET balance = balance - 100 WHERE account_number = ?', [demoTestAccount]);
+    // Deliberately trigger runtime exception to test rollback guarantee
     await db.query('INSERT INTO non_existent_table_for_rollback_test VALUES (1)');
     await db.query('COMMIT');
   } catch (e) {
@@ -189,7 +191,7 @@ async function runApplicationWorkflowTest() {
     await db.query('ROLLBACK');
   }
 
-  const [[{ postBal }]] = await db.query('SELECT balance AS postBal FROM accounts WHERE account_number = ?', [aaravAccount]);
+  const [[{ postBal }]] = await db.query('SELECT balance AS postBal FROM accounts WHERE account_number = ?', [demoTestAccount]);
   assert(rollbackCaught, 'Transaction exception deliberately caught and triggered ROLLBACK');
   assert(parseFloat(preBal) === parseFloat(postBal), `Balance completely restored after rollback: ₹${preBal} === ₹${postBal}`);
   await db.end();

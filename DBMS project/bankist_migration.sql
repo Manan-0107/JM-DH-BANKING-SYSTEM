@@ -145,16 +145,15 @@ WHERE NOT EXISTS (SELECT 1 FROM `branches` WHERE `ifsc_code` = 'BNKST0001');
 
 -- ----------------------------------------------------------------------------
 -- Step 2: Migrate `customers` (Core Demographics & Authentication)
--- Preserves all genuine customer attributes; no plaintext PIN copying.
+-- Preserves all genuine customer attributes; nominee and card PINs decomposed
 -- ----------------------------------------------------------------------------
 SET @sql_customers = CONCAT('
 INSERT INTO `customers` (
     `customer_id`, `full_name`, `email`, `phone`, `dob`, `address`, 
     `created_at`, `status`, `kyc_status`, `password_hash`, `credit_score`, 
     `tier`, `pan_number`, `aadhaar_number`, `gender`, `father_name`, 
-    `marital_status`, `occupation`, `annual_income`, `nominee_name`, 
-    `nominee_relation`, `nominee_dob`, `vkyc_status`, `signature_data`, 
-    `avatar_data`, `card_pin_hash`
+    `marital_status`, `occupation`, `annual_income`, `vkyc_status`, 
+    `signature_data`, `avatar_data`
 )
 SELECT 
     `customer_id`, `full_name`, `email`, `phone`, `dob`, `address`, 
@@ -165,9 +164,9 @@ SELECT
     COALESCE(`credit_score`, 700), 
     COALESCE(`tier`, "Silver"), 
     `pan_number`, `aadhaar_number`, `gender`, `father_name`, 
-    `marital_status`, `occupation`, `annual_income`, `nominee_name`, 
-    `nominee_relation`, `nominee_dob`, COALESCE(`vkyc_status`, "Completed"), 
-    `signature_data`, `avatar_data`, `card_pin_hash`
+    `marital_status`, `occupation`, `annual_income`, 
+    COALESCE(`vkyc_status`, "Completed"), 
+    `signature_data`, `avatar_data`
 FROM `', @SRC_DB, '`.`customers`;
 ');
 PREPARE stmt FROM @sql_customers;
@@ -206,7 +205,7 @@ DEALLOCATE PREPARE stmt;
 SET @sql_accounts = CONCAT('
 INSERT INTO `accounts` (
     `account_number`, `customer_id`, `account_type`, `balance`, 
-    `ifsc_code`, `branch_name`, `opening_date`, `status`, `card_pin_hash`
+    `ifsc_code`, `opening_date`, `status`
 )
 SELECT 
     `account_number`, 
@@ -214,10 +213,8 @@ SELECT
     COALESCE(`account_type`, "Savings Account"), 
     `balance`, 
     `ifsc_code`, 
-    COALESCE(`branch_name`, "Downtown Central"), 
     COALESCE(`opening_date`, CURRENT_TIMESTAMP), 
-    COALESCE(`status`, "Active"),
-    `card_pin_hash`
+    COALESCE(`status`, "Active")
 FROM `', @SRC_DB, '`.`accounts`;
 ');
 PREPARE stmt FROM @sql_accounts;
