@@ -377,7 +377,15 @@ async function runTests() {
 
     // TEST 14: Administrative Dashboard Aggregations
     console.log('\n--- 13. Testing Administrative Dashboard Metrics ---');
-    const dashRes = await fetch(`${BASE_URL}/api/dashboard`);
+    const jwt = require('jsonwebtoken');
+    const adminToken = jwt.sign(
+      { customer_id: 'ADMIN-01', email: 'admin@bharatbank.com', role: 'admin' },
+      process.env.JWT_SECRET || 'e7b44fa70cbf42589e47209930f7e1b9b183651d2008ad5dc7037f191b7d8be6',
+      { expiresIn: '1h' }
+    );
+    const dashRes = await fetch(`${BASE_URL}/api/dashboard`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
     const dashData = await dashRes.json();
     assert(dashRes.status === 200, 'Dashboard statistics HTTP 200');
     assert(dashData.metrics.customers.total_customers >= 5, `Total Customers: ${dashData.metrics.customers.total_customers}`);
