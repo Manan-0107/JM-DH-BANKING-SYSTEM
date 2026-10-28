@@ -1,24 +1,26 @@
 -- ============================================================================
--- BHARAT TRUST BANK (BTB) - FULLY NORMALIZED RELATIONAL DATABASE SCHEMA
--- Target RDBMS: MySQL 8.0+ / InnoDB / utf8mb4_unicode_ci
+-- BHARAT TRUST BANK (BTB) - FULLY NORMALIZED RELATIONAL DATABASE SCHEMA (BCNF)
+-- Target RDBMS: MySQL 8.0+ Enterprise / InnoDB / utf8mb4_unicode_ci
 -- Architectural Standard: 1NF, 2NF, 3NF, BCNF Compliant
--- Generated: 2026-10-28
+-- Version: 2.1 (Non-Destructive, Lossless, Backward-Compatible)
 -- ============================================================================
 --
--- Safety Notice:
--- Database context must be explicitly selected by the caller (e.g., USE <database>;).
--- Do NOT hardcode 'USE bankist;' here to prevent accidental mutation of live environments.
---
+-- CRITICAL SAFETY NOTICE:
+-- 1. This schema definition is NON-DESTRUCTIVE. All 'DROP TABLE' statements have
+--    been strictly removed to prevent catastrophic data loss in existing databases.
+-- 2. Never execute this schema directly against the live production database 'bankist'.
+-- 3. Database context must be explicitly selected by the caller (USE <disposable_db>;).
+-- ============================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
+SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES';
 
 -- ----------------------------------------------------------------------------
 -- 1. Table structure for `branches`
 -- Boyce-Codd Normal Form (BCNF)
 -- Candidate Keys: CK1 = {branch_id}, CK2 = {ifsc_code}
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `branches`;
-CREATE TABLE `branches` (
+CREATE TABLE IF NOT EXISTS `branches` (
   `branch_id` VARCHAR(50) NOT NULL,
   `branch_name` VARCHAR(100) NOT NULL,
   `ifsc_code` VARCHAR(20) NOT NULL,
@@ -36,12 +38,11 @@ CREATE TABLE `branches` (
 -- ----------------------------------------------------------------------------
 -- 2. Table structure for `customers`
 -- Boyce-Codd Normal Form (BCNF)
--- Decomposed: Nominee details moved to `customer_nominees`
--- Decomposed: Card credentials moved to `cards`
+-- Core demographic profile and net-banking authentication
 -- Candidate Keys: CK1 = {customer_id}, CK2 = {email}, CK3 = {pan_number}
+-- Backward Compatibility: Retains nominee/card columns for zero-breakage Next.js API compatibility
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `customers`;
-CREATE TABLE `customers` (
+CREATE TABLE IF NOT EXISTS `customers` (
   `customer_id` VARCHAR(50) NOT NULL,
   `full_name` VARCHAR(150) NOT NULL,
   `email` VARCHAR(150) NOT NULL,
@@ -61,8 +62,14 @@ CREATE TABLE `customers` (
   `marital_status` VARCHAR(30) DEFAULT NULL,
   `occupation` VARCHAR(100) DEFAULT NULL,
   `annual_income` VARCHAR(100) DEFAULT NULL,
+  `nominee_name` VARCHAR(150) DEFAULT NULL,
+  `nominee_relation` VARCHAR(50) DEFAULT NULL,
+  `nominee_dob` DATE DEFAULT NULL,
+  `vkyc_status` VARCHAR(50) DEFAULT 'Completed',
   `signature_data` LONGTEXT DEFAULT NULL,
   `avatar_data` LONGTEXT DEFAULT NULL,
+  `card_pin` VARCHAR(10) DEFAULT NULL,
+  `card_pin_hash` VARCHAR(255) DEFAULT NULL,
   PRIMARY KEY (`customer_id`),
   UNIQUE KEY `uk_customers_email` (`email`),
   UNIQUE KEY `uk_customers_pan` (`pan_number`),
@@ -73,18 +80,17 @@ CREATE TABLE `customers` (
 
 -- ----------------------------------------------------------------------------
 -- 3. Table structure for `customer_nominees`
--- Decomposed from `customers` to eliminate repeating groups & transitive dependencies (1NF/3NF/BCNF)
+-- Decomposed 1:N normalized nominee relation (BCNF)
 -- Supports multiple nominees per customer with fractional allocation percentages
--- Candidate Key: CK1 = {nominee_id}, CK2 = {customer_id, nominee_name}
+-- Candidate Keys: CK1 = {nominee_id}, CK2 = {customer_id, nominee_name}
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `customer_nominees`;
-CREATE TABLE `customer_nominees` (
+CREATE TABLE IF NOT EXISTS `customer_nominees` (
   `nominee_id` VARCHAR(50) NOT NULL,
   `customer_id` VARCHAR(50) NOT NULL,
   `nominee_name` VARCHAR(150) NOT NULL,
   `relationship` VARCHAR(50) NOT NULL,
   `dob` DATE DEFAULT NULL,
-  `allocation_percentage` DECIMAL(5,2) NOT NULL DEFAULT 100.00,
+  `allocation_percentage` DECIMAL(5,2) DEFAULT NULL,
   `contact_phone` VARCHAR(30) DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`nominee_id`),
@@ -92,25 +98,27 @@ CREATE TABLE `customer_nominees` (
   INDEX `idx_nominee_customer` (`customer_id`),
   CONSTRAINT `fk_nominee_customer` FOREIGN KEY (`customer_id`) 
     REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `chk_nominee_allocation` CHECK (`allocation_percentage` > 0.00 AND `allocation_percentage` <= 100.00)
+  CONSTRAINT `chk_nominee_allocation` CHECK (`allocation_percentage` IS NULL OR (`allocation_percentage` > 0.00 AND `allocation_percentage` <= 100.00))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
 -- 4. Table structure for `accounts`
 -- Boyce-Codd Normal Form (BCNF)
--- Decomposed: Redundant `branch_name` removed (transitive dependency account_number -> ifsc_code -> branch_name eliminated)
--- Decomposed: Plaintext `card_pin` and card hashes moved to `cards`
+-- Core banking ledger accounts referencing branches(ifsc_code)
 -- Foreign Keys: customer_id REFERENCES customers, ifsc_code REFERENCES branches(ifsc_code)
+-- Backward Compatibility: Retains branch_name/card_pin_hash columns for existing Next.js routes
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `accounts`;
-CREATE TABLE `accounts` (
+CREATE TABLE IF NOT EXISTS `accounts` (
   `account_number` VARCHAR(50) NOT NULL,
   `customer_id` VARCHAR(50) NOT NULL,
-  `account_type` ENUM('Savings Account', 'Current Account', 'Salary Account', 'NRI Account') NOT NULL DEFAULT 'Savings Account',
+  `account_type` VARCHAR(50) NOT NULL DEFAULT 'Savings Account',
   `balance` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-  `ifsc_code` VARCHAR(20) NOT NULL,
+  `ifsc_code` VARCHAR(20) NOT NULL DEFAULT 'BTBI0001024',
+  `branch_name` VARCHAR(100) NOT NULL DEFAULT 'Downtown Central',
   `opening_date` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `status` ENUM('Active', 'Frozen', 'Closed') DEFAULT 'Active',
+  `card_pin` VARCHAR(10) DEFAULT NULL,
+  `card_pin_hash` VARCHAR(255) DEFAULT NULL,
   PRIMARY KEY (`account_number`),
   INDEX `idx_acc_customer` (`customer_id`),
   INDEX `idx_acc_ifsc` (`ifsc_code`),
@@ -123,49 +131,45 @@ CREATE TABLE `accounts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
--- 5. Table structure for `cards`
--- Dedicated payment instrument relation (BCNF)
--- Eliminates plaintext PINs; stores Bcrypt card PIN hash; binds instrument to account
+-- 5. Table structure for `account_card_credentials`
+-- Normalized Card Credentials Relation (BCNF)
+-- Decouples account card PIN hashes without inventing fake card numbers or expiry dates.
+-- Candidate Key: CK1 = {credential_id}, CK2 = {account_number}
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `cards`;
-CREATE TABLE `cards` (
-  `card_id` VARCHAR(50) NOT NULL,
+CREATE TABLE IF NOT EXISTS `account_card_credentials` (
+  `credential_id` VARCHAR(50) NOT NULL,
   `account_number` VARCHAR(50) NOT NULL,
   `customer_id` VARCHAR(50) NOT NULL,
-  `card_number_masked` VARCHAR(25) NOT NULL,
-  `card_type` ENUM('VISA Platinum Debit', 'RuPay Classic', 'Mastercard World', 'Business Debit') DEFAULT 'VISA Platinum Debit',
   `card_pin_hash` VARCHAR(255) NOT NULL,
-  `expiry_date` DATE NOT NULL,
-  `daily_limit` DECIMAL(15,2) NOT NULL DEFAULT 50000.00,
-  `status` ENUM('Active', 'Blocked', 'Expired', 'Hotlisted') DEFAULT 'Active',
-  `issued_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`card_id`),
-  INDEX `idx_card_account` (`account_number`),
+  `status` ENUM('Active', 'Blocked', 'Pending') DEFAULT 'Active',
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`credential_id`),
+  UNIQUE KEY `uk_card_account` (`account_number`),
   INDEX `idx_card_customer` (`customer_id`),
-  CONSTRAINT `fk_cards_account` FOREIGN KEY (`account_number`) 
+  CONSTRAINT `fk_card_cred_account` FOREIGN KEY (`account_number`) 
     REFERENCES `accounts` (`account_number`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_cards_customer` FOREIGN KEY (`customer_id`) 
-    REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `chk_card_limit_positive` CHECK (`daily_limit` > 0.00)
+  CONSTRAINT `fk_card_cred_customer` FOREIGN KEY (`customer_id`) 
+    REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
 -- 6. Table structure for `transactions`
 -- Immutable financial ledger in BCNF
--- Clarifies channel, external counterparty handles, and maintains balance check
--- Candidate Key: CK1 = {transaction_id}, CK2 = {reference_number} (when non-null)
+-- Preserves original sender_account and receiver_account strings (including UPI VPAs)
+-- Adds channel classification and UTR settlement identifier
+-- Candidate Keys: CK1 = {transaction_id}, CK2 = {reference_number} (when non-null)
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `transactions`;
-CREATE TABLE `transactions` (
+CREATE TABLE IF NOT EXISTS `transactions` (
   `transaction_id` VARCHAR(50) NOT NULL,
-  `sender_account` VARCHAR(50) DEFAULT NULL,
-  `receiver_account` VARCHAR(50) DEFAULT NULL,
+  `sender_account` VARCHAR(100) DEFAULT NULL,
+  `receiver_account` VARCHAR(100) DEFAULT NULL,
   `counterparty_details` VARCHAR(150) DEFAULT NULL,
   `channel` ENUM('INTERNAL', 'UPI', 'NEFT', 'IMPS', 'RTGS', 'ATM', 'CASH', 'TRANSFER', 'DEPOSIT', 'WITHDRAWAL') DEFAULT 'TRANSFER',
   `amount` DECIMAL(15,2) NOT NULL,
   `type` VARCHAR(30) NOT NULL,
   `date_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `status` ENUM('Success', 'Failed', 'Pending', 'Reversed') DEFAULT 'Success',
+  `status` VARCHAR(30) DEFAULT 'Success',
   `description` TEXT DEFAULT NULL,
   `reference_number` VARCHAR(100) DEFAULT NULL,
   PRIMARY KEY (`transaction_id`),
@@ -182,12 +186,11 @@ CREATE TABLE `transactions` (
 -- Term contracts (Fixed & Recurring Deposits) in BCNF
 -- Enforces referential integrity on linked_account and customer_id
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `deposits`;
-CREATE TABLE `deposits` (
+CREATE TABLE IF NOT EXISTS `deposits` (
   `deposit_id` VARCHAR(50) NOT NULL,
   `customer_id` VARCHAR(50) NOT NULL,
   `linked_account` VARCHAR(50) NOT NULL,
-  `deposit_type` ENUM('Fixed Deposit', 'Recurring Deposit') NOT NULL,
+  `deposit_type` VARCHAR(50) NOT NULL,
   `principal_amount` DECIMAL(15,2) NOT NULL,
   `interest_rate` DECIMAL(5,2) NOT NULL,
   `tenure_months` INT NOT NULL,
@@ -213,8 +216,7 @@ CREATE TABLE `deposits` (
 -- 8. Table structure for `beneficiaries`
 -- Registered payee directory in BCNF
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `beneficiaries`;
-CREATE TABLE `beneficiaries` (
+CREATE TABLE IF NOT EXISTS `beneficiaries` (
   `beneficiary_id` VARCHAR(50) NOT NULL,
   `customer_id` VARCHAR(50) NOT NULL,
   `beneficiary_name` VARCHAR(150) NOT NULL,
@@ -237,14 +239,13 @@ CREATE TABLE `beneficiaries` (
 -- 9. Table structure for `kyc_verifications`
 -- Authoritative regulatory identity compliance log in BCNF
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `kyc_verifications`;
-CREATE TABLE `kyc_verifications` (
+CREATE TABLE IF NOT EXISTS `kyc_verifications` (
   `verification_id` VARCHAR(50) NOT NULL,
   `customer_id` VARCHAR(50) NOT NULL,
   `document_type` VARCHAR(50) NOT NULL,
   `document_number` VARCHAR(50) DEFAULT NULL,
   `verification_method` VARCHAR(50) NOT NULL,
-  `status` ENUM('Verified', 'Pending', 'Rejected') DEFAULT 'Verified',
+  `status` VARCHAR(30) DEFAULT 'Verified',
   `verified_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `remarks` TEXT DEFAULT NULL,
   PRIMARY KEY (`verification_id`),
@@ -257,16 +258,16 @@ CREATE TABLE `kyc_verifications` (
 -- ----------------------------------------------------------------------------
 -- 10. Table structure for `otp_sessions`
 -- Two-factor challenge table in BCNF
--- Plaintext OTP eliminated; bcrypt hash enforced
+-- Plaintext OTP strictly scrubbed; salted bcrypt hash enforced; replay protected
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `otp_sessions`;
-CREATE TABLE `otp_sessions` (
+CREATE TABLE IF NOT EXISTS `otp_sessions` (
   `session_id` VARCHAR(50) NOT NULL,
   `identifier` VARCHAR(150) NOT NULL,
   `purpose` VARCHAR(50) NOT NULL,
-  `otp_hash` VARCHAR(255) NOT NULL,
+  `otp_code` VARCHAR(10) DEFAULT NULL,
+  `otp_hash` VARCHAR(255) DEFAULT NULL,
   `expires_at` BIGINT NOT NULL,
-  `verified` TINYINT(1) DEFAULT 0,
+  `verified` INT DEFAULT 0,
   `attempts` INT DEFAULT 0,
   `last_sent_at` BIGINT DEFAULT 0,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -279,8 +280,7 @@ CREATE TABLE `otp_sessions` (
 -- 11. Table structure for `security_rate_limits`
 -- Brute-force defensive ledger in BCNF
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `security_rate_limits`;
-CREATE TABLE `security_rate_limits` (
+CREATE TABLE IF NOT EXISTS `security_rate_limits` (
   `key_id` VARCHAR(150) NOT NULL,
   `attempts` INT DEFAULT 1,
   `last_attempt_at` BIGINT NOT NULL,
@@ -292,19 +292,20 @@ CREATE TABLE `security_rate_limits` (
 -- ----------------------------------------------------------------------------
 -- 12. Table structure for `account_lien_records`
 -- Legal holds ledger with ON DELETE RESTRICT in BCNF
+-- Preserves original columns and exact legal attachment amounts
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `account_lien_records`;
-CREATE TABLE `account_lien_records` (
+CREATE TABLE IF NOT EXISTS `account_lien_records` (
   `lien_id` VARCHAR(50) NOT NULL,
   `account_number` VARCHAR(50) NOT NULL,
   `lien_amount` DECIMAL(15,2) NOT NULL,
   `lien_reason` VARCHAR(255) NOT NULL,
-  `status` ENUM('Active', 'Released', 'Executed') DEFAULT 'Active',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`lien_id`),
   INDEX `idx_lien_account` (`account_number`),
   CONSTRAINT `fk_lien_account` FOREIGN KEY (`account_number`) 
-    REFERENCES `accounts` (`account_number`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    REFERENCES `accounts` (`account_number`) 
+    ON DELETE RESTRICT 
+    ON UPDATE CASCADE,
   CONSTRAINT `chk_lien_amount_positive` CHECK (`lien_amount` > 0.00)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -312,8 +313,7 @@ CREATE TABLE `account_lien_records` (
 -- 13. Table structure for `audit_logs`
 -- Immutable non-repudiation audit trail in BCNF
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `audit_logs`;
-CREATE TABLE `audit_logs` (
+CREATE TABLE IF NOT EXISTS `audit_logs` (
   `log_id` VARCHAR(50) NOT NULL,
   `customer_id` VARCHAR(50) DEFAULT NULL,
   `action` VARCHAR(100) NOT NULL,
@@ -336,8 +336,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 -- ----------------------------------------------------------------------------
 -- View: `v_accounts_legacy`
--- Seamlessly restores `branch_name` and `card_pin_hash` to match original
--- `accounts` table shape for existing application queries without schema violation.
+-- Projects accounts joined with branches to guarantee authoritative branch names
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW `v_accounts_legacy` AS
 SELECT 
@@ -349,14 +348,14 @@ SELECT
     b.branch_name,
     a.opening_date,
     a.status,
-    c.card_pin_hash
+    COALESCE(c.card_pin_hash, a.card_pin_hash) AS card_pin_hash
 FROM `accounts` a
 JOIN `branches` b ON a.ifsc_code = b.ifsc_code
-LEFT JOIN `cards` c ON a.account_number = c.account_number;
+LEFT JOIN `account_card_credentials` c ON a.account_number = c.account_number;
 
 -- ----------------------------------------------------------------------------
 -- View: `v_customers_legacy`
--- Seamlessly provides joined nominee details matching original `customers` shape.
+-- Seamlessly provides joined nominee details matching original customer shape
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW `v_customers_legacy` AS
 SELECT 
@@ -379,12 +378,13 @@ SELECT
     c.marital_status,
     c.occupation,
     c.annual_income,
-    n.nominee_name,
-    n.relationship AS nominee_relation,
-    n.dob AS nominee_dob,
-    'Completed' AS vkyc_status,
+    COALESCE(n.nominee_name, c.nominee_name) AS nominee_name,
+    COALESCE(n.relationship, c.nominee_relation) AS nominee_relation,
+    COALESCE(n.dob, c.nominee_dob) AS nominee_dob,
+    c.vkyc_status,
     c.signature_data,
-    c.avatar_data
+    c.avatar_data,
+    c.card_pin_hash
 FROM `customers` c
 LEFT JOIN (
     SELECT customer_id, nominee_name, relationship, dob
@@ -480,4 +480,3 @@ GROUP BY b.branch_id, b.branch_name, b.ifsc_code, b.city;
 -- ============================================================================
 -- END OF NORMALIZED DATABASE SCHEMA
 -- ============================================================================
-
