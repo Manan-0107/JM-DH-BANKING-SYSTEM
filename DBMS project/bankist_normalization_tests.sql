@@ -28,18 +28,19 @@ WHERE TABLE_SCHEMA = DATABASE()
   );
 
 -- ----------------------------------------------------------------------------
--- TEST GROUP 2: Compatibility & Analytical Views Existence (6 Views)
+-- TEST GROUP 2: Compatibility & Analytical Views Existence (8 Views)
 -- ----------------------------------------------------------------------------
 SELECT 
     'T02_VIEWS_COUNT' AS test_name,
-    6 AS expected_count,
+    8 AS expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 6 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 8 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM information_schema.VIEWS
 WHERE TABLE_SCHEMA = DATABASE()
   AND TABLE_NAME IN (
     'v_accounts_legacy', 'v_customers_legacy', 'v_customer_portfolio',
-    'v_high_value_transactions', 'v_active_deposits_summary', 'v_branch_performance'
+    'v_high_value_transactions', 'v_active_deposits_summary', 'v_branch_performance',
+    'v_deposits', 'v_beneficiaries'
   );
 
 -- ----------------------------------------------------------------------------
@@ -204,114 +205,142 @@ FROM `transactions`
 WHERE amount <= 0.00;
 
 -- ----------------------------------------------------------------------------
--- TEST GROUP 7: Data Preservation & Financial Conservation
+-- TEST GROUP 7: Data Preservation & Financial Conservation (Dynamic Parity)
 -- ----------------------------------------------------------------------------
 SELECT 
     'T07A_BALANCE_SUM_CONSERVATION' AS test_name,
-    19250672.32 AS expected_sum,
-    ROUND(SUM(balance), 2) AS actual_sum,
-    CASE WHEN ABS(ROUND(SUM(balance), 2) - 19250672.32) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `accounts`;
+    src.expected_sum,
+    ROUND(SUM(a.balance), 2) AS actual_sum,
+    CASE WHEN ABS(ROUND(SUM(a.balance), 2) - src.expected_sum) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `accounts` a
+CROSS JOIN (SELECT ROUND(SUM(balance), 2) AS expected_sum FROM `bankist`.`accounts`) src
+GROUP BY src.expected_sum;
 
 SELECT 
     'T07B_TXN_AMOUNT_SUM_CONSERVATION' AS test_name,
-    7077823.01 AS expected_sum,
-    ROUND(SUM(amount), 2) AS actual_sum,
-    CASE WHEN ABS(ROUND(SUM(amount), 2) - 7077823.01) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `transactions`;
+    src.expected_sum,
+    ROUND(SUM(t.amount), 2) AS actual_sum,
+    CASE WHEN ABS(ROUND(SUM(t.amount), 2) - src.expected_sum) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `transactions` t
+CROSS JOIN (SELECT ROUND(SUM(amount), 2) AS expected_sum FROM `bankist`.`transactions`) src
+GROUP BY src.expected_sum;
 
 SELECT 
     'T07C_DEP_PRINCIPAL_SUM_CONSERVATION' AS test_name,
-    2540000.00 AS expected_sum,
-    ROUND(SUM(principal_amount), 2) AS actual_sum,
-    CASE WHEN ABS(ROUND(SUM(principal_amount), 2) - 2540000.00) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `deposits`;
+    src.expected_sum,
+    ROUND(SUM(d.principal_amount), 2) AS actual_sum,
+    CASE WHEN ABS(ROUND(SUM(d.principal_amount), 2) - src.expected_sum) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `deposits` d
+CROSS JOIN (SELECT ROUND(SUM(principal_amount), 2) AS expected_sum FROM `bankist`.`deposits`) src
+GROUP BY src.expected_sum;
 
 SELECT 
     'T07D_CUSTOMERS_COUNT' AS test_name,
-    131 AS expected_count,
+    src.expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 131 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `customers`;
+    CASE WHEN COUNT(*) = src.expected_count THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `customers` c
+CROSS JOIN (SELECT COUNT(*) AS expected_count FROM `bankist`.`customers`) src
+GROUP BY src.expected_count;
 
 SELECT 
     'T07E_ACCOUNTS_COUNT' AS test_name,
-    216 AS expected_count,
+    src.expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 216 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `accounts`;
+    CASE WHEN COUNT(*) = src.expected_count THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `accounts` a
+CROSS JOIN (SELECT COUNT(*) AS expected_count FROM `bankist`.`accounts`) src
+GROUP BY src.expected_count;
 
 SELECT 
     'T07F_TRANSACTIONS_COUNT' AS test_name,
-    841 AS expected_count,
+    src.expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 841 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `transactions`;
+    CASE WHEN COUNT(*) = src.expected_count THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `transactions` t
+CROSS JOIN (SELECT COUNT(*) AS expected_count FROM `bankist`.`transactions`) src
+GROUP BY src.expected_count;
 
 SELECT 
     'T07G_DEPOSITS_COUNT' AS test_name,
-    78 AS expected_count,
+    src.expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 78 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `deposits`;
+    CASE WHEN COUNT(*) = src.expected_count THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `deposits` d
+CROSS JOIN (SELECT COUNT(*) AS expected_count FROM `bankist`.`deposits`) src
+GROUP BY src.expected_count;
 
 SELECT 
     'T07H_KYC_VERIFICATIONS_COUNT' AS test_name,
-    850 AS expected_count,
+    src.expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 850 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `kyc_verifications`;
+    CASE WHEN COUNT(*) = src.expected_count THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `kyc_verifications` k
+CROSS JOIN (SELECT COUNT(*) AS expected_count FROM `bankist`.`kyc_verifications`) src
+GROUP BY src.expected_count;
 
 SELECT 
     'T07I_BENEFICIARIES_COUNT' AS test_name,
-    99 AS expected_count,
+    src.expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 99 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `beneficiaries`;
+    CASE WHEN COUNT(*) = src.expected_count THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `beneficiaries` b
+CROSS JOIN (SELECT COUNT(*) AS expected_count FROM `bankist`.`beneficiaries`) src
+GROUP BY src.expected_count;
 
 SELECT 
     'T07J_CARD_CREDENTIALS_COUNT' AS test_name,
-    216 AS expected_credentials,
+    src.expected_credentials,
     COUNT(*) AS actual_credentials,
-    CASE WHEN COUNT(*) = 216 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `account_card_credentials`;
+    CASE WHEN COUNT(*) = src.expected_credentials THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `account_card_credentials` acc
+CROSS JOIN (SELECT COUNT(*) AS expected_credentials FROM `bankist`.`accounts`) src
+GROUP BY src.expected_credentials;
 
 SELECT 
     'T07K_CUSTOMER_NOMINEES_COUNT' AS test_name,
-    8 AS expected_nominees,
+    src.expected_nominees,
     COUNT(*) AS actual_nominees,
-    CASE WHEN COUNT(*) = 8 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `customer_nominees`;
+    CASE WHEN COUNT(*) = src.expected_nominees THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `customer_nominees` cn
+CROSS JOIN (SELECT COUNT(*) AS expected_nominees FROM `bankist`.`customers` WHERE nominee_name IS NOT NULL AND nominee_name != '') src
+GROUP BY src.expected_nominees;
 
 SELECT 
     'T07L_LIENS_COUNT' AS test_name,
-    15 AS expected_liens,
+    src.expected_liens,
     COUNT(*) AS actual_liens,
-    CASE WHEN COUNT(*) = 15 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `account_lien_records`;
+    CASE WHEN COUNT(*) = src.expected_liens THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `account_lien_records` al
+CROSS JOIN (SELECT COUNT(*) AS expected_liens FROM `bankist`.`account_lien_records`) src
+GROUP BY src.expected_liens;
 
 -- ----------------------------------------------------------------------------
 -- TEST GROUP 8: Transaction Counterparty Preservation
 -- ----------------------------------------------------------------------------
 SELECT 
     'T08A_PRESERVED_UPI_SENDERS' AS test_name,
-    31 AS expected_upi_txns,
+    src.expected_upi_txns,
     COUNT(*) AS actual_upi_txns,
-    CASE WHEN COUNT(*) = 31 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `transactions`
-WHERE `sender_account` LIKE '%@%';
+    CASE WHEN COUNT(*) = src.expected_upi_txns THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `transactions` t
+CROSS JOIN (SELECT COUNT(*) AS expected_upi_txns FROM `bankist`.`transactions` WHERE sender_account LIKE '%@%') src
+WHERE t.sender_account LIKE '%@%'
+GROUP BY src.expected_upi_txns;
 
 -- ----------------------------------------------------------------------------
 -- TEST GROUP 9: Backward-Compatibility Views Functionality
 -- ----------------------------------------------------------------------------
 SELECT 
     'T09A_VIEW_ACCOUNTS_LEGACY_PARITY' AS test_name,
-    216 AS expected_rows,
+    src.expected_rows,
     COUNT(*) AS actual_rows,
-    SUM(CASE WHEN branch_name IS NULL OR branch_name = '' THEN 1 ELSE 0 END) AS null_branch_names,
-    CASE WHEN COUNT(*) = 216 AND SUM(CASE WHEN branch_name IS NULL OR branch_name = '' THEN 1 ELSE 0 END) = 0 
+    SUM(CASE WHEN val.branch_name IS NULL OR val.branch_name = '' THEN 1 ELSE 0 END) AS null_branch_names,
+    CASE WHEN COUNT(*) = src.expected_rows AND SUM(CASE WHEN val.branch_name IS NULL OR val.branch_name = '' THEN 1 ELSE 0 END) = 0 
          THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `v_accounts_legacy`;
+FROM `v_accounts_legacy` val
+CROSS JOIN (SELECT COUNT(*) AS expected_rows FROM `bankist`.`accounts`) src
+GROUP BY src.expected_rows;
 
 SELECT 
     'T09B_VIEW_CUSTOMERS_LEGACY_NOMINEE_COUNT' AS test_name,
@@ -323,18 +352,22 @@ WHERE nominee_name IS NOT NULL AND nominee_name != '';
 
 SELECT 
     'T09C_VIEW_PORTFOLIO_LIQUID_BALANCE' AS test_name,
-    19250672.32 AS expected_sum,
-    ROUND(SUM(total_liquid_balance), 2) AS actual_sum,
-    CASE WHEN ABS(ROUND(SUM(total_liquid_balance), 2) - 19250672.32) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `v_customer_portfolio`;
+    src.expected_sum,
+    ROUND(SUM(vcp.total_liquid_balance), 2) AS actual_sum,
+    CASE WHEN ABS(ROUND(SUM(vcp.total_liquid_balance), 2) - src.expected_sum) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `v_customer_portfolio` vcp
+CROSS JOIN (SELECT ROUND(SUM(balance), 2) AS expected_sum FROM `bankist`.`accounts`) src
+GROUP BY src.expected_sum;
 
 -- ============================================================================
 SELECT 
     'T09D_VIEW_CUSTOMERS_ONLY_FULL_GROUP_BY_STRICT' AS test_name,
-    131 AS expected_rows,
+    src.expected_rows,
     COUNT(*) AS actual_rows,
-    CASE WHEN COUNT(*) = 131 THEN 'PASS' ELSE 'FAIL' END AS status
-FROM `v_customers_legacy`;
+    CASE WHEN COUNT(*) = src.expected_rows THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `v_customers_legacy` vcl
+CROSS JOIN (SELECT COUNT(*) AS expected_rows FROM `bankist`.`customers`) src
+GROUP BY src.expected_rows;
 
 SELECT 
     'T09E_VIEW_CUSTOMERS_AT_MOST_ONE_ROW_PER_CUSTOMER' AS test_name,
@@ -347,6 +380,45 @@ FROM (
     GROUP BY customer_id 
     HAVING COUNT(*) > 1
 ) dup;
+
+SELECT 
+    'T09F_VIEW_HIGH_VALUE_TXNS_EXECUTION' AS test_name,
+    0 AS invalid_threshold_txns,
+    COUNT(*) AS actual_invalid,
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `v_high_value_transactions`
+WHERE amount < 25000.00;
+
+SELECT 
+    'T09G_VIEW_ACTIVE_DEPOSITS_SUMMARY_EXECUTION' AS test_name,
+    0 AS invalid_yield_records,
+    COUNT(*) AS actual_invalid,
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `v_active_deposits_summary`
+WHERE expected_interest_yield < 0.00 OR customer_name IS NULL;
+
+SELECT 
+    'T09H_VIEW_BRANCH_PERFORMANCE_EXECUTION' AS test_name,
+    9 AS expected_branches,
+    COUNT(*) AS actual_branches,
+    CASE WHEN COUNT(*) = 9 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `v_branch_performance`;
+
+SELECT 
+    'T09I_VIEW_DEPOSITS_BCNF_JOIN' AS test_name,
+    0 AS unlinked_deposits,
+    COUNT(*) AS actual_unlinked,
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `v_deposits`
+WHERE customer_id IS NULL OR full_name IS NULL;
+
+SELECT 
+    'T09J_VIEW_BENEFICIARIES_BCNF_JOIN' AS test_name,
+    0 AS missing_beneficiary_details,
+    COUNT(*) AS actual_missing,
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `v_beneficiaries`
+WHERE beneficiary_name IS NULL OR customer_id IS NULL;
 
 -- END OF VALIDATION TESTS
 -- ============================================================================

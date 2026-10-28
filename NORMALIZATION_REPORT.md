@@ -77,7 +77,11 @@
   - Stored repeating nominee columns `(nominee_name, nominee_relation, nominee_dob)` inside the customer master table.
   - Violated **1NF** (repeating groups and restriction to single nominee).
 - **After Normalization:**
-  - Decomposed into 1:N relation `customer_nominees(nominee_id PK, customer_id FK, nominee_name, relationship, dob, allocation_percentage)`.
+  - Decomposed into 1:N relation `customer_nominees(nominee_id PK, customer_id FK, nominee_name, relationship, dob, allocation_percentage, contact_phone, created_at)`.
+  - **Candidate Keys & Functional Dependencies Justification:**
+    - Primary Key: {nominee_id} is a minimal surrogate key ensuring that entity identity is decoupled from human names.
+    - Business Alternate Key: {customer_id, nominee_name} is enforced via unique constraint `uk_cust_nominee_name`. Under Bankist business rules, a single customer cannot register duplicate nominee records under the exact same name string. In situations where two beneficiaries share a family name (e.g., Senior and Junior), distinct suffixes are required.
+    - Because both {nominee_id} and {customer_id, nominee_name} are superkeys, every non-trivial functional dependency X -> Y has a determinant X that is a superkey. Therefore, `customer_nominees` strictly satisfies **BCNF**.
   - Preserved 100% backward compatibility via `v_customers_legacy` view using `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY allocation_percentage DESC)` window function without triggering MySQL Error 1055 (`ONLY_FULL_GROUP_BY`).
 
 ### E. Table: `accounts` & `branches`
