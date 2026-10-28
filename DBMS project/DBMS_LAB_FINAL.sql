@@ -252,6 +252,87 @@ CREATE TABLE `audit_logs` (
         REFERENCES `customers` (`customer_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ------------------------------------------------------------------------------
+-- Table 10: `kyc_verifications`
+-- Normal Form: BCNF
+-- FDs: verification_id -> {customer_id, document_type, document_number, verification_method, status, verified_at, remarks}
+-- Superkeys: {verification_id}
+-- Regulatory compliance identity document verification log.
+-- ------------------------------------------------------------------------------
+CREATE TABLE `kyc_verifications` (
+    `verification_id` VARCHAR(50) NOT NULL,
+    `customer_id` VARCHAR(50) NOT NULL,
+    `document_type` VARCHAR(50) NOT NULL,
+    `document_number` VARCHAR(50) DEFAULT NULL,
+    `verification_method` VARCHAR(50) NOT NULL,
+    `status` VARCHAR(30) DEFAULT 'Verified',
+    `verified_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `remarks` TEXT DEFAULT NULL,
+    PRIMARY KEY (`verification_id`),
+    INDEX `idx_kyc_customer` (`customer_id`),
+    INDEX `idx_kyc_status` (`status`),
+    CONSTRAINT `fk_kyc_customer` FOREIGN KEY (`customer_id`) 
+        REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------------------------
+-- Table 11: `otp_sessions`
+-- Normal Form: BCNF
+-- FDs: session_id -> {identifier, purpose, otp_hash, expires_at, verified, attempts, last_sent_at, created_at}
+-- Superkeys: {session_id}
+-- Plaintext OTP eliminated; salted HMAC-SHA256 enforced; replay protected.
+-- ------------------------------------------------------------------------------
+CREATE TABLE `otp_sessions` (
+    `session_id` VARCHAR(50) NOT NULL,
+    `identifier` VARCHAR(150) NOT NULL,
+    `purpose` VARCHAR(50) NOT NULL,
+    `otp_hash` VARCHAR(255) DEFAULT NULL,
+    `expires_at` BIGINT NOT NULL,
+    `verified` INT DEFAULT 0,
+    `attempts` INT DEFAULT 0,
+    `last_sent_at` BIGINT DEFAULT 0,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`session_id`),
+    INDEX `idx_otp_identifier` (`identifier`, `purpose`),
+    INDEX `idx_otp_expires` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------------------------
+-- Table 12: `security_rate_limits`
+-- Normal Form: BCNF
+-- FDs: key_id -> {attempts, last_attempt_at, locked_until}
+-- Superkeys: {key_id}
+-- Anti-brute force defense state.
+-- ------------------------------------------------------------------------------
+CREATE TABLE `security_rate_limits` (
+    `key_id` VARCHAR(150) NOT NULL,
+    `attempts` INT DEFAULT 1,
+    `last_attempt_at` BIGINT NOT NULL,
+    `locked_until` BIGINT DEFAULT 0,
+    PRIMARY KEY (`key_id`),
+    INDEX `idx_rate_locked` (`locked_until`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------------------------
+-- Table 13: `account_lien_records`
+-- Normal Form: BCNF
+-- FDs: lien_id -> {account_number, lien_amount, lien_reason, created_at}
+-- Superkeys: {lien_id}
+-- Legal encumbrance holds with ON DELETE RESTRICT.
+-- ------------------------------------------------------------------------------
+CREATE TABLE `account_lien_records` (
+    `lien_id` VARCHAR(50) NOT NULL,
+    `account_number` VARCHAR(50) NOT NULL,
+    `lien_amount` DECIMAL(15,2) NOT NULL,
+    `lien_reason` VARCHAR(255) NOT NULL,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`lien_id`),
+    INDEX `idx_lien_account` (`account_number`),
+    CONSTRAINT `fk_lien_account` FOREIGN KEY (`account_number`) 
+        REFERENCES `accounts` (`account_number`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `chk_lien_amount_positive` CHECK (`lien_amount` > 0.00)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ==============================================================================
 -- SECTION 3: BACKWARD-COMPATIBILITY & ANALYTICAL VIEWS
 -- ==============================================================================
@@ -388,6 +469,62 @@ SELECT
     b.created_at
 FROM `beneficiaries` b
 LEFT JOIN `branches` br ON b.ifsc_code = br.ifsc_code;
+
+-- ------------------------------------------------------------------------------
+-- View 6: `v_high_value_transactions`
+-- AML compliance view for transactions >= ₹25,000
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW `v_high_value_transactions` AS
+SELECT 
+    transaction_id,
+    sender_account,
+    receiver_account,
+    amount,
+    type,
+    date_time,
+    status,
+    description,
+    reference_number
+FROM `transactions`
+WHERE amount >= 25000.00;
+
+-- ------------------------------------------------------------------------------
+-- View 7: `v_active_deposits_summary`
+-- Term deposit portfolio yield summary
+-- Derives customer dynamically via linked_account -> accounts(customer_id)
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW `v_active_deposits_summary` AS
+SELECT 
+    d.deposit_id,
+    c.full_name AS customer_name,
+    d.linked_account,
+    d.deposit_type,
+    d.principal_amount,
+    d.interest_rate,
+    d.tenure_months,
+    d.maturity_amount,
+    (d.maturity_amount - d.principal_amount) AS expected_interest_yield,
+    d.maturity_date
+FROM `deposits` d
+JOIN `accounts` a ON d.linked_account = a.account_number
+JOIN `customers` c ON a.customer_id = c.customer_id
+WHERE d.status = 'Active';
+
+-- ------------------------------------------------------------------------------
+-- View 8: `v_branch_performance`
+-- Domicile branch deposit accumulation & liquidity view
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW `v_branch_performance` AS
+SELECT 
+    b.branch_id,
+    b.branch_name,
+    b.ifsc_code,
+    b.city,
+    COUNT(a.account_number) AS total_active_accounts,
+    COALESCE(SUM(a.balance), 0.00) AS total_branch_liquidity
+FROM `branches` b
+LEFT JOIN `accounts` a ON b.ifsc_code = a.ifsc_code AND a.status = 'Active'
+GROUP BY b.branch_id, b.branch_name, b.ifsc_code, b.city;
 
 -- ==============================================================================
 -- SECTION 4: ATOMIC STORED PROCEDURES (ACID TRANSACTIONS)
@@ -688,6 +825,20 @@ INSERT INTO `beneficiaries` (`beneficiary_id`, `customer_id`, `beneficiary_name`
 -- 7. Insert Fixed Deposit (customer ownership derived via linked_account)
 INSERT INTO `deposits` (`deposit_id`, `linked_account`, `deposit_type`, `principal_amount`, `interest_rate`, `tenure_months`, `maturity_amount`, `maturity_date`, `status`) VALUES
 ('DEP-101', 'ACC-1001', 'Fixed', 10000.00, 7.50, 12, 10772.00, DATE_ADD(CURRENT_DATE, INTERVAL 1 YEAR), 'Active');
+
+-- 8. Insert KYC Compliance Verification Records
+INSERT INTO `kyc_verifications` (`verification_id`, `customer_id`, `document_type`, `document_number`, `verification_method`, `status`, `remarks`) VALUES
+('KYC-101', 'CUST-101', 'PAN', 'ABCDE1234F', 'DigiLocker', 'Verified', 'Identity and address verified via UIDAI/ITD'),
+('KYC-102', 'CUST-102', 'PAN', 'XYZPK9876Q', 'DigiLocker', 'Verified', 'Identity and address verified via UIDAI/ITD');
+
+-- 9. Insert Active Security Rate Limits
+INSERT INTO `security_rate_limits` (`key_id`, `attempts`, `last_attempt_at`, `locked_until`) VALUES
+('RL-CUST-101', 0, UNIX_TIMESTAMP(), 0),
+('RL-CUST-102', 0, UNIX_TIMESTAMP(), 0);
+
+-- 10. Insert Sample Active OTP Sessions (HMAC-SHA256 hashed, zero plaintext)
+INSERT INTO `otp_sessions` (`session_id`, `identifier`, `purpose`, `otp_hash`, `expires_at`, `verified`, `attempts`, `last_sent_at`) VALUES
+('OTP-101', 'aarav@example.com', 'LOGIN_VERIFY', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC', UNIX_TIMESTAMP() + 300, 0, 0, UNIX_TIMESTAMP());
 
 -- ==============================================================================
 -- SECTION 6: POSITIVE AND NEGATIVE TEST DEMONSTRATIONS

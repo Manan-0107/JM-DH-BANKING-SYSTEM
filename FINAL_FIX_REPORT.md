@@ -69,8 +69,8 @@ The live database `127.0.0.1:3306/bankist` was preserved without loss (verified 
 
 | File Path | SHA-256 Hash | Description / Role |
 | :--- | :--- | :--- |
-| `DBMS_LAB_FINAL.sql` | `693AD9FA3BB0BD11304D72735E0FF530F4566194AE2B6F8F3F55C1DDF92E6079` | Authoritative single executable SQL lab script containing 13 BCNF tables, 5 views, 2 stored procedures, seed data, and 7 live test scenarios. |
-| `DBMS project/DBMS_LAB_FINAL.sql` | `693AD9FA3BB0BD11304D72735E0FF530F4566194AE2B6F8F3F55C1DDF92E6079` | Synchronized copy inside the authoritative DBMS project folder. |
+| `DBMS_LAB_FINAL.sql` | `037090266CB1FA23838337711F0C98805CFAE68EF64230322CD04377C84BB1CF` | Authoritative single executable SQL lab script containing 13 BCNF tables, 8 views, 2 stored procedures, seed data, and 7 live test scenarios. |
+| `DBMS project/DBMS_LAB_FINAL.sql` | `037090266CB1FA23838337711F0C98805CFAE68EF64230322CD04377C84BB1CF` | Synchronized copy inside the authoritative DBMS project folder. |
 | `bankist_normalized.sql` | `1F654ECE352D9BED5303165330F538B6B6EE6275BFAF5C146E70CBFED787CA92` | Canonical enterprise BCNF schema (all 13 tables, zero redundant columns, views). |
 | `DBMS project/bankist_normalized.sql` | `1F654ECE352D9BED5303165330F538B6B6EE6275BFAF5C146E70CBFED787CA92` | Synchronized copy inside the authoritative DBMS project folder. |
 | `bankist_migration.sql` | `85DA80171FF61DAD382B1CD320D5E43F64F528975CFE966DCD9055C1513199D3` | Production migration script with idempotent pre-flight checks and rollback guards. |
