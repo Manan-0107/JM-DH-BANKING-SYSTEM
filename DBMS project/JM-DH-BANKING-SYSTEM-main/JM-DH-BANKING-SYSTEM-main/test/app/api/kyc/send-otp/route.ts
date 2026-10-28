@@ -78,11 +78,21 @@ export async function POST(request: Request) {
         [cleanIdentifier, cleanPurpose, now - 24 * 60 * 60 * 1000]
       );
 
-      await conn.query(
-        `INSERT INTO otp_sessions (session_id, identifier, purpose, otp_code, otp_hash, expires_at, verified, attempts, last_sent_at)
-         VALUES (?, ?, ?, NULL, ?, ?, 0, 0, ?)`,
-        [sessionId, cleanIdentifier, cleanPurpose, otpHash, expiresAt, now]
-      );
+      // Insert into normalized otp_sessions (without plaintext otp_code)
+      try {
+        await conn.query(
+          `INSERT INTO otp_sessions (session_id, identifier, purpose, otp_hash, expires_at, verified, attempts, last_sent_at)
+           VALUES (?, ?, ?, ?, ?, 0, 0, ?)`,
+          [sessionId, cleanIdentifier, cleanPurpose, otpHash, expiresAt, now]
+        );
+      } catch (e: any) {
+        // Fallback for legacy tables with otp_code column
+        await conn.query(
+          `INSERT INTO otp_sessions (session_id, identifier, purpose, otp_code, otp_hash, expires_at, verified, attempts, last_sent_at)
+           VALUES (?, ?, ?, NULL, ?, ?, 0, 0, ?)`,
+          [sessionId, cleanIdentifier, cleanPurpose, otpHash, expiresAt, now]
+        );
+      }
     });
 
     let channelMessage = '';

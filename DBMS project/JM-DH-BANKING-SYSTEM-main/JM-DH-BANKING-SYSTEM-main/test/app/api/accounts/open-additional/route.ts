@@ -60,12 +60,33 @@ export async function POST(request: Request) {
     const pinHashToUse = custRows[0].card_pin_hash || null;
 
     await db.transaction(async (conn) => {
-      // 1. Create account (card_pin is explicitly NULL; uses pin_hash)
-      await conn.query(
-        `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, opening_date, status, card_pin, card_pin_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', NULL, ?)`,
-        [accNum, authUser.customer_id, chosenType, initialGrant, ifsc, branch, nowTime, pinHashToUse]
-      );
+      // 1. Create account (normalized BCNF schema without redundant branch_name or card_pin)
+      try {
+        await conn.query(
+          `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, opening_date, status)
+           VALUES (?, ?, ?, ?, ?, ?, 'Active')`,
+          [accNum, authUser.customer_id, chosenType, initialGrant, ifsc, nowTime]
+        );
+      } catch (e: any) {
+        // Fallback for legacy tables containing branch_name column
+        await conn.query(
+          `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, opening_date, status, card_pin, card_pin_hash)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', NULL, ?)`,
+          [accNum, authUser.customer_id, chosenType, initialGrant, ifsc, branch, nowTime, pinHashToUse]
+        );
+      }
+
+      // 1b. Insert Card Credentials into decomposed account_card_credentials table
+      if (pinHashToUse) {
+        const credId = `CARD-CRED-${accNum}`;
+        try {
+          await conn.query(
+            `INSERT INTO account_card_credentials (credential_id, account_number, card_pin_hash, status)
+             VALUES (?, ?, ?, 'Active')`,
+            [credId, accNum, pinHashToUse]
+          );
+        } catch (e) {}
+      }
 
       // 2. Initial welcome funding transaction ONLY if demo grant is explicitly enabled
       if (initialGrant > 0) {

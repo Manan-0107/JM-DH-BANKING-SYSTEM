@@ -31,12 +31,24 @@ export async function POST(request: Request) {
     // 2. Concurrency-Safe Verification Transaction
     const result = await db.transaction(async (conn) => {
       const lockClause = ' FOR UPDATE';
-      const [rows] = await conn.query(
-        `SELECT session_id, otp_code, otp_hash, expires_at, verified, attempts FROM otp_sessions
-         WHERE identifier = ? AND purpose = ?
-         ORDER BY expires_at DESC LIMIT 1${lockClause}`,
-        [cleanIdentifier, cleanPurpose]
-      );
+      let rows: any[] = [];
+      try {
+        const [res] = await conn.query(
+          `SELECT session_id, otp_hash, expires_at, verified, attempts FROM otp_sessions
+           WHERE identifier = ? AND purpose = ?
+           ORDER BY expires_at DESC LIMIT 1${lockClause}`,
+          [cleanIdentifier, cleanPurpose]
+        );
+        rows = res;
+      } catch (e: any) {
+        const [res] = await conn.query(
+          `SELECT session_id, otp_code, otp_hash, expires_at, verified, attempts FROM otp_sessions
+           WHERE identifier = ? AND purpose = ?
+           ORDER BY expires_at DESC LIMIT 1${lockClause}`,
+          [cleanIdentifier, cleanPurpose]
+        );
+        rows = res;
+      }
 
       if (!rows || rows.length === 0) {
         return { status: 400, error: 'No active OTP session found. Please request a new OTP.' };

@@ -13,7 +13,11 @@ export async function GET(request: Request) {
 
     const db = await getDb();
     const [deposits] = await db.query(
-      'SELECT * FROM deposits WHERE customer_id = ? ORDER BY created_at DESC',
+      `SELECT d.*, a.customer_id 
+       FROM deposits d 
+       JOIN accounts a ON d.linked_account = a.account_number 
+       WHERE a.customer_id = ? 
+       ORDER BY d.created_at DESC`,
       [authUser.customer_id]
     );
 
@@ -132,11 +136,21 @@ export async function POST(request: Request) {
         throw new Error('INSUFFICIENT_FUNDS');
       }
 
-      await conn.query(
-        `INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?)`,
-        [depositId, authUser.customer_id, source_account, finalType, amount, rate, tenure, maturityAmount, maturityDateStr, nowTime]
-      );
+      // Insert deposit into normalized BCNF schema without redundant customer_id
+      try {
+        await conn.query(
+          `INSERT INTO deposits (deposit_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?)`,
+          [depositId, source_account, finalType, amount, rate, tenure, maturityAmount, maturityDateStr, nowTime]
+        );
+      } catch (e: any) {
+        // Fallback for legacy tables containing customer_id column
+        await conn.query(
+          `INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?)`,
+          [depositId, authUser.customer_id, source_account, finalType, amount, rate, tenure, maturityAmount, maturityDateStr, nowTime]
+        );
+      }
 
       await conn.query(
         `INSERT INTO transactions (transaction_id, sender_account, receiver_account, amount, type, date_time, status, description, reference_number)
@@ -152,7 +166,17 @@ export async function POST(request: Request) {
       );
     });
 
-    const [newDeposit] = await db.query('SELECT * FROM deposits WHERE deposit_id = ?', [depositId]);
+    let [newDeposit] = await db.query(
+      `SELECT d.*, a.customer_id 
+       FROM deposits d 
+       JOIN accounts a ON d.linked_account = a.account_number 
+       WHERE d.deposit_id = ?`,
+      [depositId]
+    );
+    if (!newDeposit || (newDeposit as any[]).length === 0) {
+      const [rawDep] = await db.query('SELECT * FROM deposits WHERE deposit_id = ?', [depositId]);
+      newDeposit = rawDep;
+    }
     const [updatedAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [source_account]);
     const cleanAccount = sanitizeAccount(updatedAccount?.[0]);
 

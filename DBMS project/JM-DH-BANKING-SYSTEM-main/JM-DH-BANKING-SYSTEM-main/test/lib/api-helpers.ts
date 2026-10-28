@@ -236,7 +236,7 @@ export async function verifyCustomerCredentials(
   }
 
   const [custRows] = await db.query(
-    'SELECT password_hash, card_pin, card_pin_hash FROM customers WHERE customer_id = ?',
+    'SELECT customer_id, password_hash FROM customers WHERE customer_id = ?',
     [customerId]
   );
 
@@ -247,7 +247,33 @@ export async function verifyCustomerCredentials(
     };
   }
 
-  const isValidPin = verifyTransactionPin(pin, custRows[0]);
+  // Retrieve card PIN hash from normalized account_card_credentials relation
+  let cardPinHash: string | null = null;
+  try {
+    const [credRows] = await db.query(
+      `SELECT c.card_pin_hash 
+       FROM account_card_credentials c 
+       JOIN accounts a ON c.account_number = a.account_number 
+       WHERE a.customer_id = ? AND c.status = 'Active' 
+       LIMIT 1`,
+      [customerId]
+    );
+    if (credRows && (credRows as any[]).length > 0 && (credRows as any[])[0].card_pin_hash) {
+      cardPinHash = (credRows as any[])[0].card_pin_hash;
+    }
+  } catch (e) {}
+
+  if (!cardPinHash) {
+    try {
+      const [legacyRows] = await db.query(
+        'SELECT card_pin_hash FROM customers WHERE customer_id = ?',
+        [customerId]
+      );
+      cardPinHash = (legacyRows as any[])?.[0]?.card_pin_hash || null;
+    } catch (e) {}
+  }
+
+  const isValidPin = verifyTransactionPin(pin, { password_hash: custRows[0].password_hash, card_pin_hash: cardPinHash || undefined });
   if (!isValidPin) {
     const failedInfo = await recordFailedAttempt(db, rateLimitKey, pinRateLimitOptions);
     if (failedInfo.serviceUnavailable) {

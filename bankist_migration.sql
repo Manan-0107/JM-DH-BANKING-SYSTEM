@@ -232,12 +232,11 @@ DEALLOCATE PREPARE stmt;
 -- ----------------------------------------------------------------------------
 SET @sql_cards = CONCAT('
 INSERT INTO `account_card_credentials` (
-    `credential_id`, `account_number`, `customer_id`, `card_pin_hash`, `status`, `created_at`
+    `credential_id`, `account_number`, `card_pin_hash`, `status`, `created_at`
 )
 SELECT 
     CONCAT("CARD-CRED-", `account_number`) AS `credential_id`,
     `account_number`,
-    `customer_id`,
     `card_pin_hash`,
     "Active" AS `status`,
     COALESCE(`opening_date`, CURRENT_TIMESTAMP) AS `created_at`
@@ -291,15 +290,16 @@ DEALLOCATE PREPARE stmt;
 -- ----------------------------------------------------------------------------
 -- Step 7: Migrate `deposits`
 -- Preserves all principal, interest rates, tenures, maturities, and linked accounts
+-- Customer ownership derived losslessly through linked_account -> accounts(account_number)
 -- ----------------------------------------------------------------------------
 SET @sql_deposits = CONCAT('
 INSERT INTO `deposits` (
-    `deposit_id`, `customer_id`, `linked_account`, `deposit_type`, 
+    `deposit_id`, `linked_account`, `deposit_type`, 
     `principal_amount`, `interest_rate`, `tenure_months`, 
     `maturity_amount`, `maturity_date`, `status`, `created_at`
 )
 SELECT 
-    `deposit_id`, `customer_id`, `linked_account`, `deposit_type`, 
+    `deposit_id`, `linked_account`, `deposit_type`, 
     `principal_amount`, `interest_rate`, `tenure_months`, 
     `maturity_amount`, `maturity_date`, 
     COALESCE(`status`, "Active"), 
@@ -312,15 +312,16 @@ DEALLOCATE PREPARE stmt;
 
 -- ----------------------------------------------------------------------------
 -- Step 8: Migrate `beneficiaries`
+-- Bank and branch details resolved dynamically via ifsc_code -> branches(ifsc_code)
 -- ----------------------------------------------------------------------------
 SET @sql_beneficiaries = CONCAT('
 INSERT INTO `beneficiaries` (
     `beneficiary_id`, `customer_id`, `beneficiary_name`, `account_number`, 
-    `ifsc_code`, `bank_name`, `transfer_limit`, `cooling_until`, `created_at`, `is_active`
+    `ifsc_code`, `transfer_limit`, `cooling_until`, `created_at`, `is_active`
 )
 SELECT 
     `beneficiary_id`, `customer_id`, `beneficiary_name`, `account_number`, 
-    `ifsc_code`, `bank_name`, 
+    `ifsc_code`, 
     COALESCE(`transfer_limit`, 100000.00), 
     `cooling_until`, 
     COALESCE(`created_at`, CURRENT_TIMESTAMP), 

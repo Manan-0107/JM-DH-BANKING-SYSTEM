@@ -12,7 +12,11 @@ export async function GET(request: Request) {
 
     const db = await getDb();
     const [accounts] = await db.query(
-      'SELECT * FROM accounts WHERE customer_id = ? ORDER BY opening_date DESC',
+      `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city 
+       FROM accounts a 
+       LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code 
+       WHERE a.customer_id = ? 
+       ORDER BY a.opening_date DESC`,
       [authUser.customer_id]
     );
 
