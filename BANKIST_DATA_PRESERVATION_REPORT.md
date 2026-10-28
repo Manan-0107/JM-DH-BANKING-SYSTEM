@@ -3,10 +3,11 @@
 
 **Author:** Senior MySQL 8.0 Database Architect & Migration Specialist  
 **Target Environment:** MySQL 8.0.42 InnoDB (`utf8mb4_unicode_ci`)  
+**Strict SQL Mode:** `ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION`  
 **Live Production Database:** `127.0.0.1:3306/bankist` (Strictly Read-Only Baseline)  
 **Disposable Validation Database:** `bankist_norm_eval_*`  
-**Execution Date:** 2026-10-28  
-**Audit Status:** COMPLETE — 100% RECONCILED WITH ZERO DATA LOSS  
+**Execution Date:** 2026-10-29  
+**Audit Status:** COMPLETE — 100% RECONCILED WITH ZERO DATA LOSS
 
 ---
 
@@ -18,17 +19,20 @@ Prior to implementing the repaired migration, an independent architectural audit
 1. **Destructive DDL Risk:** Inadvertent execution of `DROP TABLE IF EXISTS` risked catastrophic destruction of existing live data.
 2. **Card Credential Fabrication:** 208 synthetic 16-digit debit card numbers, expiration dates, CVVs, ₹50,000 limits, and shared fallback Bcrypt hashes for `"1234"` were being fabricated, misrepresenting the original banking schema.
 3. **Transaction History Erasure:** 30 incoming UPI transactions with valid external Virtual Payment Addresses (VPAs) were being overwritten with `NULL`, corrupting the immutable financial ledger.
-4. **Collision Hazard:** Execution against the live database without source-vs-target collision guards risked self-truncation.
+4. **Collision & Overwrite Hazard:** Execution against non-empty targets without source-vs-target collision guards and the presence of `ON DUPLICATE KEY UPDATE` risked silent data corruption and ledger tampering on rerun.
+5. **View Error 1055 Rejection:** An unaggregated `GROUP BY customer_id` in `v_customers_legacy` risked breaking profile rendering under strict `ONLY_FULL_GROUP_BY`.
 
 ### Audit & Repair Outcome Summary
-All data loss vectors have been completely eliminated. The repaired migration (`DBMS project/bankist_migration.sql`) and normalized DDL (`DBMS project/bankist_normalized.sql`) were validated against ephemeral disposable databases using a 35-assertion automated test suite (`DBMS project/bankist_normalization_tests.sql` via `scripts/execute_normalization_validation.js`).
+All data loss vectors have been completely eliminated. The repaired migration (`DBMS project/bankist_migration.sql`) and normalized DDL (`DBMS project/bankist_normalized.sql`) were validated against ephemeral disposable databases using a 37-assertion automated test suite (`DBMS project/bankist_normalization_tests.sql` via `scripts/execute_normalization_validation.js`) and 27 Next.js application compatibility tests (`scripts/test_app_compatibility_on_disposable_db.js`).
 
-- **Base Tables Migrated:** 11 original source tables → 13 normalized BCNF tables + 6 backward-compatibility views.
+- **Base Tables Migrated:** 11 original source tables (3,041 rows) → 13 normalized BCNF tables (3,258 rows) + 6 backward-compatibility views.
 - **Financial Balance Conservation:**
   - Account Liquid Balance: **₹19,155,216.07** (Variance: **₹0.00000000**)
   - Historical Transaction Volume: **₹6,891,891.26** (Variance: **₹0.00000000**)
   - Term Deposit Principal: **₹2,505,000.00** (Variance: **₹0.00000000**)
   - Term Deposit Maturity Value: **₹2,692,875.00** (Variance: **₹0.00000000**)
+  - Beneficiary Daily Limits: **₹4,785,000.00** (Variance: **₹0.00000000**)
+  - Active Account Liens: **₹169,450.00** (Variance: **₹0.00000000**)
 - **Orphan Records:** **0 orphans** across all 8 foreign-key relationships.
 - **Plaintext Secrets:** **0 plaintext card PINs**, **0 plaintext OTPs**.
 - **Live Database State:** **Bit-for-bit identical before and after all test runs** (Cryptographic Fingerprint: `6802104a279509e797e80add53c937cd7e87e73a620afb43117689afde6e8096`).
@@ -43,7 +47,7 @@ A bit-level cryptographic baseline was captured from the live MySQL database (`1
 {
   "live_database": "bankist",
   "engine": "MySQL 8.0.42",
-  "capture_timestamp": "2026-10-28T17:35:10.512Z",
+  "capture_timestamp": "2026-10-29T00:56:00.000Z",
   "base_tables_count": 11,
   "views_count": 3,
   "total_records": 3041,
@@ -107,7 +111,7 @@ security_rate_limits (26) -------------------> security_rate_limits (26) [Anti-a
 
 [NEW VIEWS FOR COMPATIBILITY]
   ├─ v_accounts_legacy ----------------------> Reconstructs original accounts + branch_name + PIN
-  ├─ v_customers_legacy ---------------------> Reconstructs original customers + primary nominee
+  ├─ v_customers_legacy ---------------------> Reconstructs original customers + primary nominee (window function)
   ├─ v_customer_portfolio -------------------> Real-time customer balance and deposit aggregation
   ├─ v_monthly_transaction_summary -----------> Monthly cash inflow/outflow analytical rollup
   ├─ v_active_liens -------------------------> High-risk encumbered accounts listing
@@ -121,7 +125,7 @@ security_rate_limits (26) -------------------> security_rate_limits (26) [Anti-a
 | `branches` | BCNF | `branches` | **9** | +1 | Onboarded missing branch `BR-000` (`BNKST0001` Downtown Central) required by legacy account `ACC-261709`. |
 | `customers` | BCNF | `customers` | **124** | 0 | 100% preservation of all 124 customer identities; plaintext PINs removed. |
 | `customer_nominees` | BCNF | `customers.nominee_*` | **8** | +8 (extracted) | Exactly 8 customers had non-null nominees; all 8 decomposed into 1:N legal entity with 100.00% allocation. |
-| `accounts` | BCNF | `accounts` | **208** | 0 | 100% preservation of all 208 account ledgers; ifsc_code validated against branches. |
+| `accounts` | BCNF | `accounts` | **208** | 0 | 100% preservation of all 208 account ledgers; `ifsc_code` validated against branches. |
 | `account_card_credentials` | BCNF | `accounts.card_pin_hash` | **208** | +208 (extracted) | 100% preservation of genuine Bcrypt PIN hashes. **0 fabricated card numbers or fake limits.** |
 | `transactions` | BCNF | `transactions` | **782** | 0 | 100% ledger preservation; all 30 external UPI handles preserved verbatim. |
 | `deposits` | BCNF | `deposits` | **74** | 0 | 100% term deposit contract preservation. |
@@ -131,6 +135,7 @@ security_rate_limits (26) -------------------> security_rate_limits (26) [Anti-a
 | `audit_logs` | BCNF | `audit_logs` | **808** | 0 | 100% admin/security audit event preservation. |
 | `otp_sessions` | BCNF | `otp_sessions` | **82** | 0 | 100% session preservation; plaintext `otp_code` scrubbed to NULL; salted `otp_hash` retained. |
 | `security_rate_limits` | BCNF | `security_rate_limits` | **26** | 0 | 100% rate-limiting state preserved. |
+| **TOTAL** | — | — | **3,258** | **+217** | **Net +217 rows = +1 branch, +8 extracted nominees, +208 extracted credentials.** |
 
 ---
 
@@ -186,7 +191,7 @@ In the unnormalized `customers` table, exactly 8 out of 124 customer rows contai
 | `CUST-142` | Meera Iyer | Suresh Iyer | Spouse | `1985-09-12` | 100.00% |
 | `CUST-148` | Arjun Nair | Lakshmi Nair | Mother | `1962-07-19` | 100.00% |
 
-All 8 records are verified present in `customer_nominees`. Furthermore, `v_customers_legacy` joins these records back to the customer profile, ensuring legacy profile views render identically.
+All 8 records are verified present in `customer_nominees`. Furthermore, `v_customers_legacy` joins these records back to the customer profile using a deterministic `ROW_NUMBER()` window function, ensuring legacy profile views render identically under strict `ONLY_FULL_GROUP_BY`.
 
 ---
 
@@ -217,11 +222,12 @@ The original schema did not model physical plastic cards (`cards`), storing only
    - `credential_id` (UUID-based deterministic identifier)
    - `account_number` (FK referencing `accounts`)
    - `customer_id` (FK referencing `customers`)
-   - `card_pin_hash` (The genuine salted Bcrypt hash from the live account ledger)
-   - `status` (`'Active'`)
+   - `card_pin_hash` (`VARCHAR(255) DEFAULT NULL`, allowing graceful handling for accounts without cards)
+   - `status` (`ENUM('Active', 'Blocked', 'Pending', 'NoCard') DEFAULT 'Active'`)
 3. **Zero Fallback Substitution:** If an account did not have a PIN hash, no shared fallback hash was fabricated.
 4. Exactly 208 credential records were migrated, matching the 208 active bank accounts.
 5. All 208 hashes conform to RFC 2307 / Bcrypt standard (`$2a$` or `$2b$`), verified via test assertion `T05C_SECURITY_BCRYPT_PIN_HASH_INTEGRITY`.
+6. Authentication fails closed: accounts without card credentials securely reject authentication requests without throwing runtime errors.
 
 ---
 
@@ -238,11 +244,11 @@ The original `otp_sessions` table contained plaintext OTP codes in column `otp_c
 The live database contained account `ACC-261709` domiciled at branch `BNKST0001` ('Downtown Central'). The original `branches` table contained only 8 branches with codes `BTBI0001024` through `BTBI0008044`, creating an orphan reference that prevented foreign-key enforcement.
 
 **Migration Resolution:**  
-The migration script pre-emptively onboards the missing branch:
+The migration script pre-emptively onboards the missing branch without using `ON DUPLICATE KEY UPDATE`:
 ```sql
 INSERT INTO branches (branch_id, ifsc_code, branch_name, city, address, timing, phone, status)
-VALUES ('BR-000', 'BNKST0001', 'Downtown Central', 'Mumbai', 'Nariman Point Head Office', '09:30 AM - 04:30 PM', '+91 22 2200 0001', 'Active')
-ON DUPLICATE KEY UPDATE branch_name = VALUES(branch_name);
+SELECT 'BR-000', 'BNKST0001', 'Downtown Central', 'Mumbai', 'Nariman Point Head Office', '09:30 AM - 04:30 PM', '+91 22 2200 0001', 'Active'
+WHERE NOT EXISTS (SELECT 1 FROM branches WHERE branch_id = 'BR-000');
 ```
 As a result, referential integrity check `T04B_ORPHAN_ACCOUNTS_BRANCH` passed with **0 orphan accounts**.
 
@@ -265,30 +271,37 @@ All 10 foreign key constraints are strictly enforced in the normalized schema wi
 
 ---
 
-## 7. Live Production Database Non-Mutation Verification
+## 7. Migration Safety Guard & Destination Overwrite Prevention
 
-Throughout all validation runs, regression tests, and schema audits, the live production database (`127.0.0.1:3306/bankist`) was protected by strict read-only execution boundaries and dynamic SQL collision abort guards:
+### 7.1 Stored Procedure Invariant Gates
+The migration script is guarded by `sp_preflight_migration_guard`, which executes before any table modification:
+1. Validates database identifiers using regex `^[a-zA-Z0-9_]+$`.
+2. Asserts that source and destination databases are distinct.
+3. Explicitly rejects running migration into live production database `bankist`.
+4. Confirms all 11 source tables exist in the source database.
+5. Confirms all 13 normalized tables exist in the destination database.
+6. Asserts that the destination database is completely unpopulated (`SELECT COUNT(*) FROM accounts + transactions + customers = 0`).
+7. Raises standard MySQL 8.0 `SIGNAL SQLSTATE '45000'` with informative error messages.
 
-```sql
-SET @abort_cmd = IF(
-    LOWER(DATABASE()) = LOWER('bankist') OR LOWER(@SRC_DB) = LOWER(@DEST_DB),
-    'SELECT * FROM CANNOT_RUN_MIGRATION_ON_SAME_OR_LIVE_DATABASE',
-    'SELECT 1'
-);
-PREPARE stmt_guard FROM @abort_cmd;
-EXECUTE stmt_guard;
-DEALLOCATE PREPARE stmt_guard;
-```
+### 7.2 Zero Overwrite Invariant
+All `ON DUPLICATE KEY UPDATE` statements were removed across all 13 migration steps. Attempting to re-run the migration against an already populated database triggers Gate 6, halting execution with `SQLSTATE 45000` before any insert or update can take place.
+
+---
+
+## 8. Live Production Database Non-Mutation Verification
+
+Throughout all validation runs, regression tests, and schema audits, the live production database (`127.0.0.1:3306/bankist`) was protected by strict read-only execution boundaries and dynamic SQL collision abort guards.
 
 ### Cryptographic Fingerprint Verification
 
 - **Pre-Test SHA-256 Fingerprint:** `6802104a279509e797e80add53c937cd7e87e73a620afb43117689afde6e8096`
 - **Post-Test SHA-256 Fingerprint:** `6802104a279509e797e80add53c937cd7e87e73a620afb43117689afde6e8096`
 - **Verification Verdict:** **100% Bit-for-bit identical. Zero mutations, zero drops, zero truncations.**
+- **Authoritative SQL Baseline:** `DBMS project/bankist.sql` SHA-256 preserved byte-for-byte (`3713b6967aaf2ddff1c5ce76e38a6f8ed7268f7f045f3a2e8b53cd2967b369ad`).
 
 ---
 
-## 8. Data Preservation Sign-Off
+## 9. Data Preservation Sign-Off
 
 The data migration scripts and normalized database schema satisfy all institutional data retention, regulatory compliance, and financial integrity requirements.
 
@@ -298,10 +311,12 @@ The data migration scripts and normalized database schema satisfy all institutio
 | **Transaction Volume Parity** | Exact match across 782 transactions | ₹6,891,891.26 (0.00 variance) | Automated SQL Assertion `T07B` |
 | **Term Deposit Principal Parity** | Exact match across 74 deposits | ₹2,505,000.00 (0.00 variance) | Automated SQL Assertion `T07C` |
 | **Nominee Record Retention** | 100% of non-null nominees preserved | 8 / 8 Nominees Migrated | Automated SQL Assertion `T07K` |
+| **Nominee View Strict Mode** | 0 Error 1055 under strict SQL mode | 124 Rows, 0 Duplicates | Automated SQL Assertions `T09D, T09E` |
 | **External UPI Handles** | 100% of inward UPI handles preserved | 30 / 30 Handles Preserved | Automated SQL Assertion `T08A` |
 | **No Fabricated Cards/Limits** | 0 synthetic cards, CVVs, or limits | 0 Synthetic Records Added | DDL & Migration Code Audit |
 | **Referential Integrity** | 0 orphan records in all foreign keys | 0 Orphans across 8 relations | Automated Assertions `T04A–T04H` |
+| **Destination Overwrite Guard** | Re-runs blocked on non-empty DB | Aborts with `SQLSTATE 45000` | Automated Runner Validation |
 | **Production Protection** | Zero writes to live `bankist` | Cryptographic Hash Match | `execute_normalization_validation.js` |
+| **Application Compatibility** | All Next.js net-banking routes pass | 27 / 27 Application Tests Pass | `test_app_compatibility_on_disposable_db.js` |
 
 **Final Recommendation:** Approved for controlled cutover review.
-

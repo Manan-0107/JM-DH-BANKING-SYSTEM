@@ -325,5 +325,24 @@ SELECT
 FROM `v_customer_portfolio`;
 
 -- ============================================================================
+SELECT 
+    'T09D_VIEW_CUSTOMERS_ONLY_FULL_GROUP_BY_STRICT' AS test_name,
+    124 AS expected_rows,
+    COUNT(*) AS actual_rows,
+    CASE WHEN COUNT(*) = 124 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM `v_customers_legacy`;
+
+SELECT 
+    'T09E_VIEW_CUSTOMERS_AT_MOST_ONE_ROW_PER_CUSTOMER' AS test_name,
+    0 AS duplicate_customer_rows,
+    COUNT(*) AS actual_duplicates,
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS status
+FROM (
+    SELECT customer_id, COUNT(*) as cnt 
+    FROM `v_customers_legacy` 
+    GROUP BY customer_id 
+    HAVING COUNT(*) > 1
+) dup;
+
 -- END OF VALIDATION TESTS
 -- ============================================================================

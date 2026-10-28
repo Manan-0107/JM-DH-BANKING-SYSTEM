@@ -140,8 +140,8 @@ CREATE TABLE IF NOT EXISTS `account_card_credentials` (
   `credential_id` VARCHAR(50) NOT NULL,
   `account_number` VARCHAR(50) NOT NULL,
   `customer_id` VARCHAR(50) NOT NULL,
-  `card_pin_hash` VARCHAR(255) NOT NULL,
-  `status` ENUM('Active', 'Blocked', 'Pending') DEFAULT 'Active',
+  `card_pin_hash` VARCHAR(255) DEFAULT NULL,
+  `status` ENUM('Active', 'Blocked', 'Pending', 'NoCard') DEFAULT 'Active',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`credential_id`),
@@ -387,10 +387,22 @@ SELECT
     c.card_pin_hash
 FROM `customers` c
 LEFT JOIN (
-    SELECT customer_id, nominee_name, relationship, dob
+    SELECT 
+        customer_id,
+        nominee_name,
+        relationship,
+        dob,
+        ROW_NUMBER() OVER (
+            PARTITION BY customer_id 
+            ORDER BY 
+                CASE 
+                    WHEN allocation_percentage IS NOT NULL THEN allocation_percentage 
+                    ELSE 0 
+                END DESC,
+                nominee_id ASC
+        ) AS rn
     FROM `customer_nominees`
-    GROUP BY customer_id
-) n ON c.customer_id = n.customer_id;
+) n ON c.customer_id = n.customer_id AND n.rn = 1;
 
 -- ----------------------------------------------------------------------------
 -- View: `v_customer_portfolio`

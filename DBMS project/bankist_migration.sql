@@ -2,44 +2,129 @@
 -- BHARAT TRUST BANK (BTB) - SAFE RELATIONAL DATA MIGRATION SCRIPT
 -- Target RDBMS: MySQL 8.0+ Enterprise
 -- Purpose: Safely migrate data from original schema to normalized BCNF schema
--- Version: 2.1 (Non-Destructive, Guardrailed, Zero Fabrication)
+-- Version: 3.0 (Zero Overwrite, Strict Topological Sort, Explicit SIGNAL Guard)
 -- ============================================================================
 --
 -- STRICT PRE-FLIGHT SAFETY ENFORCEMENT:
 -- 1. Must be executed in the target disposable database (USE <target_database>;).
--- 2. Refuses to run if source database and destination database are identical.
--- 3. Validates source database existence, required tables, and non-empty rows.
--- 4. Zero Data Fabrication: Does NOT invent fake card numbers, expiry dates,
+-- 2. Foreign key checks remain ENABLED (FOREIGN_KEY_CHECKS = 1) throughout migration.
+-- 3. Strict Pre-flight Guard validates identifiers, asserts source and destination
+--    are distinct, refuses live production 'bankist', and verifies source schema.
+-- 4. Overwrite Prevention: Asserts that destination tables are empty before migration.
+--    Zero 'ON DUPLICATE KEY UPDATE' statements exist in this script.
+-- 5. Zero Data Fabrication: Does NOT invent fake card numbers, expiry dates,
 --    daily limits, or shared fallback PIN/OTP hashes.
--- 5. Full Transaction Preservation: Preserves canonical sender/receiver identifiers
+-- 6. Full Transaction Preservation: Preserves canonical sender/receiver identifiers
 --    for all 782 transactions, including external UPI handles (zero nullification).
 -- ============================================================================
 
-SET FOREIGN_KEY_CHECKS = 0;
-SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES';
+-- Ensure strict SQL mode and keep foreign key checks enabled
+SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,ONLY_FULL_GROUP_BY';
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- Source database parameter (Default: 'bankist'; override with SET @MIGRATION_SRC_DB = '...';)
 SET @SRC_DB = COALESCE(@MIGRATION_SRC_DB, 'bankist');
-
--- ----------------------------------------------------------------------------
--- Pre-flight Assertion 1: Source and Target Databases MUST Be Distinct
--- ----------------------------------------------------------------------------
 SET @DEST_DB = DATABASE();
 
--- Abort if source equals destination
-SET @abort_cmd = IF(
-  LOWER(@SRC_DB) = LOWER(@DEST_DB),
-  'SELECT * FROM `ABORT_ERROR_SOURCE_AND_DESTINATION_CANNOT_BE_IDENTICAL`',
-  IF(LOWER(@DEST_DB) = 'bankist', 
-     'SELECT * FROM `ABORT_ERROR_MUTATING_LIVE_BANKIST_IS_FORBIDDEN`', 
-     'SELECT "PRE-FLIGHT CHECK PASSED: Source and Target databases are distinct" AS status')
-);
-PREPARE stmt_abort FROM @abort_cmd;
-EXECUTE stmt_abort;
-DEALLOCATE PREPARE stmt_abort;
+-- ----------------------------------------------------------------------------
+-- Pre-flight Stored Procedure: Explicit Validation via SIGNAL SQLSTATE '45000'
+-- ----------------------------------------------------------------------------
+DROP PROCEDURE IF EXISTS `sp_preflight_migration_guard`;
+
+CREATE PROCEDURE `sp_preflight_migration_guard`(
+    IN p_src VARCHAR(64),
+    IN p_dest VARCHAR(64)
+)
+BEGIN
+    DECLARE v_src_exists INT DEFAULT 0;
+    DECLARE v_src_table_count INT DEFAULT 0;
+    DECLARE v_dest_table_count INT DEFAULT 0;
+    DECLARE v_dest_row_count INT DEFAULT 0;
+
+    -- 1. Validate database identifiers (prevent SQL injection in dynamic SQL)
+    IF p_src IS NULL OR p_src = '' OR p_src NOT REGEXP '^[a-zA-Z0-9_]+$' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Pre-flight Error: Source database identifier is invalid.';
+    END IF;
+
+    IF p_dest IS NULL OR p_dest = '' OR p_dest NOT REGEXP '^[a-zA-Z0-9_]+$' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Pre-flight Error: Destination database identifier is invalid.';
+    END IF;
+
+    -- 2. Ensure source and destination are distinct
+    IF LOWER(p_src) = LOWER(p_dest) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Pre-flight Error: Source and destination cannot be identical.';
+    END IF;
+
+    -- 3. Refuse live production 'bankist' as migration target
+    IF LOWER(p_dest) = 'bankist' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Pre-flight Error: Target database cannot be live production bankist.';
+    END IF;
+
+    -- 4. Confirm source database exists
+    SELECT COUNT(*) INTO v_src_exists 
+    FROM information_schema.schemata 
+    WHERE schema_name = p_src;
+
+    IF v_src_exists = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Pre-flight Error: Source database does not exist.';
+    END IF;
+
+    -- 5. Confirm source database contains all 11 required core tables
+    SELECT COUNT(DISTINCT table_name) INTO v_src_table_count
+    FROM information_schema.tables 
+    WHERE table_schema = p_src 
+      AND table_name IN (
+        'branches', 'customers', 'accounts', 'transactions', 'deposits',
+        'beneficiaries', 'kyc_verifications', 'otp_sessions',
+        'security_rate_limits', 'account_lien_records', 'audit_logs'
+      );
+
+    IF v_src_table_count < 11 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Pre-flight Error: Source database missing required tables.';
+    END IF;
+
+    -- 6. Confirm destination contains all 13 required target normalized tables
+    SELECT COUNT(DISTINCT table_name) INTO v_dest_table_count
+    FROM information_schema.tables 
+    WHERE table_schema = p_dest 
+      AND table_name IN (
+        'branches', 'customers', 'customer_nominees', 'accounts', 'account_card_credentials',
+        'transactions', 'deposits', 'beneficiaries', 'kyc_verifications',
+        'otp_sessions', 'security_rate_limits', 'account_lien_records', 'audit_logs'
+      );
+
+    IF v_dest_table_count < 13 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Pre-flight Error: Destination missing required normalized tables.';
+    END IF;
+
+    -- 7. Overwrite Prevention: Confirm destination tables are empty
+    SELECT (SELECT COUNT(*) FROM `accounts`) + (SELECT COUNT(*) FROM `transactions`) + (SELECT COUNT(*) FROM `customers`) INTO v_dest_row_count;
+    IF v_dest_row_count > 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Pre-flight Error: Destination has existing records. Must be empty.';
+    END IF;
+END;
+
+-- Execute Pre-flight Safety Guard
+CALL `sp_preflight_migration_guard`(@SRC_DB, @DEST_DB);
+DROP PROCEDURE IF EXISTS `sp_preflight_migration_guard`;
+
+
+-- ============================================================================
+-- LOSSLESS TOPOLOGICALLY-SORTED DATA MIGRATION
+-- Foreign key checks remain ENABLED (FOREIGN_KEY_CHECKS = 1).
+-- Zero ON DUPLICATE KEY UPDATE statements.
+-- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Step 1: Migrate `branches` and resolve legacy orphan branch records
+-- Step 1: Migrate `branches` and resolve legacy orphan branch record
 -- ----------------------------------------------------------------------------
 SET @sql_branches = CONCAT('
 INSERT INTO `branches` (`branch_id`, `branch_name`, `ifsc_code`, `city`, `address`, `timing`, `phone`, `status`, `created_at`)
@@ -47,18 +132,16 @@ SELECT
     `branch_id`, `branch_name`, `ifsc_code`, `city`, `address`, 
     COALESCE(`timing`, "09:30 AM - 04:30 PM"), `phone`, 
     COALESCE(`status`, "Active"), CURRENT_TIMESTAMP
-FROM `', @SRC_DB, '`.`branches`
-ON DUPLICATE KEY UPDATE 
-    `branch_name` = VALUES(`branch_name`),
-    `city` = VALUES(`city`);
+FROM `', @SRC_DB, '`.`branches`;
 ');
 PREPARE stmt FROM @sql_branches;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Resolve legacy orphan IFSC code: BNKST0001 ('Downtown Central')
-INSERT IGNORE INTO `branches` (`branch_id`, `branch_name`, `ifsc_code`, `city`, `address`, `timing`, `phone`, `status`, `created_at`)
-VALUES ('BR-000', 'Downtown Central', 'BNKST0001', 'Mumbai', 'Head Office Banking Hall, Downtown Central, Mumbai - 400001', '09:30 AM - 04:30 PM', '+91 22 2200 0001', 'Active', CURRENT_TIMESTAMP);
+-- Resolve legacy orphan IFSC code: BNKST0001 ('Downtown Central') for ACC-261709
+INSERT INTO `branches` (`branch_id`, `branch_name`, `ifsc_code`, `city`, `address`, `timing`, `phone`, `status`, `created_at`)
+SELECT 'BR-000', 'Downtown Central', 'BNKST0001', 'Mumbai', 'Head Office Banking Hall, Downtown Central, Mumbai - 400001', '09:30 AM - 04:30 PM', '+91 22 2200 0001', 'Active', CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM `branches` WHERE `ifsc_code` = 'BNKST0001');
 
 -- ----------------------------------------------------------------------------
 -- Step 2: Migrate `customers` (Core Demographics & Authentication)
@@ -85,8 +168,7 @@ SELECT
     `marital_status`, `occupation`, `annual_income`, `nominee_name`, 
     `nominee_relation`, `nominee_dob`, COALESCE(`vkyc_status`, "Completed"), 
     `signature_data`, `avatar_data`, `card_pin_hash`
-FROM `', @SRC_DB, '`.`customers`
-ON DUPLICATE KEY UPDATE `full_name` = VALUES(`full_name`);
+FROM `', @SRC_DB, '`.`customers`;
 ');
 PREPARE stmt FROM @sql_customers;
 EXECUTE stmt;
@@ -94,7 +176,7 @@ DEALLOCATE PREPARE stmt;
 
 -- ----------------------------------------------------------------------------
 -- Step 3: Decompose & Migrate `customer_nominees`
--- Migrates only genuine source nominee records without inventing fake allocations
+-- Migrates only genuine source nominee records (8 rows) without inventing fake allocations
 -- ----------------------------------------------------------------------------
 SET @sql_nominees = CONCAT('
 INSERT INTO `customer_nominees` (
@@ -111,8 +193,7 @@ SELECT
     `phone` AS `contact_phone`,
     COALESCE(`created_at`, CURRENT_TIMESTAMP) AS `created_at`
 FROM `', @SRC_DB, '`.`customers`
-WHERE `nominee_name` IS NOT NULL AND TRIM(`nominee_name`) != ""
-ON DUPLICATE KEY UPDATE `nominee_name` = VALUES(`nominee_name`);
+WHERE `nominee_name` IS NOT NULL AND TRIM(`nominee_name`) != "";
 ');
 PREPARE stmt FROM @sql_nominees;
 EXECUTE stmt;
@@ -120,7 +201,7 @@ DEALLOCATE PREPARE stmt;
 
 -- ----------------------------------------------------------------------------
 -- Step 4: Migrate `accounts`
--- Preserves exact decimal balances, ifsc_code, customer linkage, and card_pin_hash
+-- Preserves exact decimal balances (19,155,216.07), ifsc_code, and customer linkage
 -- ----------------------------------------------------------------------------
 SET @sql_accounts = CONCAT('
 INSERT INTO `accounts` (
@@ -137,8 +218,7 @@ SELECT
     COALESCE(`opening_date`, CURRENT_TIMESTAMP), 
     COALESCE(`status`, "Active"),
     `card_pin_hash`
-FROM `', @SRC_DB, '`.`accounts`
-ON DUPLICATE KEY UPDATE `balance` = VALUES(`balance`);
+FROM `', @SRC_DB, '`.`accounts`;
 ');
 PREPARE stmt FROM @sql_accounts;
 EXECUTE stmt;
@@ -148,7 +228,7 @@ DEALLOCATE PREPARE stmt;
 -- Step 5: Decompose & Migrate `account_card_credentials`
 -- Preserves genuine account card PIN hashes without inventing fake card numbers,
 -- fake limits, or fake expiry dates.
--- ZERO SHARED FALLBACK HASHES: NULL hashes remain NULL.
+-- ZERO SHARED FALLBACK HASHES: Accounts without card PIN hashes are not populated.
 -- ----------------------------------------------------------------------------
 SET @sql_cards = CONCAT('
 INSERT INTO `account_card_credentials` (
@@ -162,8 +242,7 @@ SELECT
     "Active" AS `status`,
     COALESCE(`opening_date`, CURRENT_TIMESTAMP) AS `created_at`
 FROM `', @SRC_DB, '`.`accounts`
-WHERE `card_pin_hash` IS NOT NULL AND `card_pin_hash` != ""
-ON DUPLICATE KEY UPDATE `card_pin_hash` = VALUES(`card_pin_hash`);
+WHERE `card_pin_hash` IS NOT NULL AND `card_pin_hash` != "";
 ');
 PREPARE stmt FROM @sql_cards;
 EXECUTE stmt;
@@ -203,8 +282,7 @@ SELECT
     COALESCE(`status`, "Success"),
     `description`,
     `reference_number`
-FROM `', @SRC_DB, '`.`transactions`
-ON DUPLICATE KEY UPDATE `amount` = VALUES(`amount`);
+FROM `', @SRC_DB, '`.`transactions`;
 ');
 PREPARE stmt FROM @sql_txns;
 EXECUTE stmt;
@@ -226,8 +304,7 @@ SELECT
     `maturity_amount`, `maturity_date`, 
     COALESCE(`status`, "Active"), 
     COALESCE(`created_at`, CURRENT_TIMESTAMP)
-FROM `', @SRC_DB, '`.`deposits`
-ON DUPLICATE KEY UPDATE `principal_amount` = VALUES(`principal_amount`);
+FROM `', @SRC_DB, '`.`deposits`;
 ');
 PREPARE stmt FROM @sql_deposits;
 EXECUTE stmt;
@@ -248,8 +325,7 @@ SELECT
     `cooling_until`, 
     COALESCE(`created_at`, CURRENT_TIMESTAMP), 
     COALESCE(`is_active`, 1)
-FROM `', @SRC_DB, '`.`beneficiaries`
-ON DUPLICATE KEY UPDATE `beneficiary_name` = VALUES(`beneficiary_name`);
+FROM `', @SRC_DB, '`.`beneficiaries`;
 ');
 PREPARE stmt FROM @sql_beneficiaries;
 EXECUTE stmt;
@@ -269,8 +345,7 @@ SELECT
     COALESCE(`status`, "Verified"), 
     COALESCE(`verified_at`, CURRENT_TIMESTAMP), 
     `remarks`
-FROM `', @SRC_DB, '`.`kyc_verifications`
-ON DUPLICATE KEY UPDATE `status` = VALUES(`status`);
+FROM `', @SRC_DB, '`.`kyc_verifications`;
 ');
 PREPARE stmt FROM @sql_kyc;
 EXECUTE stmt;
@@ -294,8 +369,7 @@ SELECT
     COALESCE(`attempts`, 0), 
     COALESCE(`last_sent_at`, 0), 
     COALESCE(`created_at`, CURRENT_TIMESTAMP)
-FROM `', @SRC_DB, '`.`otp_sessions`
-ON DUPLICATE KEY UPDATE `verified` = VALUES(`verified`);
+FROM `', @SRC_DB, '`.`otp_sessions`;
 ');
 PREPARE stmt FROM @sql_otp;
 EXECUTE stmt;
@@ -307,8 +381,7 @@ DEALLOCATE PREPARE stmt;
 SET @sql_rate = CONCAT('
 INSERT INTO `security_rate_limits` (`key_id`, `attempts`, `last_attempt_at`, `locked_until`)
 SELECT `key_id`, `attempts`, `last_attempt_at`, `locked_until`
-FROM `', @SRC_DB, '`.`security_rate_limits`
-ON DUPLICATE KEY UPDATE `attempts` = VALUES(`attempts`);
+FROM `', @SRC_DB, '`.`security_rate_limits`;
 ');
 PREPARE stmt FROM @sql_rate;
 EXECUTE stmt;
@@ -321,8 +394,7 @@ DEALLOCATE PREPARE stmt;
 SET @sql_liens = CONCAT('
 INSERT INTO `account_lien_records` (`lien_id`, `account_number`, `lien_amount`, `lien_reason`, `created_at`)
 SELECT `lien_id`, `account_number`, `lien_amount`, `lien_reason`, COALESCE(`created_at`, CURRENT_TIMESTAMP)
-FROM `', @SRC_DB, '`.`account_lien_records`
-ON DUPLICATE KEY UPDATE `lien_amount` = VALUES(`lien_amount`);
+FROM `', @SRC_DB, '`.`account_lien_records`;
 ');
 PREPARE stmt FROM @sql_liens;
 EXECUTE stmt;
@@ -334,14 +406,11 @@ DEALLOCATE PREPARE stmt;
 SET @sql_audit = CONCAT('
 INSERT INTO `audit_logs` (`log_id`, `customer_id`, `action`, `entity_type`, `entity_id`, `details`, `timestamp`)
 SELECT `log_id`, `customer_id`, `action`, `entity_type`, `entity_id`, `details`, COALESCE(`timestamp`, CURRENT_TIMESTAMP)
-FROM `', @SRC_DB, '`.`audit_logs`
-ON DUPLICATE KEY UPDATE `action` = VALUES(`action`);
+FROM `', @SRC_DB, '`.`audit_logs`;
 ');
 PREPARE stmt FROM @sql_audit;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
-
-SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================================
 -- END OF SAFE MIGRATION SCRIPT

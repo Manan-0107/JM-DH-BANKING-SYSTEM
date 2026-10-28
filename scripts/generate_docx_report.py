@@ -649,9 +649,9 @@ def main():
     # =========================================================================
     add_heading_1(doc, "12. Validation Tests and Actual Empirical Outcomes")
     p = doc.add_paragraph(
-        "A rigorous, automated test suite consisting of 35 relational, security, domain, and financial assertions ('bankist_normalization_tests.sql') "
+        "A rigorous, automated test suite consisting of 37 relational, security, domain, and financial assertions ('bankist_normalization_tests.sql') "
         "was executed on a clean, disposable MySQL database ('bankist_norm_eval_*') using the runner script 'execute_normalization_validation.js'. "
-        "Additionally, a 16-query real application compatibility test was executed via 'test_app_compatibility_on_disposable_db.js'. "
+        "Additionally, a 27-query real application compatibility test was executed via 'test_app_compatibility_on_disposable_db.js'. "
         "Below are the verified empirical outcomes:"
     )
     p.paragraph_format.space_after = Pt(6)
@@ -694,14 +694,16 @@ def main():
         ("T08A_PRESERVED_UPI_SENDERS", "30 Preserved", "30 Preserved", "PASS", "Preserved External UPI VPAs"),
         ("T09A_VIEW_ACCOUNTS_LEGACY_PARITY", "208 Rows, 0 Null", "208 Rows, 0 Null", "PASS", "Legacy View Reconstruction"),
         ("T09B_VIEW_CUSTOMERS_LEGACY_NOMINEE_COUNT", "8 Nominees", "8 Nominees", "PASS", "Legacy Customers View Join"),
-        ("T09C_VIEW_PORTFOLIO_LIQUID_BALANCE", "₹19,155,216.07", "₹19,155,216.07", "PASS", "Portfolio View Balance Parity")
+        ("T09C_VIEW_PORTFOLIO_LIQUID_BALANCE", "₹19,155,216.07", "₹19,155,216.07", "PASS", "Portfolio View Balance Parity"),
+        ("T09D_VIEW_CUSTOMERS_ONLY_FULL_GROUP_BY_STRICT", "124 Rows", "124 Rows", "PASS", "Strict ONLY_FULL_GROUP_BY Compliance"),
+        ("T09E_VIEW_CUSTOMERS_AT_MOST_ONE_ROW_PER_CUSTOMER", "0 Duplicates", "0 Duplicates", "PASS", "Nominee Projection Uniqueness")
     ]
     format_table(test_tbl, t_widths, t_headers, t_data)
     
     p = doc.add_paragraph(
-        "\nSummary of Validation Results: 35 assertions executed; 35 assertions PASSED; 0 FAILED. "
+        "\nSummary of Validation Results: 37 assertions executed; 37 assertions PASSED; 0 FAILED. "
         "The financial ledger balance sum was conserved to the exact penny: ₹19,155,216.07 with zero unexplained variance. "
-        "Application compatibility testing against disposable databases confirmed 16 out of 16 Next.js net-banking queries passed cleanly."
+        "Application compatibility testing against disposable databases confirmed 27 out of 27 Next.js net-banking queries passed cleanly."
     )
     p.paragraph_format.space_after = Pt(6)
 
@@ -714,7 +716,7 @@ def main():
         "1. Implemented Changes:\n"
         "   • Creation of 'bankist_normalized.sql' defining all 13 BCNF tables, constraints, indexes, and 6 views.\n"
         "   • Creation of 'bankist_migration.sql' performing safe, lossless data migration from the original schema.\n"
-        "   • Creation of 'bankist_normalization_tests.sql' executing all 35 empirical assertions.\n"
+        "   • Creation of 'bankist_normalization_tests.sql' executing all 37 empirical assertions.\n"
         "   • Empirical proof of 100% test pass rate and ₹0.00 financial variance in disposable test environments.\n"
         "   • Preservation of live 'bankist' in an untouched, pristine state (SHA-256 fingerprint verified before and after).\n\n"
         "2. Strategic Trade-Offs & Analytical Views:\n"
@@ -748,7 +750,7 @@ def main():
         "Step 2: Automated Verification\n"
         "   Execute the automated test runner directly via Node.js:\n"
         "   node scripts/execute_normalization_validation.js\n"
-        "   Verify that all 35 assertions output [PASS] and that the live database remains untouched.\n\n"
+        "   Verify that all 37 assertions output [PASS] and that the live database remains untouched.\n\n"
         "Step 3: Safe Production Cutover (When Approved)\n"
         "   1. Create an immutable physical backup of live 'bankist':\n"
         "      mysqldump -u root -p --single-transaction --routines --triggers bankist > bankist_pre_norm_backup.sql\n"

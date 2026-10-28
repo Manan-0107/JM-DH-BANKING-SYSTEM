@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * ==============================================================================
- * BHARAT TRUST BANK — REPAIRED NORMALIZATION VALIDATION RUNNER
+ * BHARAT TRUST BANK — AUTHORITATIVE NORMALIZATION VALIDATION RUNNER
  * ==============================================================================
  * 
  * Safety & Integrity Features:
@@ -11,11 +11,13 @@
  * 2. Cryptographic Pre-flight & Post-flight Fingerprinting:
  *    - Captures schema structure and row checksums of live `bankist` before any test.
  *    - Compares live database fingerprints before and after execution to prove zero mutation.
- * 3. Robust Test Execution:
- *    - Executes all 32 SQL assertions from `bankist_normalization_tests.sql`.
- *    - Records exact SQL outputs, detects missing or skipped assertions.
+ * 3. Overwrite Rejection Verification:
+ *    - Tests that attempting a rerun on populated destination is rejected with SIGNAL '45000'.
+ * 4. Exact 37-Assertion Test Suite Execution:
+ *    - Executes all 37 SQL assertions from `bankist_normalization_tests.sql`.
+ *    - Reconciles expected assertions (37 expected, 37 executed).
  *    - Exits with non-zero exit code (code 1) on any test failure or safety violation.
- * 4. Safe Cleanup:
+ * 5. Safe Cleanup:
  *    - Safely drops disposable target database after execution.
  */
 
@@ -34,6 +36,8 @@ const DISPOSABLE_TARGET_DB = `bankist_norm_eval_${Date.now()}_${Math.floor(Math.
 const DDL_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_normalized.sql');
 const MIGRATION_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_migration.sql');
 const TESTS_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_normalization_tests.sql');
+
+const EXPECTED_ASSERTIONS_COUNT = 37;
 
 async function computeLiveDbFingerprint(conn, dbName) {
   const [tables] = await conn.query(`SHOW FULL TABLES FROM \`${dbName}\` WHERE Table_type = 'BASE TABLE'`);
@@ -99,7 +103,7 @@ async function runValidation() {
 
   try {
     // 1. Capture Pre-flight Live Database Fingerprint
-    console.log(`\n[1/7] Capturing Pre-flight Cryptographic Fingerprint of Live Database '${SOURCE_DB}'...`);
+    console.log(`\n[1/8] Capturing Pre-flight Cryptographic Fingerprint of Live Database '${SOURCE_DB}'...`);
     const preFlightFingerprint = await computeLiveDbFingerprint(adminConn, SOURCE_DB);
     console.log(`  Live '${SOURCE_DB}' Base Tables: ${preFlightFingerprint.table_count}`);
     console.log(`  Live '${SOURCE_DB}' Overall Cryptographic Hash: ${preFlightFingerprint.overall_hash}`);
@@ -110,13 +114,13 @@ async function runValidation() {
     }
 
     // 2. Create Disposable Target Database
-    console.log(`\n[2/7] Creating disposable target database \`${DISPOSABLE_TARGET_DB}\`...`);
+    console.log(`\n[2/8] Creating disposable target database \`${DISPOSABLE_TARGET_DB}\`...`);
     await adminConn.query(`CREATE DATABASE \`${DISPOSABLE_TARGET_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
     disposableCreated = true;
     console.log('  Disposable database created cleanly.');
 
     // 3. Apply Normalized BCNF Schema
-    console.log(`\n[3/7] Applying normalized schema DDL (${DDL_PATH})...`);
+    console.log(`\n[3/8] Applying normalized schema DDL (${DDL_PATH})...`);
     const testConn = await mysql.createConnection({
       host: process.env.DB_HOST || '127.0.0.1',
       user: process.env.DB_USER || 'root',
@@ -131,14 +135,31 @@ async function runValidation() {
     console.log('  Normalized schema DDL applied successfully.');
 
     // 4. Apply Lossless Data Migration Script
-    console.log(`\n[4/7] Applying safe data migration (${MIGRATION_PATH})...`);
+    console.log(`\n[4/8] Applying safe data migration (${MIGRATION_PATH})...`);
     await testConn.query(`SET @MIGRATION_SRC_DB = '${SOURCE_DB}';`);
     const migrationContent = fs.readFileSync(MIGRATION_PATH, 'utf8');
     await testConn.query(migrationContent);
     console.log('  Data migration completed successfully.');
 
-    // 5. Execute 32-Assertion Test Suite
-    console.log(`\n[5/7] Executing test assertions from ${TESTS_PATH}...`);
+    // 5. Test Overwrite Prevention (Rerun Guard Assertion)
+    console.log(`\n[5/8] Testing Overwrite Prevention & Rerun Rejection Guard...`);
+    let rerunRejected = false;
+    try {
+      await testConn.query(migrationContent);
+    } catch (rerunErr) {
+      if (rerunErr.message.includes('Destination has existing records')) {
+        rerunRejected = true;
+        console.log(`  [PASS] Migration rerun correctly blocked by pre-flight guard: "${rerunErr.message}"`);
+      } else {
+        throw rerunErr;
+      }
+    }
+    if (!rerunRejected) {
+      throw new Error('CRITICAL FLAW: Migration rerun was not rejected on populated destination!');
+    }
+
+    // 6. Execute 37-Assertion Test Suite
+    console.log(`\n[6/8] Executing test assertions from ${TESTS_PATH}...`);
     const testsContent = fs.readFileSync(TESTS_PATH, 'utf8');
     
     // Parse statements while stripping comments
@@ -147,7 +168,6 @@ async function runValidation() {
       .map(q => q.replace(/--.*$/gm, '').trim())
       .filter(q => q.length > 0 && (q.toUpperCase().startsWith('SELECT') || q.toUpperCase().startsWith('SET')));
 
-    const EXPECTED_MIN_ASSERTIONS = 30;
     let totalAssertions = 0;
     let passedAssertions = 0;
     let failedAssertions = 0;
@@ -177,26 +197,27 @@ async function runValidation() {
 
     console.log(`\n--- Test Execution Summary ---`);
     console.log(`Total Assertions Executed: ${totalAssertions}`);
+    console.log(`Expected Assertions: ${EXPECTED_ASSERTIONS_COUNT}`);
     console.log(`Passed: ${passedAssertions}`);
     console.log(`Failed: ${failedAssertions}`);
 
-    if (totalAssertions < EXPECTED_MIN_ASSERTIONS) {
-      throw new Error(`Incomplete test suite execution: Only ${totalAssertions} assertions ran (Expected >= ${EXPECTED_MIN_ASSERTIONS}).`);
+    if (totalAssertions !== EXPECTED_ASSERTIONS_COUNT) {
+      throw new Error(`Assertion count mismatch: ${totalAssertions} executed, expected exactly ${EXPECTED_ASSERTIONS_COUNT}.`);
     }
 
     if (failedAssertions > 0) {
       throw new Error(`${failedAssertions} assertion(s) failed during validation.`);
     }
 
-    // 6. Cleanup Disposable Database
-    console.log(`\n[6/7] Safely dropping disposable target database \`${DISPOSABLE_TARGET_DB}\`...`);
+    // 7. Cleanup Disposable Database
+    console.log(`\n[7/8] Safely dropping disposable target database \`${DISPOSABLE_TARGET_DB}\`...`);
     await testConn.end();
     await adminConn.query(`DROP DATABASE IF EXISTS \`${DISPOSABLE_TARGET_DB}\`;`);
     disposableCreated = false;
     console.log('  Disposable database dropped cleanly.');
 
-    // 7. Verify Post-flight Live Database Fingerprint
-    console.log(`\n[7/7] Capturing Post-flight Cryptographic Fingerprint of Live Database '${SOURCE_DB}'...`);
+    // 8. Verify Post-flight Live Database Fingerprint
+    console.log(`\n[8/8] Capturing Post-flight Cryptographic Fingerprint of Live Database '${SOURCE_DB}'...`);
     const postFlightFingerprint = await computeLiveDbFingerprint(adminConn, SOURCE_DB);
     console.log(`  Live '${SOURCE_DB}' Post-flight Overall Hash: ${postFlightFingerprint.overall_hash}`);
 
@@ -225,7 +246,7 @@ async function runValidation() {
       }, null, 2)
     );
     console.log(`\nAudit results persisted to scratch/normalization_audit_results.json`);
-    console.log('\n[ALL CHECKS PASSED] Normalization schema and data migration successfully validated!');
+    console.log('\n[ALL CHECKS PASSED] Normalization schema, safe migration, and zero-overwrite guards successfully validated!');
 
   } catch (err) {
     console.error('\n[VALIDATION FAILED]', err.message);

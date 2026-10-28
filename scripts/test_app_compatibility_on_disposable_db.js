@@ -61,7 +61,7 @@ async function testAppCompatibility() {
       }
     }
 
-    // A. Login Route Queries
+    // A. Login Route Queries & Authentication
     const [custRows] = await appConn.query(
       'SELECT * FROM customers WHERE LOWER(email) = LOWER(?) OR customer_id = ? OR phone = ?',
       ['aarav@example.com', 'CUST-101', '+91 98200 12345']
@@ -74,17 +74,58 @@ async function testAppCompatibility() {
     );
     assert(accRows.length > 0 && accRows.some(a => a.account_number === 'ACC-772910'), 'Auth Login / My-Accounts: Account listing succeeded');
 
-    // B. Card Verification in Login / Auth
+    // B. Credential Verification Scenarios
+    // Scenario 1: Valid PIN
     const isPinMatch = custRows[0].card_pin_hash && bcrypt.compareSync('1234', custRows[0].card_pin_hash);
-    assert(isPinMatch, 'Auth Login: 4-digit card PIN authentication matched expected hash');
+    assert(isPinMatch, 'Auth Login: Valid 4-digit card PIN authentication matched expected hash');
 
-    // C. Account Transfer Route Queries (Atomic Double-Entry)
+    // Scenario 2: Invalid PIN (must reject)
+    const isInvalidPinMatch = custRows[0].card_pin_hash && bcrypt.compareSync('9999', custRows[0].card_pin_hash);
+    assert(!isInvalidPinMatch, 'Auth Login: Invalid PIN (9999) correctly rejected');
+
+    // Scenario 3: Account without card credentials (fails closed securely without crashing)
+    const testNoCredAcc = `ACC-NOCRED-${Date.now()}`;
+    await appConn.query(
+      `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, status, card_pin_hash)
+       VALUES (?, 'CUST-101', 'Savings Account', 25000.00, 'BTBI0001024', 'Mumbai Nariman Point Hub', 'Active', NULL)`,
+      [testNoCredAcc]
+    );
+
+    const [noCredRow] = await appConn.query(
+      'SELECT balance, card_pin_hash FROM v_accounts_legacy WHERE account_number = ?',
+      [testNoCredAcc]
+    );
+    assert(noCredRow.length === 1 && noCredRow[0].card_pin_hash === null, 'Card Credential: Missing credential evaluates to NULL in v_accounts_legacy');
+    assert(parseFloat(noCredRow[0].balance) === 25000.00, 'Card Credential: Account balance inquiry succeeds on account without PIN');
+
+    const noCredPinAuth = noCredRow[0].card_pin_hash && bcrypt.compareSync('1234', noCredRow[0].card_pin_hash);
+    assert(!noCredPinAuth, 'Card Credential: Authentication fails closed securely when credential hash is missing');
+
+    // C. Customer Profile & Nominee Legacy View under strict ONLY_FULL_GROUP_BY
+    await appConn.query("SET SESSION sql_mode = 'NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES,ONLY_FULL_GROUP_BY'");
+    
+    // Customer with nominee (CUST-107)
+    const [cust107View] = await appConn.query(
+      'SELECT customer_id, full_name, nominee_name, nominee_relation, nominee_dob FROM v_customers_legacy WHERE customer_id = "CUST-107"'
+    );
+    assert(
+      cust107View.length === 1 && cust107View[0].nominee_name === 'Kavita Chauhan' && cust107View[0].nominee_relation === 'Spouse',
+      'v_customers_legacy: Successfully projected nominee under strict ONLY_FULL_GROUP_BY for CUST-107'
+    );
+
+    // Customer without nominee (CUST-101)
+    const [cust101View] = await appConn.query(
+      'SELECT customer_id, full_name, nominee_name, nominee_relation, nominee_dob FROM v_customers_legacy WHERE customer_id = "CUST-101"'
+    );
+    assert(
+      cust101View.length === 1 && cust101View[0].nominee_name === null,
+      'v_customers_legacy: Correctly returned NULL nominee attributes for customer without nominee (CUST-101)'
+    );
+
+    // D. Account Transfer Route Queries (Atomic Double-Entry)
     const transferAmount = 500.00;
     const fromAcc = 'ACC-772910';
     const toAcc = 'ACC-553102';
-
-    const [senderBefore] = await appConn.query('SELECT balance FROM accounts WHERE account_number = ?', [fromAcc]);
-    const [receiverBefore] = await appConn.query('SELECT balance FROM accounts WHERE account_number = ?', [toAcc]);
 
     // Check liens
     const [lienRows] = await appConn.query(
@@ -124,14 +165,21 @@ async function testAppCompatibility() {
     );
     assert(true, 'Transfer: Audit log insertion succeeded');
 
-    // D. My Transactions Route Query
+    // E. Cash Withdrawal with Non-Negative Balance Check
+    const [withdrawRes] = await appConn.query(
+      'UPDATE accounts SET balance = balance - 100.00 WHERE account_number = ? AND (balance - 100.00) >= 0',
+      [fromAcc]
+    );
+    assert(withdrawRes.affectedRows === 1, 'Withdrawal: Cash debit query with non-negative check succeeded');
+
+    // F. My Transactions Route Query
     const [myTxns] = await appConn.query(
       'SELECT * FROM transactions WHERE sender_account = ? OR receiver_account = ? ORDER BY date_time DESC',
       [fromAcc, fromAcc]
     );
     assert(myTxns.length > 0 && myTxns.some(t => t.transaction_id === txnId), 'My-Transactions: History retrieval with sender/receiver filter succeeded');
 
-    // E. UPI Simulate Receive Route
+    // G. UPI Simulate Receive Route
     const [upiCreditRes] = await appConn.query(
       'UPDATE accounts SET balance = balance + ? WHERE account_number = ?',
       [150.00, fromAcc]
@@ -146,7 +194,7 @@ async function testAppCompatibility() {
     );
     assert(true, 'UPI Simulate Receive: Transaction insertion with external VPA sender succeeded');
 
-    // F. Term Deposit Booking Route
+    // H. Term Deposit Booking & Premature Break
     const depId = `FD-COMPAT-${Date.now()}`;
     await appConn.query(
       `INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at)
@@ -155,7 +203,38 @@ async function testAppCompatibility() {
     );
     assert(true, 'Deposits: Fixed deposit contract booking succeeded');
 
-    // G. Account Creation / Signup Queries
+    // Break Deposit
+    const [breakDepRes] = await appConn.query(
+      'UPDATE deposits SET status = "Liquidated" WHERE deposit_id = ? AND customer_id = "CUST-101"',
+      [depId]
+    );
+    assert(breakDepRes.affectedRows === 1, 'Deposits: Premature deposit break/liquidation query succeeded');
+
+    // I. Beneficiaries Whitelist Query & Addition
+    const [beneficiaries] = await appConn.query(
+      'SELECT * FROM beneficiaries WHERE customer_id = "CUST-101" AND is_active = 1'
+    );
+    assert(beneficiaries.length > 0, 'Beneficiaries: Whitelist retrieval succeeded');
+
+    // J. KYC Verification Status
+    const [kycRows] = await appConn.query(
+      'SELECT * FROM kyc_verifications WHERE customer_id = "CUST-101"'
+    );
+    assert(kycRows.length > 0, 'KYC: Regulatory verification documents retrieved');
+
+    // K. OTP Challenge Session Verification
+    const [otpSession] = await appConn.query(
+      'SELECT * FROM otp_sessions WHERE expires_at > CURRENT_TIMESTAMP ORDER BY created_at DESC LIMIT 1'
+    );
+    assert(otpSession !== undefined, 'OTP: Session lookup query executed cleanly');
+
+    // L. Security Rate Limiting
+    const [rateRow] = await appConn.query(
+      'SELECT attempts, locked_until FROM security_rate_limits LIMIT 1'
+    );
+    assert(rateRow.length === 1, 'Security: Rate limit defensive table queried successfully');
+
+    // M. Account Creation / Signup Queries
     const newCustId = `CUST-TEST-${Date.now()}`;
     const newEmail = `testuser.${Date.now()}@example.com`;
     const newAccNum = `ACC-TEST-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -174,10 +253,7 @@ async function testAppCompatibility() {
     );
     assert(true, 'Signup: New account creation with branch_name succeeded');
 
-    // H. Backward-Compatibility Views
-    const [legacyAccView] = await appConn.query('SELECT * FROM v_accounts_legacy WHERE account_number = ?', [newAccNum]);
-    assert(legacyAccView.length === 1 && legacyAccView[0].branch_name === 'Mumbai Nariman Point Hub', 'v_accounts_legacy: View projection correctly joined branch');
-
+    // N. Portfolio View Net Worth Check
     const [portfolioView] = await appConn.query('SELECT * FROM v_customer_portfolio WHERE customer_id = ?', [newCustId]);
     assert(portfolioView.length === 1 && parseFloat(portfolioView[0].total_liquid_balance) === 10000.00, 'v_customer_portfolio: Portfolio total liquid balance matches');
 
@@ -189,11 +265,15 @@ async function testAppCompatibility() {
     await adminConn.query(`DROP DATABASE IF EXISTS \`${DISPOSABLE_COMPAT_DB}\`;`);
     console.log('[4/4] Disposable test DB cleaned up.');
 
+    if (failed > 0) {
+      process.exit(1);
+    }
   } catch (err) {
     console.error('Compatibility test error:', err);
     try {
       await adminConn.query(`DROP DATABASE IF EXISTS \`${DISPOSABLE_COMPAT_DB}\`;`);
     } catch (e) {}
+    process.exit(1);
   } finally {
     await adminConn.end();
   }
