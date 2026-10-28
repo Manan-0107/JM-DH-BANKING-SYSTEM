@@ -214,3 +214,4 @@ $$(R_1 \cap R_2) \to R_1 \quad \text{OR} \quad (R_1 \cap R_2) \to R_2$$
 All 13 tables, 5 legacy views, 2 stored procedures, and 50 performance indexes were validated using:
 1. `DBMS_LAB_FINAL.sql`: Executed directly against MySQL 8.0 without syntax or runtime errors.
 2. `scripts/test_college_demo.js`: Verified table schema constraints, row-level locking, foreign keys, and transaction atomicity with 100% assertion pass rate.
+

@@ -168,3 +168,4 @@ Use the following pre-configured credentials in the web UI:
 > - **Consistency:** Schema-level `CHECK (balance >= 0)` and foreign keys prevent invalid database states.
 > - **Isolation:** `SELECT ... FOR UPDATE` row-level exclusive locks isolate concurrent updates.
 > - **Durability:** The InnoDB ACID storage engine guarantees committed transactions persist via write-ahead logging (WAL) and redo logs.
+
