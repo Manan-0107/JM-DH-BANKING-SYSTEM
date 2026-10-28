@@ -110,6 +110,16 @@ copyFiltered(path.join(projectRoot, 'README.md'), path.join(stagingDir, 'README.
 copyFiltered(path.join(projectRoot, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'), path.join(stagingDir, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'));
 copyFiltered(path.join(projectRoot, 'COMPLETE_REMEDIATION_REPORT.md'), path.join(stagingDir, 'COMPLETE_REMEDIATION_REPORT.md'));
 copyFiltered(path.join(projectRoot, 'SQLITE_TO_MYSQL_MIGRATION_REPORT.md'), path.join(stagingDir, 'SQLITE_TO_MYSQL_MIGRATION_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'DBMS_LAB_FINAL.sql'), path.join(stagingDir, 'DBMS_LAB_FINAL.sql'));
+copyFiltered(path.join(projectRoot, 'bankist_normalized.sql'), path.join(stagingDir, 'bankist_normalized.sql'));
+copyFiltered(path.join(projectRoot, 'bankist_migration.sql'), path.join(stagingDir, 'bankist_migration.sql'));
+copyFiltered(path.join(projectRoot, 'bankist_normalization_tests.sql'), path.join(stagingDir, 'bankist_normalization_tests.sql'));
+copyFiltered(path.join(projectRoot, 'NORMALIZATION_AUDIT_REPORT.md'), path.join(stagingDir, 'NORMALIZATION_AUDIT_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'MYSQL_TEST_RESULTS.md'), path.join(stagingDir, 'MYSQL_TEST_RESULTS.md'));
+copyFiltered(path.join(projectRoot, 'README_NORMALIZATION.md'), path.join(stagingDir, 'README_NORMALIZATION.md'));
+copyFiltered(path.join(projectRoot, 'NORMALIZATION_AUDIT_CURRENT.md'), path.join(stagingDir, 'NORMALIZATION_AUDIT_CURRENT.md'));
+copyFiltered(path.join(projectRoot, 'NORMALIZATION_CONSISTENCY_FIX_2026-10-29.md'), path.join(stagingDir, 'NORMALIZATION_CONSISTENCY_FIX_2026-10-29.md'));
+copyFiltered(path.join(projectRoot, 'BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md'), path.join(stagingDir, 'BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md'));
 copyFiltered(path.join(projectRoot, 'database'), path.join(stagingDir, 'database'));
 copyFiltered(path.join(projectRoot, 'docs'), path.join(stagingDir, 'docs'));
 copyFiltered(path.join(projectRoot, 'scripts'), path.join(stagingDir, 'scripts'));
@@ -157,6 +167,13 @@ execSync(`powershell -NoProfile -Command "${psExtract}"`, { stdio: 'inherit' });
 const criticalFiles = [
   'README.md',
   'DBMS_VIVA_DEMONSTRATION_GUIDE.md',
+  'DBMS_LAB_FINAL.sql',
+  'bankist_normalized.sql',
+  'bankist_migration.sql',
+  'bankist_normalization_tests.sql',
+  'NORMALIZATION_AUDIT_REPORT.md',
+  'MYSQL_TEST_RESULTS.md',
+  'README_NORMALIZATION.md',
   'database/advanced-sql/01_ddl_and_integrity.sql',
   'database/advanced-sql/04_stored_routines.sql',
   'database/advanced-sql/08_transactions_and_concurrency.sql',
