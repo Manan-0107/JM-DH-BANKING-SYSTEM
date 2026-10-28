@@ -345,6 +345,70 @@ async function runSecuritySuite() {
     const devEnabled2 = testEvalDemo('development', undefined, 'true');
     assert(devEnabled2.initialGrant === 10000, 'Development with ALLOW_DEMO_GRANT=true issues demo grant');
 
+    // --------------------------------------------------------------------------
+    // 9. Mandatory PIN Verification on Deposit Liquidation
+    // --------------------------------------------------------------------------
+    console.log('\n--- 9. Testing Mandatory PIN Verification on Deposit Liquidation ---');
+    const aaravAuthRes = await request('/api/auth/login', {
+      method: 'POST',
+      body: { email: 'aarav@example.com', password: '1234' }
+    });
+    const secAaravToken = aaravAuthRes.data.token;
+    const secAaravAcc = aaravAuthRes.data.accounts[0].account_number;
+
+    const bookFdRes = await request('/api/deposits', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${secAaravToken}` },
+      body: {
+        source_account: secAaravAcc,
+        deposit_type: 'Fixed Deposit',
+        principal_amount: 5000,
+        tenure_months: 6,
+        pin: '1234'
+      }
+    });
+    assert(bookFdRes.status === 201, 'Test Fixed Deposit certificate booked (HTTP 201)');
+    const testDepositId = bookFdRes.data.deposit.deposit_id;
+
+    // Attempt liquidation without PIN (must be rejected with HTTP 400)
+    const noPinBreakRes = await request(`/api/deposits/${testDepositId}/break`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${secAaravToken}` },
+      body: {}
+    });
+    assert(noPinBreakRes.status === 400, 'Liquidation without PIN strictly rejected (HTTP 400)');
+    assert(noPinBreakRes.data && noPinBreakRes.data.error.includes('PIN is required'), 'Mandatory PIN requirement message returned');
+
+    // Attempt liquidation with invalid PIN (must be rejected with HTTP 401)
+    const badPinBreakRes = await request(`/api/deposits/${testDepositId}/break`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${secAaravToken}` },
+      body: { pin: '9999' }
+    });
+    assert(badPinBreakRes.status === 401, 'Liquidation with invalid PIN rejected (HTTP 401)');
+
+    // Attempt liquidation with valid PIN (must succeed with HTTP 200)
+    const validBreakRes = await request(`/api/deposits/${testDepositId}/break`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${secAaravToken}` },
+      body: { pin: '1234' }
+    });
+    assert(validBreakRes.status === 200, 'Liquidation with verified PIN authenticated successfully (HTTP 200)');
+
+    // --------------------------------------------------------------------------
+    // 10. Fail-Closed Plaintext OTP Elimination
+    // --------------------------------------------------------------------------
+    console.log('\n--- 10. Testing Plaintext OTP Elimination & Cryptographic Verification ---');
+    const otpVerifyNoHash = await request('/api/kyc/verify-otp', {
+      method: 'POST',
+      body: {
+        identifier: '9999999999',
+        otp: '123456',
+        purpose: 'NON_EXISTENT_PURPOSE'
+      }
+    });
+    assert(otpVerifyNoHash.status === 400, 'Non-existent session rejected with HTTP 400');
+
   } catch (err) {
     console.error('[FATAL EXCEPTION IN SECURITY SUITE]', err);
     failed++;

@@ -109,7 +109,7 @@ export async function checkRateLimit(
   db: DbAdapter,
   keyId: string,
   options: RateLimitOptions
-): Promise<{ allowed: boolean; remaining: number; lockedUntil?: number; retryAfterSec?: number }> {
+): Promise<{ allowed: boolean; remaining: number; lockedUntil?: number; retryAfterSec?: number; serviceUnavailable?: boolean }> {
   const now = Date.now();
   try {
     const [rows] = await db.query(
@@ -144,68 +144,63 @@ export async function checkRateLimit(
 
     return { allowed: true, remaining };
   } catch (err) {
-    console.warn('[Rate Limit] checkRateLimit fallback:', err);
-    return { allowed: true, remaining: options.maxAttempts };
+    console.error('[Rate Limit] checkRateLimit database failure (fail-closed):', err);
+    return { allowed: false, remaining: 0, serviceUnavailable: true, retryAfterSec: 60 };
   }
 }
 
 /**
- * Records a failed authentication attempt, incrementing counter and locking if limit is exceeded.
+ * Records a failed authentication attempt with atomic in-database increment and locking.
  */
 export async function recordFailedAttempt(
   db: DbAdapter,
   keyId: string,
   options: RateLimitOptions
-): Promise<{ locked: boolean; remaining: number; lockDurationSec?: number }> {
+): Promise<{ locked: boolean; remaining: number; lockDurationSec?: number; serviceUnavailable?: boolean }> {
   const now = Date.now();
   try {
-    const [rows] = await db.query(
-      'SELECT attempts, last_attempt_at, locked_until FROM security_rate_limits WHERE key_id = ?',
-      [keyId]
-    );
-
-    let attempts = 1;
-    let lockedUntil = 0;
-
-    if (rows && rows.length > 0) {
-      const lastAttemptAt = Number(rows[0].last_attempt_at) || 0;
-      if (now - lastAttemptAt <= options.windowMs) {
-        attempts = (Number(rows[0].attempts) || 0) + 1;
-      }
-    }
-
-    const isLocked = attempts >= options.maxAttempts;
-    if (isLocked) {
-      lockedUntil = now + options.lockDurationMs;
-    }
-
     if (db.isSqlite) {
       await db.query(
         `INSERT INTO security_rate_limits (key_id, attempts, last_attempt_at, locked_until)
-         VALUES (?, ?, ?, ?)
+         VALUES (?, 1, ?, 0)
          ON CONFLICT(key_id) DO UPDATE SET
-           attempts = excluded.attempts,
-           last_attempt_at = excluded.last_attempt_at,
-           locked_until = excluded.locked_until`,
-        [keyId, attempts, now, lockedUntil]
+           attempts = CASE WHEN (? - last_attempt_at <= ?) THEN attempts + 1 ELSE 1 END,
+           last_attempt_at = ?`,
+        [keyId, now, now, options.windowMs, now]
       );
     } else {
       await db.query(
         `INSERT INTO security_rate_limits (key_id, attempts, last_attempt_at, locked_until)
-         VALUES (?, ?, ?, ?)
+         VALUES (?, 1, ?, 0)
          ON DUPLICATE KEY UPDATE
-           attempts = VALUES(attempts),
-           last_attempt_at = VALUES(last_attempt_at),
-           locked_until = VALUES(locked_until)`,
-        [keyId, attempts, now, lockedUntil]
+           attempts = IF(? - last_attempt_at <= ?, attempts + 1, 1),
+           last_attempt_at = ?`,
+        [keyId, now, now, options.windowMs, now]
       );
     }
 
-    const remaining = Math.max(0, options.maxAttempts - attempts);
+    const [updatedRows] = await db.query(
+      'SELECT attempts, locked_until FROM security_rate_limits WHERE key_id = ?',
+      [keyId]
+    );
+
+    const updatedAttempts = Number(updatedRows?.[0]?.attempts) || 1;
+    let updatedLockedUntil = Number(updatedRows?.[0]?.locked_until) || 0;
+    const isLocked = updatedAttempts >= options.maxAttempts || updatedLockedUntil > now;
+
+    if (updatedAttempts >= options.maxAttempts && updatedLockedUntil <= now) {
+      updatedLockedUntil = now + options.lockDurationMs;
+      await db.query(
+        'UPDATE security_rate_limits SET locked_until = ? WHERE key_id = ?',
+        [updatedLockedUntil, keyId]
+      );
+    }
+
+    const remaining = Math.max(0, options.maxAttempts - updatedAttempts);
     return { locked: isLocked, remaining, lockDurationSec: Math.ceil(options.lockDurationMs / 1000) };
   } catch (err) {
-    console.warn('[Rate Limit] recordFailedAttempt fallback:', err);
-    return { locked: false, remaining: 1 };
+    console.error('[Rate Limit] recordFailedAttempt database failure (fail-closed):', err);
+    return { locked: true, remaining: 0, serviceUnavailable: true, lockDurationSec: Math.ceil(options.lockDurationMs / 1000) };
   }
 }
 
@@ -242,9 +237,11 @@ export async function verifyCustomerCredentials(
       valid: false,
       errorResponse: NextResponse.json(
         {
-          error: `Card PIN authentication is locked due to multiple incorrect attempts. Please try again in ${rateLimit.retryAfterSec || 900} seconds.`,
+          error: rateLimit.serviceUnavailable
+            ? 'Security rate-limit service temporarily unavailable. Please try again shortly.'
+            : `Card PIN authentication is locked due to multiple incorrect attempts. Please try again in ${rateLimit.retryAfterSec || 900} seconds.`,
         },
-        { status: 429 }
+        { status: rateLimit.serviceUnavailable ? 503 : 429 }
       ),
     };
   }
@@ -264,6 +261,15 @@ export async function verifyCustomerCredentials(
   const isValidPin = verifyTransactionPin(pin, custRows[0]);
   if (!isValidPin) {
     const failedInfo = await recordFailedAttempt(db, rateLimitKey, pinRateLimitOptions);
+    if (failedInfo.serviceUnavailable) {
+      return {
+        valid: false,
+        errorResponse: NextResponse.json(
+          { error: 'Security service temporarily unavailable. Please try again shortly.' },
+          { status: 503 }
+        ),
+      };
+    }
     const errorMsg = failedInfo.locked
       ? 'Maximum PIN attempts exceeded. Card PIN authentication is now locked for 15 minutes.'
       : `${invalidPinMessage}. ${failedInfo.remaining} attempt(s) remaining before authentication lock.`;

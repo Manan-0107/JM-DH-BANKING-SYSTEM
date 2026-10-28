@@ -64,11 +64,18 @@ export async function POST(request: Request) {
     // 3. Cryptographic Hash computation (Plaintext OTP is NEVER stored in database)
     const otpHash = hashOtp(generatedOtp, sessionId);
 
-    // 4. Invalidate previous active sessions and insert new session with hashed OTP
+    // 4. Invalidate previous active sessions and insert new session with hashed OTP while preserving frequency history
     await db.transaction(async (conn) => {
+      // Invalidate any existing active unconsumed sessions so only the newly issued OTP is active
       await conn.query(
-        `DELETE FROM otp_sessions WHERE identifier = ? AND purpose = ?`,
-        [cleanIdentifier, cleanPurpose]
+        `UPDATE otp_sessions SET expires_at = ? WHERE identifier = ? AND purpose = ? AND verified = 0 AND expires_at > ?`,
+        [now - 1000, cleanIdentifier, cleanPurpose, now]
+      );
+
+      // Clean up stale sessions older than 24 hours
+      await conn.query(
+        `DELETE FROM otp_sessions WHERE identifier = ? AND purpose = ? AND expires_at < ?`,
+        [cleanIdentifier, cleanPurpose, now - 24 * 60 * 60 * 1000]
       );
 
       await conn.query(

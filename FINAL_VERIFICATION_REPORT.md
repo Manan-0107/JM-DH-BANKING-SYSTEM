@@ -130,7 +130,7 @@ BUILD/TYPE CHECKS:   2 (TypeScript: PASS, Next.js Build: PASS)
 4. **Authoritative Backend Suite (161 Tests):**
    - Full lifecycle coverage of customer onboarding, account creation, deposits, withdrawals, transfers, and term deposits.
    - Mid-transaction failure rollback verified: account balance restored, uncommitted ledger records deleted.
-   - Multi-threaded overdraft protection verified: 3 simultaneous ₹10,000 transfers on a ₹10,000 balance resulted in exactly 1 success and 2 rejections; balance never dropped below ₹0.
+   - Multi-threaded overdraft protection verified: 3 simultaneous ₹6,000 transfers on an initial ₹10,000 balance resulted in exactly 1 success (₹4,000 remaining balance) and 2 rejections; balance never dropped below ₹0.
    - Concurrency-safe onboarding verified: 3 parallel signups created unique customer and account IDs without duplicate conflicts.
 5. **Persistence Suite (5 Phases):**
    - Verified persistent disk storage across registration, transfer execution, session re-authentication, and transaction ledger verification on MySQL 8.0.42.

@@ -241,12 +241,17 @@ In `app/api/system/test-rollback/route.ts` and `08_transactions_and_concurrency.
    - Uncommitted transaction journal records are completely purged.
 
 ### Race Condition & Overdraft Prevention
-- **Mechanism:** In `app/api/accounts/transfer/route.ts`:
+- **API Route Mechanism:** In `app/api/accounts/transfer/route.ts`, fund transfers enforce concurrency safety via an atomic conditional `UPDATE` with a balance predicate:
   ```sql
-  SELECT balance, status FROM accounts WHERE account_number = ? FOR UPDATE;
+  UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND balance >= ? AND status = 'Active';
   ```
-- **Concurrency Test:** `test_backend_suite.js` (Section 17) executes 3 parallel asynchronous transfers of ₹10,000 from an account holding exactly ₹10,000.
-- **Result:** InnoDB row-level locking forces threads to serialize. Exactly 1 transfer commits (HTTP 200), and the remaining 2 are blocked with HTTP 400 (`Insufficient balance`). The resulting balance is exactly ₹0.00, demonstrating zero race condition leakage.
+  When concurrent debit requests target the same account, InnoDB's row-level write lock serializes the updates. Only the request where `balance >= amount` satisfies the predicate decrements the balance (`affectedRows === 1`). Competing requests encounter insufficient remaining funds, returning `affectedRows === 0` and triggering an explicit `INSUFFICIENT_FUNDS` exception (HTTP 400).
+- **Stored Procedure Mechanism:** In `database/advanced-sql/04_stored_routines.sql`, `sp_atomic_fund_transfer` implements explicit pessimistic row-level locking:
+  ```sql
+  SELECT balance, status INTO v_sender_bal, v_sender_status FROM accounts WHERE account_number = p_sender_acc FOR UPDATE;
+  ```
+- **Concurrency Test:** `test_backend_suite.js` (Section 17) executes 3 parallel asynchronous transfers of ₹6,000 from an account holding an initial balance of ₹10,000 (total ₹18,000 requested).
+- **Result:** Exactly 1 transfer commits (HTTP 200), and the remaining 2 are blocked by the balance predicate with HTTP 400 (`Insufficient balance`). The resulting balance is non-negative (₹4,000.00). This test verifies serialized race condition prevention for competing debits on a single sender account; it models single-account debit serialization rather than proving arbitrary cross-transfer circular deadlock safety across complex multi-account topologies.
 
 ---
 
@@ -339,8 +344,10 @@ All 233 automated test checks (36 Security + 161 Backend + 5 Persistence + 31 DB
 2. Declarative MySQL 8.0 CHECK constraint: `CHECK (balance >= 0.00)`.
 3. Database trigger `trg_prevent_negative_balance` which executes `BEFORE UPDATE` and signals SQLSTATE `45000` if `NEW.balance < 0.00`.
 
-### Q3: How do you prevent race conditions when two users withdraw from the same account simultaneously?
-**Answer:** We employ pessimistic row-level locking using `SELECT ... FOR UPDATE` inside an explicit ACID transaction. When thread A executes `SELECT ... FOR UPDATE` on an account row, InnoDB acquires an exclusive lock. Thread B is forced to wait until thread A commits or rolls back, guaranteeing serialized execution.
+### Q3: How do you prevent race conditions when two users withdraw or transfer from the same account simultaneously?
+**Answer:** The architecture prevents race conditions through two complementary database mechanisms:
+1. **API Route Handler Layer (`app/api/accounts/transfer/route.ts`):** Uses an atomic conditional `UPDATE` with a balance check predicate (`UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND balance >= ? AND status = 'Active'`). Under concurrent requests, InnoDB's row write lock forces serialized execution; only the request satisfying `balance >= amount` updates the row (`affectedRows === 1`), while subsequent requests get `affectedRows === 0` and are rejected with HTTP 400.
+2. **Database Stored Routine Layer (`sp_atomic_fund_transfer`):** Employs explicit pessimistic row-level locking via `SELECT ... FOR UPDATE` inside an ACID transaction to serialize competing threads before reading and mutating balances.
 
 ### Q4: Explain the difference between `DELETE RESTRICT` and `DELETE CASCADE` in your schema.
 **Answer:** We enforce `ON DELETE RESTRICT` on core financial entities (e.g., deleting a customer with active accounts or deleting an account with legal liens is rejected by the database to prevent orphaned records). We use `ON DELETE CASCADE` on auxiliary entities such as `beneficiaries` so that removing a customer automatically removes their whitelisted payee list.
