@@ -69,12 +69,12 @@ The live database `127.0.0.1:3306/bankist` was preserved without loss (verified 
 
 | File Path | SHA-256 Hash | Description / Role |
 | :--- | :--- | :--- |
-| `DBMS_LAB_FINAL.sql` | `5B60E80448ACDFBD94B6E73011925EE4F77D5311D3CA031713B3262456DB3DE0` | Authoritative single executable SQL lab script containing 13 BCNF tables, 8 views, 2 stored procedures, seed data, and 7 live test scenarios. |
-| `DBMS project/DBMS_LAB_FINAL.sql` | `5B60E80448ACDFBD94B6E73011925EE4F77D5311D3CA031713B3262456DB3DE0` | Synchronized copy inside the authoritative DBMS project folder. |
-| `bankist_normalized.sql` | `AF8AE18DC10C7EC17A2052C3B048B76799BE413DF25B34C867C9EA90E01CDDAB` | Canonical enterprise BCNF schema (all 13 tables, 8 views, zero redundant columns). |
-| `DBMS project/bankist_normalized.sql` | `AF8AE18DC10C7EC17A2052C3B048B76799BE413DF25B34C867C9EA90E01CDDAB` | Synchronized copy inside the authoritative DBMS project folder. |
-| `bankist_migration.sql` | `AC2A0F3FEFB0C868742BC356246046B5AC41A36EE4AB81EDE6A8250FC34C4382` | Production migration script with idempotent pre-flight checks and rollback guards. |
-| `DBMS project/bankist_migration.sql` | `AC2A0F3FEFB0C868742BC356246046B5AC41A36EE4AB81EDE6A8250FC34C4382` | Synchronized copy inside the authoritative DBMS project folder. |
+| `DBMS_LAB_FINAL.sql` | `85FECE229AB4061BA1A735407DA131115E0BBF694BF035D6D6B975BBEB297047` | Authoritative single executable SQL lab script containing 13 BCNF tables, 8 views, 2 stored procedures, seed data, and 7 live test scenarios. |
+| `DBMS project/DBMS_LAB_FINAL.sql` | `85FECE229AB4061BA1A735407DA131115E0BBF694BF035D6D6B975BBEB297047` | Synchronized copy inside the authoritative DBMS project folder. |
+| `bankist_normalized.sql` | `9ACAB350DA58515BC105359D00818F0B0CF585B0C47813A8D2C65C59D6336143` | Canonical enterprise BCNF schema (all 13 tables, 8 views, zero redundant columns). |
+| `DBMS project/bankist_normalized.sql` | `9ACAB350DA58515BC105359D00818F0B0CF585B0C47813A8D2C65C59D6336143` | Synchronized copy inside the authoritative DBMS project folder. |
+| `bankist_migration.sql` | `1633DFD46CA4EE89E2956C4256CB72E9D872DFFFEA0861D2BB6B71E05C7919AB` | Production migration script with idempotent pre-flight checks and rollback guards. |
+| `DBMS project/bankist_migration.sql` | `1633DFD46CA4EE89E2956C4256CB72E9D872DFFFEA0861D2BB6B71E05C7919AB` | Synchronized copy inside the authoritative DBMS project folder. |
 | `bankist_normalization_tests.sql` | `137995FA464D7C7250884FDCE892120BAD79306ADB5053AB94D25037B5F2F76E` | Automated test suite (42 SQL assertions covering all 13 tables, all 8 views, parity, and security). |
 | `DBMS project/bankist_normalization_tests.sql` | `137995FA464D7C7250884FDCE892120BAD79306ADB5053AB94D25037B5F2F76E` | Synchronized copy inside the authoritative DBMS project folder. |
 | `scripts/test_college_demo.js` | — | Automated test runner verifying both direct SQL lab execution and full-stack Next.js HTTP API workflows. |
