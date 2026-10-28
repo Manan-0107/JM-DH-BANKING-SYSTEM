@@ -5,7 +5,7 @@
  * ==============================================================================
  * 
  * Comprehensive automated regression verification covering:
- * 1. 11-Table Schema Parity & Account Lien Constraints
+ * 1. 11-Table Schema Parity & Account Lien Constraints (MySQL 8.0+ Exclusive)
  * 2. Sensitive Credential Scrubbing (Zero Plaintext card_pin / otp_code)
  * 3. CSV Importer Idempotency & Repeatability
  * 4. End-to-End Login Contract, Suspended Customer Handling & Rate Limiting
@@ -24,6 +24,10 @@ const http = require('http');
 const WORKSPACE_ROOT = path.resolve(__dirname, '..');
 const TEST_DIR = path.resolve(WORKSPACE_ROOT, 'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test');
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
+
+// Load environment configuration
+require(path.resolve(TEST_DIR, 'node_modules/dotenv')).config({ path: path.resolve(TEST_DIR, '.env') });
+const mysql = require(path.resolve(TEST_DIR, 'node_modules/mysql2/promise'));
 
 let passed = 0;
 let failed = 0;
@@ -77,12 +81,19 @@ async function runRegressionSuite() {
   console.log('   JM-DH BANKING SYSTEM — COMPLETE REMEDIATION TEST SUITE       ');
   console.log('================================================================\n');
 
-  const sqlite3 = require(path.resolve(TEST_DIR, 'node_modules/sqlite3')).verbose();
-  const db = new sqlite3.Database(path.resolve(TEST_DIR, 'bankist.sqlite'));
-
-  const queryAsync = (sql, params = []) => new Promise((res, rej) => {
-    db.all(sql, params, (err, rows) => err ? rej(err) : res(rows || []));
+  const pool = mysql.createPool({
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: parseInt(process.env.DB_PORT || '3306', 10),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME || 'bankist',
+    dateStrings: true
   });
+
+  const queryAsync = async (sql, params = []) => {
+    const [rows] = await pool.query(sql, params);
+    return rows;
+  };
 
   try {
     // --------------------------------------------------------------------------
@@ -95,11 +106,14 @@ async function runRegressionSuite() {
       'audit_logs', 'otp_sessions', 'security_rate_limits'
     ];
 
-    const tablesInDb = await queryAsync("SELECT name FROM sqlite_master WHERE type='table'");
+    const tablesInDb = await queryAsync(
+      'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ?',
+      [process.env.DB_NAME || 'bankist']
+    );
     const tableNames = new Set(tablesInDb.map(t => t.name));
 
     expectedTables.forEach(t => {
-      assert(tableNames.has(t), `Core table '${t}' exists in database engine`);
+      assert(tableNames.has(t), `Core table '${t}' exists in MySQL 8.0 database engine`);
     });
 
     // --------------------------------------------------------------------------
@@ -140,8 +154,9 @@ async function runRegressionSuite() {
     const suspEmail = 'suspended.eval@btb.in';
     const defaultHash = '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC';
     await queryAsync(
-      `INSERT OR REPLACE INTO customers (customer_id, full_name, email, status, kyc_status, password_hash, card_pin_hash)
-       VALUES (?, 'Suspended Test User', ?, 'Suspended', 'Verified', ?, ?)`,
+      `INSERT INTO customers (customer_id, full_name, email, status, kyc_status, password_hash, card_pin_hash)
+       VALUES (?, 'Suspended Test User', ?, 'Suspended', 'Verified', ?, ?)
+       ON DUPLICATE KEY UPDATE status = 'Suspended'`,
       [suspCustId, suspEmail, defaultHash, defaultHash]
     );
 
@@ -232,10 +247,9 @@ async function runRegressionSuite() {
 
     // 5d. Account Lien Encumbrance Enforcement
     console.log('\n--- 5d. Testing Legal Lien Encumbrance Protection ---');
-    // Insert a temporary legal lien on a test account
     const lienTestAccount = authAccount;
     const testLienId = `LIEN-UNIT-${Date.now()}`;
-    const testLienAmount = 5000000.00; // Large lien to encumber balance
+    const testLienAmount = 5000000.00;
     await queryAsync(
       "INSERT INTO account_lien_records (lien_id, account_number, lien_amount, lien_reason) VALUES (?, ?, ?, 'Regulatory Hold Unit Test')",
       [testLienId, lienTestAccount, testLienAmount]
@@ -304,7 +318,7 @@ async function runRegressionSuite() {
     console.error('[UNCAUGHT TEST RUNNER ERROR]:', err);
     failed++;
   } finally {
-    db.close();
+    await pool.end();
   }
 
   console.log('\n================================================================');

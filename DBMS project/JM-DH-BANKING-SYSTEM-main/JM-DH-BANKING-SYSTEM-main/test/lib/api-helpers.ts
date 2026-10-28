@@ -159,25 +159,14 @@ export async function recordFailedAttempt(
 ): Promise<{ locked: boolean; remaining: number; lockDurationSec?: number; serviceUnavailable?: boolean }> {
   const now = Date.now();
   try {
-    if (db.isSqlite) {
-      await db.query(
-        `INSERT INTO security_rate_limits (key_id, attempts, last_attempt_at, locked_until)
-         VALUES (?, 1, ?, 0)
-         ON CONFLICT(key_id) DO UPDATE SET
-           attempts = CASE WHEN (? - last_attempt_at <= ?) THEN attempts + 1 ELSE 1 END,
-           last_attempt_at = ?`,
-        [keyId, now, now, options.windowMs, now]
-      );
-    } else {
-      await db.query(
-        `INSERT INTO security_rate_limits (key_id, attempts, last_attempt_at, locked_until)
-         VALUES (?, 1, ?, 0)
-         ON DUPLICATE KEY UPDATE
-           attempts = IF(? - last_attempt_at <= ?, attempts + 1, 1),
-           last_attempt_at = ?`,
-        [keyId, now, now, options.windowMs, now]
-      );
-    }
+    await db.query(
+      `INSERT INTO security_rate_limits (key_id, attempts, last_attempt_at, locked_until)
+       VALUES (?, 1, ?, 0)
+       ON DUPLICATE KEY UPDATE
+         attempts = IF(? - last_attempt_at <= ?, attempts + 1, 1),
+         last_attempt_at = ?`,
+      [keyId, now, now, options.windowMs, now]
+    );
 
     const [updatedRows] = await db.query(
       'SELECT attempts, locked_until FROM security_rate_limits WHERE key_id = ?',
@@ -285,3 +274,48 @@ export async function verifyCustomerCredentials(
 
   return { valid: true };
 }
+
+/**
+ * Masks an account number, displaying only the last 4 digits (e.g. ****7766).
+ */
+export function maskAccountNumber(accountNumber?: string | null): string {
+  if (!accountNumber) return 'N/A';
+  const clean = accountNumber.toString().trim();
+  if (clean.length <= 4) return '****';
+  return `****${clean.slice(-4)}`;
+}
+
+/**
+ * Sanitizes customer deposits for AI prompt generation, stripping customer IDs and account numbers.
+ */
+export function sanitizeDepositsForPrompt(deposits: any[] = []): any[] {
+  return deposits.map((d) => ({
+    deposit_type: d.deposit_type,
+    principal_amount: d.principal_amount,
+    tenure_months: d.tenure_months,
+    interest_rate: d.interest_rate,
+    status: d.status,
+  }));
+}
+
+/**
+ * Constructs a privacy-preserving LLM prompt free of direct customer identifiers.
+ */
+export function buildGeminiPrompt(prompt: string, ctx: any): string {
+  const maskedAcc = maskAccountNumber(ctx.primaryAccount?.account_number);
+  const sanitizedDeposits = sanitizeDepositsForPrompt(ctx.deposits);
+
+  const systemInstruction = `You are BTB Co-Pilot, the AI financial planning assistant for Bharat Trust Bank (BTB).
+Aggregated Customer Financial Overview (Data Minimization & Privacy Preservation Applied):
+- Customer Profile: Tier ${ctx.tier || 'Standard'}, Credit Bureau Score: ${ctx.creditScore || 'N/A'}
+- Total Liquid Balance: INR ${ctx.totalBalance}
+- Primary Account: ${maskedAcc} (${ctx.primaryAccount?.account_type || 'Savings'})
+- Monthly Inflow: INR ${ctx.monthlyInflow}, Outflow: INR ${ctx.monthlyOutflow}, Net Savings: INR ${ctx.netSavings} (${ctx.savingsRate}%)
+- Category Spending Aggregates: ${JSON.stringify(ctx.categorySpending)}
+- Active Term Deposits: ${JSON.stringify(sanitizedDeposits)}
+
+Respond concisely, professionally, and accurately in Indian Rupee format (₹, Lakhs, Crores). Always provide mathematical calculations when asked about investments, FD returns, loans, or budget burn rates.`;
+
+  return `${systemInstruction}\n\nUser Question: ${prompt}`;
+}
+

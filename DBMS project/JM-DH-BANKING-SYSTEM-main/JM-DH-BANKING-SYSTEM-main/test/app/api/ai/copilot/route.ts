@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
+import { maskAccountNumber, buildGeminiPrompt } from '@/lib/api-helpers';
 
 interface FinancialContext {
   fullName: string;
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const authUser = getUserFromRequest(request);
     if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Session invalid or expired' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -52,21 +53,21 @@ export async function POST(request: Request) {
       const placeholders = accountNumbers.map(() => '?').join(',');
       const [txRows] = await db.query(
         `SELECT * FROM transactions 
-         WHERE sender_account IN (${placeholders}) OR receiver_account IN (${placeholders}) 
+         WHERE (sender_account IN (${placeholders}) OR receiver_account IN (${placeholders})) 
          ORDER BY date_time DESC LIMIT 30`,
         [...accountNumbers, ...accountNumbers]
       );
       transactions = txRows || [];
     }
 
-    // 5. Calculate monthly cashflow metrics
+    // 5. Compute Monthly Inflow, Outflow, and Category Spending
     let monthlyInflow = 0;
     let monthlyOutflow = 0;
     const categoryTotals: Record<string, number> = {
       'Transfers & UPI': 0,
-      'Cash & ATM': 0,
       'Deposits & Investments': 0,
       'Utilities & Bills': 0,
+      'Cash & ATM': 0,
       'Shopping & Others': 0,
     };
 
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
       recentTransactions: transactions.slice(0, 10),
     };
 
-    // 6. Try Gemini API if GEMINI_API_KEY is available
+    // 6. Try Gemini API if GEMINI_API_KEY is available (with PII minimization)
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (geminiApiKey) {
       try {
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
           return NextResponse.json(aiResponse);
         }
       } catch (geminiError) {
-        console.warn('Gemini API call skipped/failed, using high-precision financial heuristics:', geminiError);
+        console.warn('Gemini API call skipped or failed. Falling back to deterministic heuristics.');
       }
     }
 
@@ -139,104 +140,54 @@ export async function POST(request: Request) {
 function runFinancialHeuristics(prompt: string, ctx: FinancialContext) {
   const p = prompt.toLowerCase();
 
-  // Query: Can I afford FD / Fixed Deposit advice?
-  if (p.includes('fd') || p.includes('fixed deposit') || p.includes('invest') || p.includes('afford')) {
-    const desiredAmount = 50000;
-    const emergencyBuffer = 25000;
-    const canAfford = ctx.totalBalance - desiredAmount >= emergencyBuffer;
-    const rate1Yr = 7.5;
-    // Compounded quarterly maturity: P * (1 + r/4)^(4*1)
-    const maturity1Yr = Math.round(desiredAmount * Math.pow(1 + (rate1Yr / 100) / 4, 4));
-    const interestEarned = maturity1Yr - desiredAmount;
-
+  // Pattern 1: Savings forecast & burn rate
+  if (p.includes('forecast') || p.includes('month-end') || p.includes('project') || p.includes('burn')) {
+    const dailyBurn = ctx.monthlyOutflow > 0 ? (ctx.monthlyOutflow / 30).toFixed(2) : '0';
+    const runwayMonths = ctx.monthlyOutflow > 0 ? (ctx.totalBalance / ctx.monthlyOutflow).toFixed(1) : 'Infinite';
     return {
-      reply: canAfford
-        ? `Yes, absolutely! Your total liquid balance is ₹${ctx.totalBalance.toLocaleString('en-IN')}. Locking ₹${desiredAmount.toLocaleString('en-IN')} in a 1-year Fixed Deposit at 7.50% p.a. will leave you with a safe buffer of ₹${(ctx.totalBalance - desiredAmount).toLocaleString('en-IN')}.\n\nAt maturity, you will receive ₹${maturity1Yr.toLocaleString('en-IN')} (guaranteed interest profit of ₹${interestEarned.toLocaleString('en-IN')}).`
-        : `Your current balance is ₹${ctx.totalBalance.toLocaleString('en-IN')}. We recommend keeping at least ₹${emergencyBuffer.toLocaleString('en-IN')} for liquid liquidity. You can comfortably lock ₹${Math.max(10000, ctx.totalBalance - emergencyBuffer).toLocaleString('en-IN')} in high-yield Fixed Deposits instead.`,
+      reply: `Based on your recent transactions, your average daily burn rate is ₹${dailyBurn}/day with an estimated cash runway of ${runwayMonths} months. At current trends, your projected month-end balance will be ₹${Math.max(0, ctx.totalBalance - (ctx.monthlyOutflow * 0.3)).toLocaleString('en-IN')}.`,
       insights: [
-        { label: 'Available Balance', value: `₹${ctx.totalBalance.toLocaleString('en-IN')}`, positive: true },
-        { label: '1-Year FD Rate', value: '7.50% p.a.', positive: true },
-        { label: 'Maturity Yield (₹50k)', value: `₹${maturity1Yr.toLocaleString('en-IN')}`, positive: true },
-        { label: 'Interest Profit', value: `+₹${interestEarned.toLocaleString('en-IN')}`, positive: true },
+        { label: 'Burn Rate', value: `₹${dailyBurn}/day`, positive: false },
+        { label: 'Runway', value: `${runwayMonths} Months`, positive: parseFloat(runwayMonths) >= 3 },
       ],
-      suggestedAction: {
-        label: 'Open FD Booking Modal',
-        actionType: 'open_modal',
-        modal: 'book_deposit',
-        params: { defaultAmount: desiredAmount, defaultTenure: 12 },
-      },
       suggestedFollowUps: [
-        'What are senior citizen FD interest rates?',
-        'How does quarterly compounding compare to monthly payout?',
-        'What is my monthly cash flow breakdown?',
+        'How can I optimize my monthly savings rate?',
+        'Can I afford to open a ₹25,000 Fixed Deposit?',
       ],
     };
   }
 
-  // Query: Spending / Expense / Category audit
-  if (p.includes('spend') || p.includes('expense') || p.includes('category') || p.includes('where did my money go')) {
-    const topCategory = [...ctx.categorySpending].sort((a, b) => b.total - a.total)[0] || { name: 'None', total: 0 };
+  // Pattern 2: FD Compounding & Yield Advisory
+  if (p.includes('fd') || p.includes('fixed deposit') || p.includes('invest') || p.includes('interest')) {
+    const rate = 7.5; // BTB Platinum 1-Year Rate
+    const testPrincipal = 50000;
+    const testMaturity = Math.round(testPrincipal * (1 + (rate / 100)));
     return {
-      reply: `In your recent transactions, your total outflows amount to ₹${ctx.monthlyOutflow.toLocaleString('en-IN')}.\n\nYour highest spending category is **${topCategory.name}** at ₹${topCategory.total.toLocaleString('en-IN')}. Your net savings this period is ₹${ctx.netSavings.toLocaleString('en-IN')} (${ctx.savingsRate}% savings rate), which ranks in the **${ctx.savingsRate >= 50 ? 'Excellent' : 'Moderate'}** financial health tier.`,
+      reply: `Bharat Trust Bank offers competitive FD returns up to **${rate}% p.a.** on 1-year tenures for ${ctx.tier} customers. For example, depositing ₹${testPrincipal.toLocaleString('en-IN')} yields ₹${testMaturity.toLocaleString('en-IN')} upon maturity. You currently have ₹${ctx.totalBalance.toLocaleString('en-IN')} liquid balance available.`,
       insights: [
-        { label: 'Total Inflow', value: `₹${ctx.monthlyInflow.toLocaleString('en-IN')}`, positive: true },
-        { label: 'Total Outflow', value: `₹${ctx.monthlyOutflow.toLocaleString('en-IN')}`, positive: false },
-        { label: 'Savings Rate', value: `${ctx.savingsRate}%`, positive: ctx.savingsRate >= 40 },
-        { label: 'Top Expense Category', value: topCategory.name, positive: false },
+        { label: 'Top FD Rate', value: `${rate}% p.a.`, positive: true },
+        { label: 'Liquid Surplus', value: `₹${ctx.totalBalance.toLocaleString('en-IN')}`, positive: true },
       ],
-      suggestedAction: {
-        label: 'Generate UPI Payment Request',
-        actionType: 'open_modal',
-        modal: 'upi',
-      },
       suggestedFollowUps: [
-        'What is my predicted month-end balance?',
-        'Can I afford to lock ₹50,000 in a 1-year FD?',
-        'Show my loan eligibility based on my credit score',
+        'Open a 1-year Fixed Deposit now',
+        'Compare 1-year vs 3-year term deposit yields',
       ],
     };
   }
 
-  // Query: Month-end balance / burn rate
-  if (p.includes('month-end') || p.includes('burn') || p.includes('predict') || p.includes('forecast') || p.includes('future')) {
-    const avgDailySpend = Math.round(ctx.monthlyOutflow / 30);
-    const estimatedRemainingDays = 15;
-    const projectedSpend = avgDailySpend * estimatedRemainingDays;
-    const projectedEndBalance = Math.max(0, ctx.totalBalance - projectedSpend);
-
+  // Pattern 3: Spending breakdown & budget leaks
+  if (p.includes('spend') || p.includes('category') || p.includes('highest') || p.includes('budget') || p.includes('expense')) {
+    const sorted = [...ctx.categorySpending].sort((a, b) => b.total - a.total);
+    const top = sorted[0] || { name: 'None', total: 0 };
     return {
-      reply: `Based on your recent 30-day activity, your daily average burn rate is **₹${avgDailySpend.toLocaleString('en-IN')} / day**.\n\nAssuming this current run-rate continues for the rest of the cycle, your projected account balance at month-end will be approximately **₹${projectedEndBalance.toLocaleString('en-IN')}**.\n\nTip: You have sufficient liquidity to automate ₹10,000 into a Recurring Deposit (RD) to maximize interest returns.`,
-      insights: [
-        { label: 'Current Balance', value: `₹${ctx.totalBalance.toLocaleString('en-IN')}`, positive: true },
-        { label: 'Daily Burn Rate', value: `₹${avgDailySpend.toLocaleString('en-IN')}/day`, positive: false },
-        { label: 'Projected End Balance', value: `₹${projectedEndBalance.toLocaleString('en-IN')}`, positive: true },
-      ],
-      suggestedAction: {
-        label: 'Book a Recurring Deposit',
-        actionType: 'open_modal',
-        modal: 'book_deposit',
-      },
+      reply: `Your total outflow this period was ₹${ctx.monthlyOutflow.toLocaleString('en-IN')}. Your highest expense category was **${top.name}** at ₹${top.total.toLocaleString('en-IN')} (${ctx.monthlyOutflow > 0 ? Math.round((top.total / ctx.monthlyOutflow) * 100) : 0}% of total spending).`,
+      insights: sorted.slice(0, 3).map((c) => ({
+        label: c.name,
+        value: `₹${c.total.toLocaleString('en-IN')}`,
+        positive: false,
+      })),
       suggestedFollowUps: [
-        'How can I reduce my daily burn rate?',
-        'Can I afford to invest in Fixed Deposits?',
-        'What are the charges for IMPS vs NEFT?',
-      ],
-    };
-  }
-
-  // Query: Credit Score / Loan eligibility
-  if (p.includes('credit') || p.includes('score') || p.includes('loan') || p.includes('emi') || p.includes('cibil')) {
-    return {
-      reply: `Your credit bureau score is **${ctx.creditScore}** (${ctx.tier} tier).\n\nWith a score of ${ctx.creditScore}, you qualify for pre-approved retail loans at our lowest institutional rate of **8.25% p.a.** on Home Loans and EV Vehicle Finance, with 100% processing fee waiver.\n\nFor an example ₹25,00,000 home loan over 20 years, your monthly EMI would be approximately ₹21,298.`,
-      insights: [
-        { label: 'Credit Score', value: `${ctx.creditScore}/900`, positive: true },
-        { label: 'Customer Tier', value: ctx.tier, positive: true },
-        { label: 'Home Loan Rate', value: '8.25% p.a.', positive: true },
-        { label: 'Processing Fee', value: '₹0 (Waived)', positive: true },
-      ],
-      suggestedFollowUps: [
-        'Calculate EMI for ₹50 Lakh loan',
-        'Can I afford to lock ₹50,000 in a 1-year FD?',
+        'How can I reduce my transfers and discretionary spending?',
         'What is my monthly cash flow summary?',
       ],
     };
@@ -244,7 +195,7 @@ function runFinancialHeuristics(prompt: string, ctx: FinancialContext) {
 
   // Default intelligent assistant response
   return {
-    reply: `Hello ${ctx.fullName}! I have analyzed your active Bharat Trust Bank profile:\n\n• **Total Liquid Balance:** ₹${ctx.totalBalance.toLocaleString('en-IN')}\n• **Active Accounts:** Primary account ${ctx.primaryAccount?.account_number || 'N/A'}\n• **Recent Inflows:** ₹${ctx.monthlyInflow.toLocaleString('en-IN')} vs Outflows of ₹${ctx.monthlyOutflow.toLocaleString('en-IN')}\n• **Credit Bureau Score:** ${ctx.creditScore} (${ctx.tier} Status)\n\nHow can I assist your financial planning today? You can ask me to forecast your month-end balance, check FD compounding returns, or audit category spending.`,
+    reply: `Hello ${ctx.fullName}! I have analyzed your active Bharat Trust Bank profile:\n\n• **Total Liquid Balance:** ₹${ctx.totalBalance.toLocaleString('en-IN')}\n• **Active Accounts:** Primary account ${maskAccountNumber(ctx.primaryAccount?.account_number)}\n• **Recent Inflows:** ₹${ctx.monthlyInflow.toLocaleString('en-IN')} vs Outflows of ₹${ctx.monthlyOutflow.toLocaleString('en-IN')}\n• **Credit Bureau Score:** ${ctx.creditScore} (${ctx.tier} Status)\n\nHow can I assist your financial planning today? You can ask me to forecast your month-end balance, check FD compounding returns, or audit category spending.`,
     insights: [
       { label: 'Total Balance', value: `₹${ctx.totalBalance.toLocaleString('en-IN')}`, positive: true },
       { label: 'Savings Rate', value: `${ctx.savingsRate}%`, positive: ctx.savingsRate >= 40 },
@@ -259,19 +210,9 @@ function runFinancialHeuristics(prompt: string, ctx: FinancialContext) {
   };
 }
 
-// Call Gemini API if available
+// Call Gemini API if available (with PII minimization & masking)
 async function callGeminiApi(prompt: string, ctx: FinancialContext, apiKey: string) {
-  const systemInstruction = `You are BTB Co-Pilot, the elite AI financial assistant for Bharat Trust Bank (BTB), a premier Indian Scheduled Commercial Bank.
-You have real-time access to the user's verified telemetry:
-- Customer Name: ${ctx.fullName}
-- Tier: ${ctx.tier}, Credit Score: ${ctx.creditScore}
-- Total Liquid Balance: INR ${ctx.totalBalance}
-- Primary Account: ${ctx.primaryAccount?.account_number} (${ctx.primaryAccount?.account_type})
-- Inflow this period: INR ${ctx.monthlyInflow}, Outflow: INR ${ctx.monthlyOutflow}, Net Savings: INR ${ctx.netSavings} (${ctx.savingsRate}%)
-- Category Spending: ${JSON.stringify(ctx.categorySpending)}
-- Active Fixed Deposits: ${JSON.stringify(ctx.deposits)}
-
-Respond concisely, professionally, and accurately in Indian Rupee format (₹, Lakhs, Crores). Always give concrete mathematical calculations when asked about investments, FD returns (7.5% 1-yr), loans (8.25%), or budget burn rates.`;
+  const fullPromptText = buildGeminiPrompt(prompt, ctx);
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
@@ -281,7 +222,7 @@ Respond concisely, professionally, and accurately in Indian Rupee format (₹, L
       contents: [
         {
           role: 'user',
-          parts: [{ text: `${systemInstruction}\n\nUser Question: ${prompt}` }],
+          parts: [{ text: fullPromptText }],
         },
       ],
       generationConfig: {

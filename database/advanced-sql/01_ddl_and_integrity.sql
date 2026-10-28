@@ -3,7 +3,8 @@
 -- MODULE 01: DDL, CONSTRAINTS & DATA INTEGRITY INVARIANTS (MySQL 8.0+)
 -- ============================================================================
 
-USE `bankist`;
+-- Note: Database context must be explicitly selected by the caller (e.g. USE <database>; or via connection pool/CLI).
+-- Do NOT hardcode 'USE bankist;' here to prevent accidental mutation of live environments during test/disposable setups.
 
 -- ----------------------------------------------------------------------------
 -- 1. Dynamic Column & Table Evolution Helpers

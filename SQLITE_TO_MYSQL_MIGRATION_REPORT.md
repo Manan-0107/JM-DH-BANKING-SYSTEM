@@ -234,3 +234,4 @@ DB_NAME=bankist
 
 ---
 *Report generated and validated by Senior Database Engineer & Application Security Reviewer.*
+

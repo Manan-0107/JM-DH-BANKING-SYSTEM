@@ -3,13 +3,15 @@
 -- MODULE 03: RELATIONAL VIEWS & MATERIALIZED VIEW ALTERNATIVES (MySQL 8.0+)
 -- ============================================================================
 
-USE `bankist`;
+-- Note: Database context must be explicitly selected by the caller (e.g. USE <database>; or via connection pool/CLI).
+-- Do NOT hardcode 'USE bankist;' here to prevent accidental mutation of live environments during test/disposable setups.
 
 -- ----------------------------------------------------------------------------
 -- 1. Standard Relational Views (Virtual Tables with Query Rewriting)
 -- ----------------------------------------------------------------------------
 
 -- View 1: Customer Portfolio & Total Liquid/Term Net Worth
+-- Uses pre-aggregated subqueries (acc and dep) to strictly prevent Cartesian multiplication / double-counting
 CREATE OR REPLACE VIEW `v_customer_portfolio` AS
 SELECT 
     c.customer_id,
@@ -18,14 +20,23 @@ SELECT
     c.phone,
     c.tier,
     c.credit_score,
-    COUNT(DISTINCT a.account_number) AS total_accounts,
-    COALESCE(SUM(a.balance), 0.00) AS total_liquid_balance,
-    COALESCE(SUM(d.principal_amount), 0.00) AS total_deposits_principal,
-    (COALESCE(SUM(a.balance), 0.00) + COALESCE(SUM(d.principal_amount), 0.00)) AS total_net_worth
+    COALESCE(acc.total_accounts, 0) AS total_accounts,
+    COALESCE(acc.total_liquid_balance, 0.00) AS total_liquid_balance,
+    COALESCE(dep.total_deposits_principal, 0.00) AS total_deposits_principal,
+    (COALESCE(acc.total_liquid_balance, 0.00) + COALESCE(dep.total_deposits_principal, 0.00)) AS total_net_worth
 FROM customers c
-LEFT JOIN accounts a ON c.customer_id = a.customer_id AND a.status = 'Active'
-LEFT JOIN deposits d ON c.customer_id = d.customer_id AND d.status = 'Active'
-GROUP BY c.customer_id, c.full_name, c.email, c.phone, c.tier, c.credit_score;
+LEFT JOIN (
+    SELECT customer_id, COUNT(*) AS total_accounts, SUM(balance) AS total_liquid_balance
+    FROM accounts
+    WHERE status = 'Active'
+    GROUP BY customer_id
+) acc ON c.customer_id = acc.customer_id
+LEFT JOIN (
+    SELECT customer_id, SUM(principal_amount) AS total_deposits_principal
+    FROM deposits
+    WHERE status = 'Active'
+    GROUP BY customer_id
+) dep ON c.customer_id = dep.customer_id;
 
 -- View 2: High Value Transaction Monitor (Transactions >= ₹25,000 for AML Compliance)
 CREATE OR REPLACE VIEW `v_high_value_transactions` AS

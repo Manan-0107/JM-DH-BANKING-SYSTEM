@@ -8,3 +8,5 @@ node_modules/
 .env.local
 .env*.local
 !.env.example
+database/backups/
+*.patch

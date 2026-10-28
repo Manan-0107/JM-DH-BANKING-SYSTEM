@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
     // 2. Concurrency-Safe Verification Transaction
     const result = await db.transaction(async (conn) => {
-      const lockClause = db.isSqlite ? '' : ' FOR UPDATE';
+      const lockClause = ' FOR UPDATE';
       const [rows] = await conn.query(
         `SELECT session_id, otp_code, otp_hash, expires_at, verified, attempts FROM otp_sessions
          WHERE identifier = ? AND purpose = ?

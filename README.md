@@ -1,17 +1,17 @@
 # Bharat Trust Bank (BTB) — Core Banking DBMS Project
 
-A database-driven banking web application for academic DBMS demonstration, featuring atomic financial transactions, concurrency safety, row-level authorization, and dual-mode database support.
+A production-grade, database-driven banking web application for academic DBMS demonstration, featuring atomic financial transactions, concurrency safety, row-level authorization, and exclusive MySQL 8.0+ enterprise database architecture.
 
 ---
 
 ## 📁 Repository Directory Structure & Authoritative Application Root
 
-This repository preserves legacy project iterations while establishing the modern Next.js 14 application as authoritative:
+This repository preserves legacy project iterations while establishing the modern Next.js application as authoritative:
 
 | Directory | Status | Description |
 | :--- | :--- | :--- |
-| **`DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/`** | **⭐ AUTHORITATIVE** | **Active Modern Application**: Next.js 14 App Router, dual-engine database adapter (SQLite/MySQL), Tailwind CSS, API endpoints, and verification test suites. |
-| `DBMS project/bankist.sql` | Authoritative DDL | Canonical MySQL 8.0 schema and seed DDL script. |
+| **`DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/`** | **⭐ AUTHORITATIVE** | **Active Application**: Next.js 15 App Router, MySQL 8.0+ exclusive database adapter, Tailwind CSS, authenticated API endpoints, and verification test suites. |
+| `DBMS project/bankist.sql` | Authoritative DDL | Canonical MySQL 8.0 schema, views, constraints, and seed DDL script. |
 | `docs/DBMS_VIVA_AND_EVALUATION_GUIDE.md` | Authoritative Guide | Comprehensive 27-point DBMS viva and evaluation guide. |
 | `archive/legacy-prototype-express/` | Archived Reference | Historical Express.js prototype from earlier project iteration. |
 | `archive/legacy-mockup-og/` | Archived Reference | Historical static HTML/CSS/JS frontend mockup. |
@@ -20,32 +20,47 @@ This repository preserves legacy project iterations while establishing the moder
 
 ## 🚀 Quick Start (Running the Authoritative App)
 
-### 1. Navigate to Authoritative Project Directory
+### 1. MySQL 8.0+ Database Server
+Ensure MySQL 8.0+ is running locally on port 3306 and create the `bankist` database:
+```sql
+CREATE DATABASE IF NOT EXISTS bankist CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+Import the authoritative schema:
+```bash
+mysql -u root -p bankist < "DBMS project/bankist.sql"
+```
+
+### 2. Navigate to Authoritative Project Directory
 ```bash
 cd "DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test"
 ```
 
-### 2. Environment Configuration
+### 3. Environment Configuration
 Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-- By default, `USE_MYSQL=false` uses embedded SQLite (`bankist.sqlite`) with automatic table creation and demo seeding out of the box.
-- To connect to a live MySQL 8.0+ server, configure `.env`:
+Configure `.env` with your local MySQL credentials:
 ```env
-USE_MYSQL=true
-ALLOW_SQLITE_FALLBACK=false
-DB_HOST=localhost
+# MySQL 8.0 Database Configuration (Exclusive Runtime Engine)
+DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=your_mysql_password
 DB_NAME=bankist
+
+# JWT Authentication
 JWT_SECRET=your_secure_32_byte_secret_here
+JWT_EXPIRES_IN=24h
+
+# Security & Demo Flags
+ALLOW_TEST_OTP=false
+ENABLE_DEMO_GRANT=true
 ```
 > [!IMPORTANT]
-> When `USE_MYSQL=true`, the system strictly connects to MySQL and will abort startup if MySQL is unreachable. Automatic fallback to SQLite is only allowed if `ALLOW_SQLITE_FALLBACK=true` is explicitly enabled in development mode (prohibited in production to avoid silent data divergence).
+> MySQL 8.0+ is the **exclusive, unconditional runtime engine**. All fallback paths have been permanently removed. If MySQL is unreachable, application startup will abort immediately with a fail-closed fatal error.
 
-### 3. Install & Start Development Server
+### 4. Install & Start Development Server
 ```bash
 npm install
 npm run dev
@@ -54,35 +69,72 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## 📥 Authoritative CSV Data Integration & Reconciliation
+
+Authoritative banking CSV datasets in the repository root can be safely integrated into MySQL 8.0+ with full referential validation:
+
+### Dependency Order:
+1. `branches.csv`
+2. `customers.csv`
+3. `accounts.csv`
+4. `account_lien_records.csv`
+5. `beneficiaries.csv`
+6. `deposits.csv`
+7. `transactions.csv`
+8. `kyc_verifications.csv`
+9. `audit_logs.csv`
+10. `otp_sessions.csv`
+11. `security_rate_limits.csv`
+
+### Dry-Run Assessment (No Writes):
+```bash
+node scripts/import_csv_data.js --dry-run
+```
+
+### Live Transactional Import & Reconciliation:
+```bash
+node scripts/import_csv_data.js
+```
+*Guarantees: Strict conflict policy preserves active demo users and live balances. Plaintext PINs and OTP codes are strictly scrubbed to NULL with bcrypt hashing enforced.*
+
+---
+
 ## 🧪 Automated Verification Test Suites
 
-### Complete Backend Infrastructure Suite
-Validates authentication, row-level authorization, overdraft prevention, multi-threaded concurrency, atomic transaction failure-driven rollback, term deposits, and ATM operations:
+### 1. MySQL Exclusive Runtime Enforcement
 ```bash
-node test_backend_suite.js
+npm run test:engine
 ```
+Verifies unconditional MySQL connection, failure prevention, and fail-closed rejection of obsolete fallback flags.
 
-### End-to-End Database Persistence Verification
-Verifies that onboarding grants, transfers, and ledger UTR records persist across full server restarts:
+### 2. Complete Security Remediation Suite
 ```bash
-node test_persistence.js
+node test_security_remediation.js
 ```
+Verifies persistent brute-force lockout, PIN vs password credential separation, HMAC-SHA256 OTP verification, replay protection, and sensitive credential sanitization.
 
-### Advanced DBMS Capstone Verification Suite (MySQL 8.0)
-Validates all 31 DBMS criteria including DDL constraints, window functions, recursive CTEs, materialized summary table refreshes, stored routines, triggers, ACID transaction rollbacks, race condition prevention, RBAC roles, and backup parity:
+### 3. Complete Backend Infrastructure Suite
 ```bash
-node scripts/run_all_dbms_tests.js
+npm run test:backend
 ```
+Validates authentication, row-level authorization, overdraft prevention, multi-threaded concurrency, atomic transaction failure-driven rollback, term deposits, and ATM operations (161 assertions).
 
-### Synthetic Scale Seed Data Generator
-Generates reproducible, relationally-sound synthetic banking data (customers, accounts, transactions, beneficiaries, deposits, and branches) with configurable scale:
+### 4. End-to-End Database Persistence Verification
 ```bash
-node scripts/generate_seed_data.js --customers 100 --transactions 1000
+npm run test:persistence
 ```
+Verifies that onboarding grants, transfers, and ledger UTR records persist across full server restarts.
 
-### Static Type Check
+### 5. CSV Data & Remediation Regression Suite
 ```bash
-npx tsc --noEmit
+node ../../../scripts/test_csv_and_remediation.js
+```
+Verifies 11-table MySQL schema parity, sensitive credential scrubbing, active login flow, legal lien encumbrance, and deposit lifecycles.
+
+### 6. Static Type Check & Production Build
+```bash
+npm run type-check
+npm run build
 ```
 
 ---

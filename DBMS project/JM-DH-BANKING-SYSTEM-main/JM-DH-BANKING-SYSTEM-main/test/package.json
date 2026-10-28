@@ -8,7 +8,8 @@
     "start": "next start",
     "type-check": "tsc --noEmit",
     "test:backend": "node test_backend_suite.js",
-    "test:persistence": "node test_persistence.js"
+    "test:persistence": "node test_persistence.js",
+    "test:engine": "node --experimental-strip-types test_mysql_runtime_enforcement.js"
   },
   "dependencies": {
     "autoprefixer": "^10.4.20",
@@ -20,9 +21,8 @@
     "postcss": "^8.5.31",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sqlite3": "^6.0.1",
     "tailwindcss": "^3.4.14",
-    "uuid": "^10.0.0"
+    "uuid": "^11.1.1"
   },
   "overrides": {
     "postcss": "^8.5.31"

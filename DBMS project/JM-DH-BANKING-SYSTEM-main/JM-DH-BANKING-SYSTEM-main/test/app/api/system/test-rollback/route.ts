@@ -123,7 +123,7 @@ export async function POST(request: Request) {
           ledger_record_remains: false,
           probe_txn_id: txnId,
           probe_reference_number: referenceNumber,
-          engine: db.isSqlite ? 'sqlite' : 'mysql',
+          engine: 'mysql',
         },
         { status: 500 }
       );
@@ -165,8 +165,8 @@ export async function GET(request: Request) {
   try {
     const db = await getDb();
     return NextResponse.json({
-      engine: db.isSqlite ? 'sqlite' : 'mysql',
-      isSqlite: !!db.isSqlite,
+      engine: 'mysql',
+      isSqlite: false,
       status: 'active-test-environment',
     });
   } catch (err: any) {

@@ -4,8 +4,8 @@
 -- Generated: 2026-09-13T16:49:30.116Z
 -- ============================================================================
 
-CREATE DATABASE IF NOT EXISTS `bankist` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `bankist`;
+-- Note: Database context must be explicitly selected by the caller (e.g. USE <database>; or via connection pool/CLI).
+-- Do NOT hardcode 'USE bankist;' here to prevent accidental mutation of live environments during test/disposable setups.
 
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -79,6 +79,7 @@ CREATE TABLE `transactions` (
   `date_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `status` VARCHAR(30) DEFAULT 'Success',
   `description` TEXT DEFAULT NULL,
+  `reference_number` VARCHAR(100) DEFAULT NULL UNIQUE,
   PRIMARY KEY (`transaction_id`),
   INDEX `idx_tx_sender` (`sender_account`),
   INDEX `idx_tx_receiver` (`receiver_account`),
@@ -261,14 +262,23 @@ SELECT
     c.phone,
     c.tier,
     c.credit_score,
-    COUNT(DISTINCT a.account_number) AS total_accounts,
-    COALESCE(SUM(a.balance), 0.00) AS total_liquid_balance,
-    COALESCE(SUM(d.principal_amount), 0.00) AS total_deposits_principal,
-    (COALESCE(SUM(a.balance), 0.00) + COALESCE(SUM(d.principal_amount), 0.00)) AS total_net_worth
+    COALESCE(acc.total_accounts, 0) AS total_accounts,
+    COALESCE(acc.total_liquid_balance, 0.00) AS total_liquid_balance,
+    COALESCE(dep.total_deposits_principal, 0.00) AS total_deposits_principal,
+    (COALESCE(acc.total_liquid_balance, 0.00) + COALESCE(dep.total_deposits_principal, 0.00)) AS total_net_worth
 FROM customers c
-LEFT JOIN accounts a ON c.customer_id = a.customer_id AND a.status = 'Active'
-LEFT JOIN deposits d ON c.customer_id = d.customer_id AND d.status = 'Active'
-GROUP BY c.customer_id, c.full_name, c.email, c.phone, c.tier, c.credit_score;
+LEFT JOIN (
+    SELECT customer_id, COUNT(*) AS total_accounts, SUM(balance) AS total_liquid_balance
+    FROM accounts
+    WHERE status = 'Active'
+    GROUP BY customer_id
+) acc ON c.customer_id = acc.customer_id
+LEFT JOIN (
+    SELECT customer_id, SUM(principal_amount) AS total_deposits_principal
+    FROM deposits
+    WHERE status = 'Active'
+    GROUP BY customer_id
+) dep ON c.customer_id = dep.customer_id;
 
 -- View: High Value Transactions (> ₹25,000)
 CREATE OR REPLACE VIEW `v_high_value_transactions` AS
@@ -301,6 +311,81 @@ SELECT
 FROM deposits d
 JOIN customers c ON d.customer_id = c.customer_id
 WHERE d.status = 'Active';
+
+
+-- ----------------------------------------------------------------------------
+-- Table structure for `branches`
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `branches` (
+  `branch_id` VARCHAR(50) NOT NULL,
+  `branch_name` VARCHAR(100) NOT NULL,
+  `ifsc_code` VARCHAR(20) NOT NULL UNIQUE,
+  `city` VARCHAR(100) NOT NULL,
+  `address` TEXT NOT NULL,
+  `timing` VARCHAR(50) DEFAULT '09:30 AM - 04:30 PM',
+  `phone` VARCHAR(30) DEFAULT NULL,
+  `status` VARCHAR(20) DEFAULT 'Active',
+  PRIMARY KEY (`branch_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- Table structure for `account_lien_records`
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `account_lien_records` (
+  `lien_id` VARCHAR(50) NOT NULL,
+  `account_number` VARCHAR(50) NOT NULL,
+  `lien_amount` DECIMAL(15,2) NOT NULL,
+  `lien_reason` VARCHAR(255) NOT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`lien_id`),
+  INDEX `idx_lien_account` (`account_number`),
+  CONSTRAINT `fk_lien_account` FOREIGN KEY (`account_number`) 
+    REFERENCES `accounts` (`account_number`) 
+    ON DELETE RESTRICT 
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- Table structure for `audit_logs`
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `audit_logs` (
+  `log_id` VARCHAR(50) NOT NULL,
+  `customer_id` VARCHAR(50) DEFAULT NULL,
+  `action` VARCHAR(100) NOT NULL,
+  `entity_type` VARCHAR(50) NOT NULL,
+  `entity_id` VARCHAR(50) DEFAULT NULL,
+  `details` TEXT DEFAULT NULL,
+  `timestamp` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`log_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- Table structure for `otp_sessions`
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `otp_sessions` (
+  `session_id` VARCHAR(50) NOT NULL,
+  `identifier` VARCHAR(150) NOT NULL,
+  `purpose` VARCHAR(50) NOT NULL,
+  `otp_code` VARCHAR(10) DEFAULT NULL,
+  `otp_hash` VARCHAR(255) DEFAULT NULL,
+  `expires_at` BIGINT NOT NULL,
+  `verified` INT DEFAULT 0,
+  `attempts` INT DEFAULT 0,
+  `last_sent_at` BIGINT DEFAULT 0,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
+-- Table structure for `security_rate_limits`
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `security_rate_limits` (
+  `key_id` VARCHAR(150) NOT NULL,
+  `attempts` INT DEFAULT 1,
+  `last_attempt_at` BIGINT NOT NULL,
+  `locked_until` BIGINT DEFAULT 0,
+  PRIMARY KEY (`key_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
 -- END OF DATABASE SCRIPT
