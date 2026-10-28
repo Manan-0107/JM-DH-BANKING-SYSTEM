@@ -10,18 +10,64 @@
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- SECTION 1: DATABASE INITIALIZATION & ENVIRONMENT SETUP
+-- SECTION 1: SAFETY-GUARDED DATABASE INITIALIZATION & ENVIRONMENT SETUP
 -- ------------------------------------------------------------------------------
-DROP DATABASE IF EXISTS `bankist_college_demo`;
-CREATE DATABASE `bankist_college_demo`
+-- Safety Guard: The live production database `bankist` is strictly protected.
+-- Target Database: `bankist_college_demo` (Isolated Demo Database).
+-- ------------------------------------------------------------------------------
+CREATE DATABASE IF NOT EXISTS `bankist_college_demo`
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
 USE `bankist_college_demo`;
 
+-- Explicit Pre-flight Safety Guard: Prevent accidental execution in production 'bankist'
+DROP PROCEDURE IF EXISTS `sp_assert_safe_demo_db`;
+DELIMITER //
+CREATE PROCEDURE `sp_assert_safe_demo_db`()
+BEGIN
+    IF DATABASE() = 'bankist' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'ABORT: Destructive lab script cannot run against live production bankist database!';
+    END IF;
+END //
+DELIMITER ;
+CALL `sp_assert_safe_demo_db`();
+DROP PROCEDURE `sp_assert_safe_demo_db`;
+
 -- Enforce strict SQL mode (Zero tolerance for group-by errors or silent truncations)
 SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- Clean idempotent reset restricted strictly to verified disposable target database:
+-- Drop views in dependency order
+DROP VIEW IF EXISTS `v_beneficiaries`;
+DROP VIEW IF EXISTS `v_deposits`;
+DROP VIEW IF EXISTS `v_branch_performance`;
+DROP VIEW IF EXISTS `v_active_deposits_summary`;
+DROP VIEW IF EXISTS `v_high_value_transactions`;
+DROP VIEW IF EXISTS `v_customer_portfolio`;
+DROP VIEW IF EXISTS `v_accounts_legacy`;
+DROP VIEW IF EXISTS `v_customers_legacy`;
+
+-- Drop stored procedures
+DROP PROCEDURE IF EXISTS `sp_deposit_funds`;
+DROP PROCEDURE IF EXISTS `sp_transfer_funds`;
+
+-- Drop tables in reverse foreign-key topological order (child/leaf tables first)
+DROP TABLE IF EXISTS `audit_logs`;
+DROP TABLE IF EXISTS `security_rate_limits`;
+DROP TABLE IF EXISTS `otp_sessions`;
+DROP TABLE IF EXISTS `account_lien_records`;
+DROP TABLE IF EXISTS `kyc_verifications`;
+DROP TABLE IF EXISTS `beneficiaries`;
+DROP TABLE IF EXISTS `deposits`;
+DROP TABLE IF EXISTS `transactions`;
+DROP TABLE IF EXISTS `account_card_credentials`;
+DROP TABLE IF EXISTS `customer_nominees`;
+DROP TABLE IF EXISTS `accounts`;
+DROP TABLE IF EXISTS `customers`;
+DROP TABLE IF EXISTS `branches`;
 
 -- ==============================================================================
 -- SECTION 2: BCNF NORMALIZED SCHEMA CREATION

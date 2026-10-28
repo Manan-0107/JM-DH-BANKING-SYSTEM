@@ -37,7 +37,7 @@ const DDL_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_normalized.s
 const MIGRATION_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_migration.sql');
 const TESTS_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_normalization_tests.sql');
 
-const EXPECTED_ASSERTIONS_COUNT = 37;
+const EXPECTED_ASSERTIONS_COUNT = 42;
 
 async function computeLiveDbFingerprint(conn, dbName) {
   const [tables] = await conn.query(`SHOW FULL TABLES FROM \`${dbName}\` WHERE Table_type = 'BASE TABLE'`);
