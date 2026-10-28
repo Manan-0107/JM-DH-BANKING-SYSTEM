@@ -13,23 +13,15 @@ export default function Header() {
   const pathname = usePathname();
 
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userStr = localStorage.getItem('user');
-    if (token && userStr) {
-      try {
-        setCustomer(JSON.parse(userStr));
-      } catch (e) {}
-    } else {
-      setCustomer(null);
-    }
-
-    const handleStorage = () => {
-      const updatedUser = localStorage.getItem('user');
-      if (updatedUser) {
+    const syncAuth = () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+      if (token && userStr) {
         try {
-          setCustomer(JSON.parse(updatedUser));
+          setCustomer(JSON.parse(userStr));
         } catch (e) {
           setCustomer(null);
         }
@@ -37,14 +29,23 @@ export default function Header() {
         setCustomer(null);
       }
     };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+
+    syncAuth();
+    window.addEventListener('storage', syncAuth);
+    window.addEventListener('auth-state-change', syncAuth);
+    return () => {
+      window.removeEventListener('storage', syncAuth);
+      window.removeEventListener('auth-state-change', syncAuth);
+    };
   }, [pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('primaryAccount');
     setCustomer(null);
+    setMobileMenuOpen(false);
+    window.dispatchEvent(new Event('auth-state-change'));
     showToast(language === 'hi' ? 'सफलतापूर्वक लॉग आउट किया गया' : 'Logged out securely', 'info');
     router.push('/');
   };
@@ -68,7 +69,7 @@ export default function Header() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
           <span style={{ color: '#0f172a', fontWeight: 600 }}>
-            {t('Scheduled Commercial Bank • Govt of India Partner')}
+            {t('Academic DBMS Project • Educational Simulation')}
           </span>
           <span style={{ color: '#cbd5e1' }}>|</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -76,7 +77,7 @@ export default function Header() {
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
-            <span>{t('256-Bit SSL Encrypted | RBI Regulated')}</span>
+            <span>{t('Bcrypt / HMAC-SHA256 Encrypted | Laboratory Prototype')}</span>
           </div>
         </div>
 
@@ -156,8 +157,8 @@ export default function Header() {
           </div>
         </Link>
 
-        {/* Navigation Links */}
-        <ul style={{ display: 'flex', gap: '2.8rem', listStyle: 'none', alignItems: 'center', margin: 0, padding: 0 }}>
+        {/* Desktop Navigation Links */}
+        <ul className="hidden lg:flex" style={{ gap: '2.4rem', listStyle: 'none', alignItems: 'center', margin: 0, padding: 0 }}>
           <li>
             <Link
               href="/"
@@ -259,8 +260,37 @@ export default function Header() {
           </li>
         </ul>
 
-        {/* Right User or Login Action */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.6rem' }}>
+        {/* Right User or Login Action & Mobile Hamburger */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+          {/* Mobile Hamburger Toggle Button */}
+          <button
+            aria-label="Toggle Navigation Menu"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex lg:hidden items-center justify-center"
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '0.8rem',
+              padding: '0.8rem',
+              cursor: 'pointer',
+              color: '#0f172a',
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              {mobileMenuOpen ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </>
+              ) : (
+                <>
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                </>
+              )}
+            </svg>
+          </button>
           {customer ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.4rem' }}>
               <Link
@@ -347,6 +377,105 @@ export default function Header() {
           )}
         </div>
       </nav>
+
+      {/* Responsive Mobile Drawer Menu */}
+      {mobileMenuOpen && (
+        <div
+          className="lg:hidden"
+          style={{
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #e2e8f0',
+            padding: '1.8rem 2.4rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.2rem',
+            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.06)',
+          }}
+        >
+          <Link
+            href="/"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ textDecoration: 'none', fontSize: '1.45rem', fontWeight: 600, color: '#0f172a', padding: '0.6rem 0' }}
+          >
+            {t('Home')}
+          </Link>
+          <Link
+            href="/table-detail?tab=accounts"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ textDecoration: 'none', fontSize: '1.45rem', fontWeight: 600, color: '#475569', padding: '0.6rem 0' }}
+          >
+            {t('Accounts')}
+          </Link>
+          <Link
+            href="/table-detail?tab=deposits"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ textDecoration: 'none', fontSize: '1.45rem', fontWeight: 600, color: '#475569', padding: '0.6rem 0' }}
+          >
+            {t('Deposits')}
+          </Link>
+          <Link
+            href="/table-detail?tab=loans"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ textDecoration: 'none', fontSize: '1.45rem', fontWeight: 600, color: '#1d4ed8', padding: '0.6rem 0' }}
+          >
+            {t('Loans & EMI Calc')}
+          </Link>
+          <Link
+            href="/table-detail?tab=cards"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ textDecoration: 'none', fontSize: '1.45rem', fontWeight: 600, color: '#475569', padding: '0.6rem 0' }}
+          >
+            {t('RuPay Cards')}
+          </Link>
+          <Link
+            href="/table-detail?tab=branches"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ textDecoration: 'none', fontSize: '1.45rem', fontWeight: 600, color: '#475569', padding: '0.6rem 0' }}
+          >
+            {t('Branches & ATMs')}
+          </Link>
+
+          {!customer && (
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
+              <Link
+                href="/open-account"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  flex: 1,
+                  textAlign: 'center',
+                  background: '#eff6ff',
+                  color: '#1d4ed8',
+                  border: '1px solid #bfdbfe',
+                  textDecoration: 'none',
+                  padding: '1rem',
+                  borderRadius: '0.8rem',
+                  fontSize: '1.35rem',
+                  fontWeight: 600,
+                }}
+              >
+                {t('Open Account')}
+              </Link>
+              <Link
+                href="/#login-card"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  flex: 1,
+                  textAlign: 'center',
+                  background: '#0f172a',
+                  color: '#ffffff',
+                  textDecoration: 'none',
+                  padding: '1rem',
+                  borderRadius: '0.8rem',
+                  fontSize: '1.35rem',
+                  fontWeight: 600,
+                }}
+              >
+                {t('Login →')}
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 }

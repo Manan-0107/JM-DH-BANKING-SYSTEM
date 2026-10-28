@@ -52,6 +52,21 @@ export async function POST(
     const nowTime = formatDbDateTime();
     const targetAccount = deposit.linked_account;
 
+    // Verify target refund account existence and status
+    const [accRows] = await db.query(
+      'SELECT account_number, status FROM accounts WHERE account_number = ?',
+      [targetAccount]
+    );
+    if (!accRows || accRows.length === 0) {
+      return NextResponse.json({ error: 'Linked account for refund not found' }, { status: 404 });
+    }
+    if (accRows[0].status !== 'Active') {
+      return NextResponse.json(
+        { error: `Linked account ${targetAccount} is ${accRows[0].status.toLowerCase()}. Cannot process liquidation into inactive account.` },
+        { status: 400 }
+      );
+    }
+
     const { txnId, referenceNumber } = generateTransactionReference('TXN-LIQ');
 
     // 4. Atomic Execution

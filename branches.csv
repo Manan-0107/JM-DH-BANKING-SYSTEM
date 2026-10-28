@@ -1,0 +1,6 @@
+branch_id,branch_name,ifsc_code,city,address,timing,phone,status
+BR-101,Mumbai Nariman Point Hub,BTBI0001024,Mumbai,"Ground Floor, Express Towers, Nariman Point, Mumbai 400021",09:30 AM - 04:30 PM,022-22881024,Active
+BR-102,Bengaluru MG Road Branch,BTBI0002018,Bengaluru,"Prestige Meridian, 29 MG Road, Bengaluru 560001",09:30 AM - 04:30 PM,080-25582018,Active
+BR-103,Delhi Connaught Place Branch,BTBI0003055,New Delhi,"Inner Circle, Blocks A-C, Connaught Place, New Delhi 110001",09:30 AM - 04:30 PM,011-23343055,Active
+BR-104,Pune Camp Central Branch,BTBI0004011,Pune,"Moledina Road, Camp, Pune 411001",09:30 AM - 04:30 PM,020-26124011,Active
+BR-105,Ahmedabad Ashram Road Hub,BTBI0005089,Ahmedabad,"Near Sakar III, Ashram Road, Ahmedabad 380009",09:30 AM - 04:30 PM,079-26585089,Active

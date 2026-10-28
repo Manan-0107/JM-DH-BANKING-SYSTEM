@@ -2,6 +2,7 @@ node_modules/
 .next/
 *.sqlite
 *.sqlite3
+*.sqlite.backup*
 *.db
 .env
 .env.local

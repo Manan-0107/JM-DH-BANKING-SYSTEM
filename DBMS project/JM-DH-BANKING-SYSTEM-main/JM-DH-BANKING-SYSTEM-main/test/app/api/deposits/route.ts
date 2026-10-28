@@ -74,10 +74,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Source account is frozen or inactive' }, { status: 400 });
     }
 
-    if (parseFloat(account.balance) < amount) {
-      return NextResponse.json({
-        error: `Insufficient funds in ${source_account}. Available: ₹${parseFloat(account.balance).toLocaleString('en-IN')}`,
-      }, { status: 400 });
+    // Check Legal Liens / Encumbrance Holds
+    let totalLien = 0;
+    try {
+      const [lienRows] = await db.query(
+        'SELECT COALESCE(SUM(lien_amount), 0) AS total_lien FROM account_lien_records WHERE account_number = ?',
+        [source_account]
+      );
+      totalLien = parseFloat(lienRows?.[0]?.total_lien || 0);
+    } catch (e) {}
+
+    const currentBal = parseFloat(account.balance);
+    const availableBal = currentBal - totalLien;
+
+    if (availableBal < amount) {
+      const errorMsg = totalLien > 0
+        ? `Insufficient funds in ${source_account}: ₹${totalLien.toLocaleString('en-IN')} held under active legal lien. Available: ₹${Math.max(0, availableBal).toLocaleString('en-IN')}`
+        : `Insufficient funds in ${source_account}. Available: ₹${currentBal.toLocaleString('en-IN')}`;
+      return NextResponse.json({ error: errorMsg }, { status: 400 });
     }
 
     // 2. Verify PIN
@@ -109,8 +123,8 @@ export async function POST(request: Request) {
     // 4. Atomic Execution with Concurrency Protection
     await db.transaction(async (conn) => {
       const [debitResult] = await conn.query(
-        'UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND balance >= ? AND status = ?',
-        [amount, source_account, amount, 'Active']
+        'UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND (balance - ?) >= ? AND status = ?',
+        [amount, source_account, totalLien, amount, 'Active']
       );
 
       const affected = (debitResult as any)?.affectedRows ?? (debitResult as any)?.changes ?? 0;

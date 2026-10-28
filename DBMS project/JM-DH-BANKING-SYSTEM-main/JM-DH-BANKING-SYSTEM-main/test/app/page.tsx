@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLanguage, useToast } from '@/components/Providers';
@@ -9,6 +9,32 @@ export default function Home() {
   const { t, language } = useLanguage();
   const { showToast } = useToast();
   const router = useRouter();
+
+  // Logged in user state for reactive UI reflow
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    const updateAuth = () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+      if (token && userStr) {
+        try {
+          setCurrentUser(JSON.parse(userStr));
+        } catch (e) {
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    };
+    updateAuth();
+    window.addEventListener('storage', updateAuth);
+    window.addEventListener('auth-state-change', updateAuth);
+    return () => {
+      window.removeEventListener('storage', updateAuth);
+      window.removeEventListener('auth-state-change', updateAuth);
+    };
+  }, []);
 
   // Auth Tabs State
   const [authTab, setAuthTab] = useState<'login' | 'signup'>('login');
@@ -69,6 +95,8 @@ export default function Home() {
       if (data.accounts && data.accounts.length > 0) {
         localStorage.setItem('primaryAccount', JSON.stringify(data.accounts[0]));
       }
+      setCurrentUser(data.customer);
+      window.dispatchEvent(new Event('auth-state-change'));
 
       showToast(language === 'hi' ? 'लॉगिन सफल रहा! डैशबोर्ड लोड हो रहा है...' : 'Login successful! Entering NetBanking...', 'success');
       router.push('/personal');
@@ -77,6 +105,15 @@ export default function Home() {
     } finally {
       setLoginLoading(false);
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('primaryAccount');
+    setCurrentUser(null);
+    window.dispatchEvent(new Event('auth-state-change'));
+    showToast(language === 'hi' ? 'सफलतापूर्वक लॉग आउट किया गया' : 'Logged out securely', 'info');
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -109,6 +146,8 @@ export default function Home() {
       if (data.account) {
         localStorage.setItem('primaryAccount', JSON.stringify(data.account));
       }
+      setCurrentUser(data.customer);
+      window.dispatchEvent(new Event('auth-state-change'));
 
       showToast(language === 'hi' ? 'खाता सफलतापूर्वक खोला गया! स्वागत है।' : 'Account opened successfully! Welcome.', 'success');
       router.push('/personal');
@@ -130,7 +169,7 @@ export default function Home() {
           borderBottom: '1px solid #e2e8f0',
         }}
       >
-        <div style={{ maxWidth: '118rem', margin: '0 auto', display: 'grid', gridTemplateColumns: '1.2fr 0.95fr', gap: '6rem', alignItems: 'center' }}>
+        <div className="hero-container" style={{ maxWidth: '118rem', margin: '0 auto', display: 'grid', gridTemplateColumns: '1.2fr 0.95fr', gap: '6rem', alignItems: 'center' }}>
           {/* Left Column: Hero Intro */}
           <div>
             <div
@@ -152,7 +191,7 @@ export default function Home() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
               </svg>
-              <span>{t('DICGC Deposit Insured up to ₹5,00,000')}</span>
+              <span>{t('Educational Core Banking System • ACID Transaction Engine')}</span>
             </div>
 
             <h1 style={{ fontSize: '4.4rem', fontWeight: 800, lineHeight: '1.18', letterSpacing: '-1px', color: '#0f172a', marginBottom: '2rem' }}>
@@ -202,7 +241,125 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Column: Crisp White NetBanking Auth Card */}
+          {/* Right Column: Authenticated User Portal Card or NetBanking Auth Card */}
+          {currentUser ? (
+            <div
+              id="authenticated-card"
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '1.4rem',
+                padding: '3.5rem',
+                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.08)',
+                color: '#0f172a',
+                border: '1px solid #cbd5e1',
+                maxWidth: '44rem',
+                width: '100%',
+                margin: '0 auto',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.6rem', marginBottom: '2.4rem', paddingBottom: '1.8rem', borderBottom: '1px solid #e2e8f0' }}>
+                <div
+                  style={{
+                    width: '5.2rem',
+                    height: '5.2rem',
+                    borderRadius: '50%',
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '2rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  {currentUser.full_name ? currentUser.full_name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.15rem', color: '#2563eb', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {t('Active NetBanking Session')}
+                  </div>
+                  <h3 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#0f172a', margin: '0.2rem 0' }}>
+                    {currentUser.full_name}
+                  </h3>
+                  <div style={{ fontSize: '1.25rem', color: '#64748b' }}>
+                    {currentUser.email} • <span style={{ fontWeight: 600, color: '#0f172a' }}>{currentUser.tier || 'Silver'} Tier</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.4rem' }}>
+                <Link
+                  href="/personal"
+                  style={{
+                    background: '#0f172a',
+                    color: '#ffffff',
+                    padding: '1.3rem 2rem',
+                    borderRadius: '0.8rem',
+                    fontSize: '1.5rem',
+                    fontWeight: 700,
+                    textAlign: 'center',
+                    textDecoration: 'none',
+                    display: 'block',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                  }}
+                >
+                  {t('Enter NetBanking Portal →')}
+                </Link>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <Link
+                    href="/personal"
+                    style={{
+                      background: '#f8fafc',
+                      color: '#0f172a',
+                      border: '1px solid #e2e8f0',
+                      padding: '1rem',
+                      borderRadius: '0.6rem',
+                      fontSize: '1.3rem',
+                      fontWeight: 600,
+                      textAlign: 'center',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {t('Fund Transfer')}
+                  </Link>
+                  <Link
+                    href="/personal"
+                    style={{
+                      background: '#f8fafc',
+                      color: '#0f172a',
+                      border: '1px solid #e2e8f0',
+                      padding: '1rem',
+                      borderRadius: '0.6rem',
+                      fontSize: '1.3rem',
+                      fontWeight: 600,
+                      textAlign: 'center',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {t('Fixed Deposits')}
+                  </Link>
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#dc2626',
+                    cursor: 'pointer',
+                    fontSize: '1.3rem',
+                    fontWeight: 600,
+                    padding: '0.8rem',
+                    textAlign: 'center',
+                    marginTop: '0.4rem',
+                  }}
+                >
+                  {t('Log Out Securely')}
+                </button>
+              </div>
+            </div>
+          ) : (
           <div
             id="login-card"
             style={{
@@ -413,6 +570,7 @@ export default function Home() {
               </div>
             )}
           </div>
+          )}
         </div>
       </section>
 
