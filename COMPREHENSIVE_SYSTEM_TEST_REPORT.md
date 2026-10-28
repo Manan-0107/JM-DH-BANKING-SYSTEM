@@ -164,3 +164,4 @@ This report documents the end-to-end test execution across all 11 test suites en
 The Bharat Trust Bank application features environment-aware security boundaries:
 - **Development Mode (`next dev`)**: Enables test harness endpoints (`/api/system/test-rollback`), demo grants (`ENABLE_DEMO_GRANT=true`), and simulated inward UPI credits (`ALLOW_SIMULATED_UPI=true`) to facilitate automated regression suites.
 - **Production Mode (`next start`)**: Strictly disables test harness endpoints (`/api/system/test-rollback` returns `404 Not Found`), enforces administrative authorization, disables simulated UPI credits, and serves optimized compiled static assets with sub-second response times.
+

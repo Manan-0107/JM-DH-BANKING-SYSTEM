@@ -216,3 +216,4 @@ node scripts/test_app_compatibility_on_disposable_db.js
 ### Q3: Why does `/api/system/test-rollback` return HTTP 404 in production?
 - **Cause:** Intentional security gating. Internal test rollback endpoints are disabled when `NODE_ENV=production` to prevent unauthorized execution in production.
 - **Solution:** This is the expected and documented security behavior. Use `npm run dev` for running internal test harness endpoints.
+
