@@ -116,3 +116,4 @@ node scripts/test_college_demo.js
 
 ### Q4: How is ACID transaction atomicity handled?
 > **Answer:** All fund transfers use MySQL stored procedures (`sp_transfer_funds`) wrapped in `START TRANSACTION ... COMMIT` blocks with `DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; END;`. If any step fails (e.g., negative balance check constraint or network failure), all updates are atomically rolled back.
+

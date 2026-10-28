@@ -434,3 +434,4 @@ $$(\bigcup_{i=1}^k \pi_{R_i}(F))^+ = F^+$$
 *\* Note: Unique for non-null values.*
 
 **Formal Conclusion:** The Bharat Trust Bank relational database schema satisfies all criteria for **Boyce-Codd Normal Form (BCNF)** under the confirmed business-rule functional dependencies, with 100% lossless decomposition and full referential integrity.
+
