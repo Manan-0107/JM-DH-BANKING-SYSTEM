@@ -108,9 +108,21 @@ export async function POST(request: Request) {
 
     const customer = rows[0];
 
-    // Check credentials against password_hash or card_pin_hash
+    // Check credentials against password_hash or card_pin_hash in account_card_credentials
     const isPasswordMatch = customer.password_hash && bcrypt.compareSync(password, customer.password_hash);
-    const isPinMatch = customer.card_pin_hash && verifyPin(password, customer.card_pin_hash);
+    let cardPinHash = customer.card_pin_hash;
+    if (!cardPinHash) {
+      const [cardRows] = await db.query(
+        `SELECT c.card_pin_hash FROM account_card_credentials c 
+         JOIN accounts a ON c.account_number = a.account_number 
+         WHERE a.customer_id = ? AND c.status = 'Active' LIMIT 1`,
+        [customer.customer_id]
+      );
+      if (cardRows && cardRows.length > 0) {
+        cardPinHash = cardRows[0].card_pin_hash;
+      }
+    }
+    const isPinMatch = cardPinHash && verifyPin(password, cardPinHash);
 
     if (!isPasswordMatch && !isPinMatch) {
       const failedAccount = await recordFailedAttempt(db, accountRateLimitKey, loginAccountRateLimitOptions);
@@ -168,7 +180,11 @@ export async function POST(request: Request) {
     const cleanCustomer = sanitizeCustomer(customer);
 
     const [accounts] = await db.query(
-      'SELECT * FROM accounts WHERE customer_id = ? ORDER BY opening_date DESC',
+      `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city 
+       FROM accounts a 
+       LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code 
+       WHERE a.customer_id = ? 
+       ORDER BY a.opening_date DESC`,
       [cleanCustomer!.customer_id]
     );
 

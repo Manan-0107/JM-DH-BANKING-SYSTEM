@@ -13,7 +13,11 @@ export async function GET(request: Request) {
 
     const db = await getDb();
     const [beneficiaries] = await db.query(
-      `SELECT * FROM beneficiaries WHERE customer_id = ? ORDER BY created_at DESC`,
+      `SELECT b.*, COALESCE(br.bank_name, 'Bharat Trust Bank') AS bank_name, br.branch_name 
+       FROM beneficiaries b 
+       LEFT JOIN branches br ON b.ifsc_code = br.ifsc_code 
+       WHERE b.customer_id = ? 
+       ORDER BY b.created_at DESC`,
       [authUser.customer_id]
     );
 
@@ -76,13 +80,32 @@ export async function POST(request: Request) {
     const finalBank = bank_name || 'Bharat Trust Bank';
     const limit = parseFloat(transfer_limit) || 100000.0;
 
-    await db.query(
-      `INSERT INTO beneficiaries (beneficiary_id, customer_id, beneficiary_name, account_number, ifsc_code, bank_name, transfer_limit, cooling_until)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [benId, authUser.customer_id, beneficiary_name.trim(), cleanAcc, cleanIfsc, finalBank, limit, coolingUntil]
-    );
+    try {
+      await db.query(
+        `INSERT INTO beneficiaries (beneficiary_id, customer_id, beneficiary_name, account_number, ifsc_code, transfer_limit, cooling_until)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [benId, authUser.customer_id, beneficiary_name.trim(), cleanAcc, cleanIfsc, limit, coolingUntil]
+      );
+    } catch (e: any) {
+      // Fallback for legacy tables containing bank_name column
+      await db.query(
+        `INSERT INTO beneficiaries (beneficiary_id, customer_id, beneficiary_name, account_number, ifsc_code, bank_name, transfer_limit, cooling_until)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [benId, authUser.customer_id, beneficiary_name.trim(), cleanAcc, cleanIfsc, finalBank, limit, coolingUntil]
+      );
+    }
 
-    const [created] = await db.query(`SELECT * FROM beneficiaries WHERE beneficiary_id = ?`, [benId]);
+    let [created] = await db.query(
+      `SELECT b.*, COALESCE(br.bank_name, 'Bharat Trust Bank') AS bank_name, br.branch_name 
+       FROM beneficiaries b 
+       LEFT JOIN branches br ON b.ifsc_code = br.ifsc_code 
+       WHERE b.beneficiary_id = ?`, 
+      [benId]
+    );
+    if (!created || (created as any[]).length === 0) {
+      const [rawBen] = await db.query(`SELECT * FROM beneficiaries WHERE beneficiary_id = ?`, [benId]);
+      created = rawBen;
+    }
 
     return NextResponse.json({
       message: `Beneficiary "${beneficiary_name.trim()}" registered successfully with a 2-hour security cooling limit.`,

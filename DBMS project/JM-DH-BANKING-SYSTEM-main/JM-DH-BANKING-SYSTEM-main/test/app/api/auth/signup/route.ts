@@ -161,48 +161,112 @@ export async function POST(request: Request) {
 
       try {
         await db.transaction(async (conn) => {
-          // 1. Insert Customer Record (card_pin set to NULL to prevent plaintext storage)
-          await conn.query(
-            `INSERT INTO customers (
-              customer_id, full_name, email, phone, dob, address, created_at,
-              status, kyc_status, password_hash, credit_score, tier,
-              pan_number, aadhaar_number, gender, father_name, marital_status,
-              occupation, annual_income, nominee_name, nominee_relation, nominee_dob,
-              vkyc_status, signature_data, avatar_data, card_pin, card_pin_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, 770, 'Silver', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
-            [
-              candidateCustomerId,
-              cleanName,
-              cleanEmail,
-              phone || null,
-              dob || null,
-              address || null,
-              created_at,
-              initialKycStatus,
-              password_hash,
-              cleanPan,
-              maskedAadhaar,
-              gender || 'Not Specified',
-              father_name || null,
-              marital_status || 'Single',
-              occupation || 'Salaried',
-              annual_income || '₹3,00,000 - ₹10,00,000',
-              nominee_name || null,
-              nominee_relation || null,
-              nominee_dob || null,
-              initialVkycStatus,
-              signature_data || null,
-              avatar_data || null,
-              card_pin_hash,
-            ]
-          );
+          // 1. Insert Customer Record (normalized BCNF schema without embedded nominee/card facts)
+          try {
+            await conn.query(
+              `INSERT INTO customers (
+                customer_id, full_name, email, phone, dob, address, created_at,
+                status, kyc_status, password_hash, credit_score, tier,
+                pan_number, aadhaar_number, gender, father_name, marital_status,
+                occupation, annual_income, vkyc_status, signature_data, avatar_data
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, 770, 'Silver', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                candidateCustomerId,
+                cleanName,
+                cleanEmail,
+                phone || null,
+                dob || null,
+                address || null,
+                created_at,
+                initialKycStatus,
+                password_hash,
+                cleanPan,
+                maskedAadhaar,
+                gender || 'Not Specified',
+                father_name || null,
+                marital_status || 'Single',
+                occupation || 'Salaried',
+                annual_income || '₹3,00,000 - ₹10,00,000',
+                initialVkycStatus,
+                signature_data || null,
+                avatar_data || null,
+              ]
+            );
+          } catch (e: any) {
+            // Fallback for legacy database with un-decomposed nominee/card columns
+            await conn.query(
+              `INSERT INTO customers (
+                customer_id, full_name, email, phone, dob, address, created_at,
+                status, kyc_status, password_hash, credit_score, tier,
+                pan_number, aadhaar_number, gender, father_name, marital_status,
+                occupation, annual_income, nominee_name, nominee_relation, nominee_dob,
+                vkyc_status, signature_data, avatar_data, card_pin, card_pin_hash
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, 770, 'Silver', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+              [
+                candidateCustomerId,
+                cleanName,
+                cleanEmail,
+                phone || null,
+                dob || null,
+                address || null,
+                created_at,
+                initialKycStatus,
+                password_hash,
+                cleanPan,
+                maskedAadhaar,
+                gender || 'Not Specified',
+                father_name || null,
+                marital_status || 'Single',
+                occupation || 'Salaried',
+                annual_income || '₹3,00,000 - ₹10,00,000',
+                nominee_name || null,
+                nominee_relation || null,
+                nominee_dob || null,
+                initialVkycStatus,
+                signature_data || null,
+                avatar_data || null,
+                card_pin_hash,
+              ]
+            );
+          }
 
-          // 2. Insert Account Record (card_pin set to NULL to prevent plaintext storage)
-          await conn.query(
-            `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, opening_date, status, card_pin, card_pin_hash)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', NULL, ?)`,
-            [candidateAccNum, candidateCustomerId, finalType, initialGrant, finalIfsc, finalBranch, created_at, card_pin_hash]
-          );
+          // 1b. Insert Nominee Record into decomposed customer_nominees table
+          if (nominee_name && nominee_name.trim()) {
+            const nomineeId = `NOM-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+            try {
+              await conn.query(
+                `INSERT INTO customer_nominees (nominee_id, customer_id, nominee_name, relationship, dob, allocation_percentage)
+                 VALUES (?, ?, ?, ?, ?, 100.00)`,
+                [nomineeId, candidateCustomerId, nominee_name.trim(), nominee_relation || 'Nominee', nominee_dob || null]
+              );
+            } catch (e) {}
+          }
+
+          // 2. Insert Account Record (normalized BCNF schema without redundant branch_name or card_pin)
+          try {
+            await conn.query(
+              `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, opening_date, status)
+               VALUES (?, ?, ?, ?, ?, ?, 'Active')`,
+              [candidateAccNum, candidateCustomerId, finalType, initialGrant, finalIfsc, created_at]
+            );
+          } catch (e: any) {
+            // Fallback for legacy tables containing branch_name column
+            await conn.query(
+              `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, opening_date, status, card_pin, card_pin_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', NULL, ?)`,
+              [candidateAccNum, candidateCustomerId, finalType, initialGrant, finalIfsc, finalBranch, created_at, card_pin_hash]
+            );
+          }
+
+          // 2b. Insert Card Credentials Record into decomposed account_card_credentials table
+          const credId = `CARD-CRED-${candidateAccNum}`;
+          try {
+            await conn.query(
+              `INSERT INTO account_card_credentials (credential_id, account_number, card_pin_hash, status)
+               VALUES (?, ?, ?, 'Active')`,
+              [credId, candidateAccNum, card_pin_hash]
+            );
+          } catch (e) {}
 
           // 3. Insert Initial Welcome Balance Transaction (if demo grant enabled)
           if (initialGrant > 0) {
