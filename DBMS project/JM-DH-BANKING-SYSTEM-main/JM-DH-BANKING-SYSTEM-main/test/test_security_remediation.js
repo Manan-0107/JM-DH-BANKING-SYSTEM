@@ -278,8 +278,7 @@ async function runSecuritySuite() {
     // --------------------------------------------------------------------------
     console.log('\n--- 6. Testing OTP Expiration Enforcement ---');
     // Using direct database query to artificially expire an OTP session
-    const mysql = require(path.resolve(__dirname, 'node_modules/mysql2/promise'));
-    const pool = mysql.createPool({ host: '127.0.0.1', port: 3307, user: 'root', password: '', database: 'bankist' });
+    const isMysql = process.env.USE_MYSQL === 'true';
     const expiredMobile = `98200${Math.floor(10000 + Math.random() * 90000)}`;
     
     const sendExpiredRes = await request('/api/kyc/send-otp', {
@@ -289,8 +288,25 @@ async function runSecuritySuite() {
     const expOtp = sendExpiredRes.data.test_otp;
     
     // Set expires_at to 10 minutes in the past
-    await pool.query('UPDATE otp_sessions SET expires_at = ? WHERE identifier = ?', [Date.now() - 600000, expiredMobile]);
-    await pool.end();
+    if (isMysql) {
+      const mysql = require(path.resolve(__dirname, 'node_modules/mysql2/promise'));
+      const pool = mysql.createPool({
+        host: process.env.DB_HOST || '127.0.0.1',
+        port: parseInt(process.env.DB_PORT || '3306', 10),
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'bankist'
+      });
+      await pool.query('UPDATE otp_sessions SET expires_at = ? WHERE identifier = ?', [Date.now() - 600000, expiredMobile]);
+      await pool.end();
+    } else {
+      const sqlite3 = require(path.resolve(__dirname, 'node_modules/sqlite3')).verbose();
+      const sdb = new sqlite3.Database(path.resolve(__dirname, 'bankist.sqlite'));
+      await new Promise((res, rej) => {
+        sdb.run('UPDATE otp_sessions SET expires_at = ? WHERE identifier = ?', [Date.now() - 600000, expiredMobile], err => err ? rej(err) : res());
+      });
+      await new Promise(res => sdb.close(res));
+    }
 
     const expiredVerifyRes = await request('/api/kyc/verify-otp', {
       method: 'POST',

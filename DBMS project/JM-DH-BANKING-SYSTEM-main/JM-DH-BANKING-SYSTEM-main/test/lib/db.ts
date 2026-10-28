@@ -48,7 +48,11 @@ function createSqliteAdapter(sqliteDb: any): DbAdapter {
       .replace(/NOW\(\)/gi, "datetime('now', 'localtime')")
       .replace(/CURDATE\(\)/gi, "date('now', 'localtime')")
       .replace(/DATE\(date_time\)\s*>=\s*CURDATE\(\)/gi, "date(date_time) >= date('now', 'localtime')")
-      .replace(/CREATE OR REPLACE VIEW/gi, "CREATE VIEW IF NOT EXISTS");
+      .replace(/DATE_ADD\(CURDATE\(\),\s*INTERVAL\s*(\d+)\s*YEAR\)/gi, "date('now', '+$1 years')")
+      .replace(/DATE_ADD\(CURDATE\(\),\s*INTERVAL\s*(\d+)\s*MONTH\)/gi, "date('now', '+$1 months')")
+      .replace(/DATE_ADD\(CURDATE\(\),\s*INTERVAL\s*(\d+)\s*DAY\)/gi, "date('now', '+$1 days')")
+      .replace(/CREATE OR REPLACE VIEW/gi, "CREATE VIEW IF NOT EXISTS")
+      .replace(/INSERT\s+IGNORE\s+INTO/gi, "INSERT OR IGNORE INTO");
 
     if (isSelect) {
       const rows = await allAsync(adaptedSql, params);
@@ -305,8 +309,150 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
         locked_until INTEGER DEFAULT 0
       );
     `);
+
+    // 11. Account Lien Records Table (SQLite)
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS account_lien_records (
+        lien_id TEXT PRIMARY KEY,
+        account_number TEXT NOT NULL,
+        lien_amount REAL NOT NULL,
+        lien_reason TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (account_number) REFERENCES accounts(account_number) ON DELETE RESTRICT ON UPDATE CASCADE
+      );
+    `);
   } else {
-    // MySQL 8.0 DDL & Migration
+    // MySQL 8.0 DDL & Migration - All 11 Core Tables for complete parity
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`customers\` (
+        \`customer_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+        \`full_name\` VARCHAR(100) NOT NULL,
+        \`email\` VARCHAR(100) NOT NULL UNIQUE,
+        \`phone\` VARCHAR(30) DEFAULT NULL,
+        \`dob\` DATE DEFAULT NULL,
+        \`address\` TEXT DEFAULT NULL,
+        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        \`status\` VARCHAR(30) DEFAULT 'Active',
+        \`kyc_status\` VARCHAR(30) DEFAULT 'Pending',
+        \`password_hash\` VARCHAR(255) NOT NULL,
+        \`card_pin\` VARCHAR(255) DEFAULT NULL,
+        \`card_pin_hash\` VARCHAR(255) DEFAULT NULL,
+        \`credit_score\` INT DEFAULT 700,
+        \`tier\` VARCHAR(30) DEFAULT 'Silver',
+        \`pan_number\` VARCHAR(20) DEFAULT NULL,
+        \`aadhaar_number\` VARCHAR(20) DEFAULT NULL,
+        \`gender\` VARCHAR(20) DEFAULT NULL,
+        \`father_name\` VARCHAR(100) DEFAULT NULL,
+        \`marital_status\` VARCHAR(30) DEFAULT NULL,
+        \`occupation\` VARCHAR(100) DEFAULT NULL,
+        \`annual_income\` VARCHAR(50) DEFAULT NULL,
+        \`nominee_name\` VARCHAR(100) DEFAULT NULL,
+        \`nominee_relation\` VARCHAR(50) DEFAULT NULL,
+        \`nominee_dob\` DATE DEFAULT NULL,
+        \`vkyc_status\` VARCHAR(30) DEFAULT 'Completed',
+        \`signature_data\` LONGTEXT DEFAULT NULL,
+        \`avatar_data\` LONGTEXT DEFAULT NULL,
+        INDEX \`idx_cust_email\` (\`email\`),
+        INDEX \`idx_cust_phone\` (\`phone\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`accounts\` (
+        \`account_number\` VARCHAR(50) NOT NULL PRIMARY KEY,
+        \`customer_id\` VARCHAR(50) NOT NULL,
+        \`account_type\` VARCHAR(50) NOT NULL,
+        \`balance\` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+        \`ifsc_code\` VARCHAR(20) NOT NULL DEFAULT 'BTBI0001024',
+        \`branch_name\` VARCHAR(100) NOT NULL DEFAULT 'Downtown Central',
+        \`opening_date\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        \`status\` VARCHAR(30) DEFAULT 'Active',
+        \`card_pin\` VARCHAR(255) DEFAULT NULL,
+        \`card_pin_hash\` VARCHAR(255) DEFAULT NULL,
+        INDEX \`idx_acc_customer\` (\`customer_id\`),
+        CONSTRAINT \`fk_acc_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`account_lien_records\` (
+        \`lien_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+        \`account_number\` VARCHAR(50) NOT NULL,
+        \`lien_amount\` DECIMAL(15,2) NOT NULL,
+        \`lien_reason\` VARCHAR(255) NOT NULL,
+        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX \`idx_lien_account\` (\`account_number\`),
+        CONSTRAINT \`fk_lien_account\` FOREIGN KEY (\`account_number\`) REFERENCES \`accounts\` (\`account_number\`) ON DELETE RESTRICT ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`transactions\` (
+        \`transaction_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+        \`sender_account\` VARCHAR(50) DEFAULT NULL,
+        \`receiver_account\` VARCHAR(50) DEFAULT NULL,
+        \`amount\` DECIMAL(15,2) NOT NULL,
+        \`type\` VARCHAR(30) NOT NULL,
+        \`date_time\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        \`status\` VARCHAR(30) DEFAULT 'Success',
+        \`description\` TEXT DEFAULT NULL,
+        \`reference_number\` VARCHAR(100) DEFAULT NULL,
+        INDEX \`idx_txn_sender\` (\`sender_account\`),
+        INDEX \`idx_txn_receiver\` (\`receiver_account\`),
+        INDEX \`idx_txn_date\` (\`date_time\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`kyc_verifications\` (
+        \`verification_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+        \`customer_id\` VARCHAR(50) NOT NULL,
+        \`document_type\` VARCHAR(50) NOT NULL,
+        \`document_number\` VARCHAR(50) DEFAULT NULL,
+        \`verification_method\` VARCHAR(50) NOT NULL,
+        \`status\` VARCHAR(30) DEFAULT 'Verified',
+        \`verified_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        \`remarks\` TEXT DEFAULT NULL,
+        INDEX \`idx_kyc_customer\` (\`customer_id\`),
+        CONSTRAINT \`fk_kyc_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`beneficiaries\` (
+        \`beneficiary_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+        \`customer_id\` VARCHAR(50) NOT NULL,
+        \`beneficiary_name\` VARCHAR(100) NOT NULL,
+        \`account_number\` VARCHAR(50) NOT NULL,
+        \`ifsc_code\` VARCHAR(20) NOT NULL,
+        \`bank_name\` VARCHAR(100) NOT NULL,
+        \`transfer_limit\` DECIMAL(15,2) DEFAULT 100000.00,
+        \`cooling_until\` DATETIME DEFAULT NULL,
+        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        \`is_active\` INT DEFAULT 1,
+        INDEX \`idx_ben_customer\` (\`customer_id\`),
+        CONSTRAINT \`fk_ben_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await adapter.query(`
+      CREATE TABLE IF NOT EXISTS \`deposits\` (
+        \`deposit_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+        \`customer_id\` VARCHAR(50) NOT NULL,
+        \`linked_account\` VARCHAR(50) NOT NULL,
+        \`deposit_type\` VARCHAR(50) NOT NULL,
+        \`principal_amount\` DECIMAL(15,2) NOT NULL,
+        \`interest_rate\` DECIMAL(5,2) NOT NULL,
+        \`tenure_months\` INT NOT NULL,
+        \`maturity_amount\` DECIMAL(15,2) NOT NULL,
+        \`maturity_date\` DATE NOT NULL,
+        \`status\` VARCHAR(30) DEFAULT 'Active',
+        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX \`idx_dep_customer\` (\`customer_id\`),
+        CONSTRAINT \`fk_dep_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
     await adapter.query(`
       CREATE TABLE IF NOT EXISTS \`branches\` (
         \`branch_id\` VARCHAR(50) PRIMARY KEY,

@@ -16,6 +16,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    if (custRows[0].status !== 'Active') {
+      const currentStatus = (custRows[0].status || 'inactive').toLowerCase();
+      return NextResponse.json({ error: `Account is currently ${currentStatus}` }, { status: 403 });
+    }
+
     const customer = sanitizeCustomer(custRows[0]);
 
     const [accounts] = await db.query(

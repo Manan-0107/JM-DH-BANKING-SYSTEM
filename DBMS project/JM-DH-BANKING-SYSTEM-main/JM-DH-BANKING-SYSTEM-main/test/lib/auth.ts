@@ -99,6 +99,15 @@ export function verifyPin(pin: string, storedHash: string | null | undefined): b
       return false;
     }
   }
+  // Support legacy SHA-256 hex hashes from CSV datasets with timing-safe comparison
+  if (/^[a-f0-9]{64}$/i.test(storedHash)) {
+    try {
+      const computed = crypto.createHash('sha256').update(trimmedPin).digest('hex');
+      return crypto.timingSafeEqual(Buffer.from(computed, 'utf8'), Buffer.from(storedHash.toLowerCase(), 'utf8'));
+    } catch {
+      return false;
+    }
+  }
   return false;
 }
 

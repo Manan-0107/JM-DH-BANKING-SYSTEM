@@ -10,7 +10,8 @@ export async function POST(request: Request) {
     const authUser = auth.user;
 
     const body = await request.json().catch(() => ({}));
-    const { from_account, to_account, amount, description, pin } = body;
+    const { from_account, to_account, amount, description, pin, idempotency_key } = body;
+    const rawIdemKey = (request.headers.get('x-idempotency-key') || idempotency_key || '').toString().trim();
 
     // 1. Strict Input Validation
     if (!from_account || typeof from_account !== 'string' || !from_account.trim()) {
@@ -40,6 +41,23 @@ export async function POST(request: Request) {
 
     const db = await getDb();
 
+    // 1b. Idempotency Check: Return existing record on duplicate retry
+    if (rawIdemKey) {
+      const [existingTxns] = await db.query(
+        'SELECT * FROM transactions WHERE reference_number = ? OR description LIKE ?',
+        [rawIdemKey, `%[IDEM:${rawIdemKey}]%`]
+      );
+      if (existingTxns && existingTxns.length > 0) {
+        const [sender] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [cleanFrom]);
+        return NextResponse.json({
+          message: `Transfer already processed (Idempotency Key: ${rawIdemKey})`,
+          transaction: existingTxns[0],
+          sender: sanitizeAccount(sender?.[0]),
+          idempotent_replay: true,
+        });
+      }
+    }
+
     // 2. Sender Account Ownership & Status Verification
     const [senderRows] = await db.query(
       'SELECT account_number, customer_id, balance, status FROM accounts WHERE account_number = ?',
@@ -59,10 +77,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Sender account is currently ${senderAcc.status.toLowerCase()}. Please unfreeze before transacting.` }, { status: 400 });
     }
 
-    if (parseFloat(senderAcc.balance) < numAmount) {
-      return NextResponse.json({
-        error: `Insufficient funds. Available balance: ₹${parseFloat(senderAcc.balance).toLocaleString('en-IN')}`,
-      }, { status: 400 });
+    // Check Legal Liens / Encumbrance Holds
+    let totalLien = 0;
+    try {
+      const [lienRows] = await db.query(
+        'SELECT COALESCE(SUM(lien_amount), 0) AS total_lien FROM account_lien_records WHERE account_number = ?',
+        [cleanFrom]
+      );
+      totalLien = parseFloat(lienRows?.[0]?.total_lien || 0);
+    } catch (e) {
+      // Table may not have liens yet
+    }
+
+    const currentBalance = parseFloat(senderAcc.balance);
+    const availableBalance = currentBalance - totalLien;
+
+    if (availableBalance < numAmount) {
+      const errorMsg = totalLien > 0
+        ? `Insufficient funds: ₹${totalLien.toLocaleString('en-IN')} held under active legal lien. Available transfer balance: ₹${Math.max(0, availableBalance).toLocaleString('en-IN')}`
+        : `Insufficient funds. Available balance: ₹${currentBalance.toLocaleString('en-IN')}`;
+      return NextResponse.json({ error: errorMsg }, { status: 400 });
     }
 
     // 3. Beneficiary Account Existence & Status Verification
@@ -87,14 +121,15 @@ export async function POST(request: Request) {
     // 5. Generate Collision-Proof Transaction Reference
     const { txnId, referenceNumber } = generateTransactionReference('TXN');
     const nowTime = formatDbDateTime();
-    const finalDesc = description ? description.trim() : `IMPS Fund Transfer to ${cleanTo}`;
+    const baseDesc = description ? description.trim() : `IMPS Fund Transfer to ${cleanTo}`;
+    const finalDesc = rawIdemKey ? `${baseDesc} [IDEM:${rawIdemKey}]` : baseDesc;
 
     // 6. Execute Concurrency-Safe Atomic Transfer
     await db.transaction(async (conn) => {
-      // Conditional atomic debit: prevents race condition / negative balance under concurrent requests
+      // Conditional atomic debit: prevents race condition, negative balance, and lien violation under concurrent requests
       const [debitResult] = await conn.query(
-        'UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND balance >= ? AND status = ?',
-        [numAmount, cleanFrom, numAmount, 'Active']
+        'UPDATE accounts SET balance = balance - ? WHERE account_number = ? AND (balance - ?) >= ? AND status = ?',
+        [numAmount, cleanFrom, totalLien, numAmount, 'Active']
       );
 
       const affected = (debitResult as any)?.affectedRows ?? (debitResult as any)?.changes ?? 0;

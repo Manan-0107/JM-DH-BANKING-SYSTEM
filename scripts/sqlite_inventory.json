@@ -1,0 +1,1341 @@
+{
+  "sourceDatabase": "c:\\Users\\MANAN\\OneDrive\\Desktop\\SQL PROJECT\\DBMS project\\JM-DH-BANKING-SYSTEM-main\\JM-DH-BANKING-SYSTEM-main\\test\\bankist.sqlite",
+  "originalChecksum": "8f88b55703368fad8066b467ff60ec99f1d2240a082f7e2bd5593f79db1e6bcb",
+  "originalSizeBytes": 753664,
+  "backupFile": "c:\\Users\\MANAN\\OneDrive\\Desktop\\SQL PROJECT\\DBMS project\\JM-DH-BANKING-SYSTEM-main\\JM-DH-BANKING-SYSTEM-main\\test\\bankist.sqlite.backup_phase2_2026-10-28T10-14-24-896Z.db",
+  "backupChecksum": "6680dc286442eaa787edf1f18f7263d01e1ab542d59bf31e48ab4ba268c8342a",
+  "backupSizeBytes": 753664,
+  "timestamp": "2026-10-28T10:14:24.921Z",
+  "tables": [
+    {
+      "name": "account_lien_records",
+      "rowCount": 15,
+      "sql": "CREATE TABLE account_lien_records (\n        lien_id TEXT PRIMARY KEY,\n        account_number TEXT NOT NULL,\n        lien_amount REAL NOT NULL,\n        lien_reason TEXT NOT NULL,\n        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n        FOREIGN KEY (account_number) REFERENCES accounts(account_number) ON DELETE RESTRICT ON UPDATE CASCADE\n      )",
+      "primaryKey": [
+        "lien_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "lien_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "account_number",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "lien_amount",
+          "type": "REAL",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "lien_reason",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 4,
+          "name": "created_at",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "accounts",
+          "from": "account_number",
+          "to": "account_number",
+          "onUpdate": "CASCADE",
+          "onDelete": "RESTRICT",
+          "match": "NONE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_account_lien_records_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "lien_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "accounts",
+      "rowCount": 208,
+      "sql": "CREATE TABLE accounts (\n            account_number TEXT PRIMARY KEY,\n            customer_id TEXT NOT NULL,\n            account_type TEXT NOT NULL,\n            balance REAL NOT NULL DEFAULT 0.00,\n            ifsc_code TEXT NOT NULL DEFAULT 'BTBI0001024',\n            branch_name TEXT NOT NULL DEFAULT 'Downtown Central',\n            opening_date DATETIME DEFAULT CURRENT_TIMESTAMP,\n            status TEXT DEFAULT 'Active', card_pin TEXT DEFAULT '1234', card_pin_hash TEXT,\n            FOREIGN KEY (customer_id) REFERENCES customers(customer_id)\n          )",
+      "primaryKey": [
+        "account_number"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "account_number",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "customer_id",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "account_type",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "balance",
+          "type": "REAL",
+          "notnull": true,
+          "defaultValue": "0.00",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 4,
+          "name": "ifsc_code",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": "'BTBI0001024'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 5,
+          "name": "branch_name",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": "'Downtown Central'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 6,
+          "name": "opening_date",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 7,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Active'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 8,
+          "name": "card_pin",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'1234'",
+          "pk": 0,
+          "nullCount": 208
+        },
+        {
+          "cid": 9,
+          "name": "card_pin_hash",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "customers",
+          "from": "customer_id",
+          "to": "customer_id",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_accounts_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "account_number"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "audit_logs",
+      "rowCount": 807,
+      "sql": "CREATE TABLE audit_logs (\n      log_id TEXT PRIMARY KEY,\n      customer_id TEXT,\n      action TEXT NOT NULL,\n      entity_type TEXT NOT NULL,\n      entity_id TEXT,\n      details TEXT,\n      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP\n    )",
+      "primaryKey": [
+        "log_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "log_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "customer_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "action",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "entity_type",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 4,
+          "name": "entity_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 5,
+          "name": "details",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 6,
+          "name": "timestamp",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_audit_logs_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "log_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "beneficiaries",
+      "rowCount": 99,
+      "sql": "CREATE TABLE beneficiaries (\n            beneficiary_id TEXT PRIMARY KEY,\n            customer_id TEXT NOT NULL,\n            beneficiary_name TEXT NOT NULL,\n            account_number TEXT NOT NULL,\n            ifsc_code TEXT NOT NULL,\n            bank_name TEXT NOT NULL,\n            transfer_limit REAL DEFAULT 100000.00,\n            cooling_until DATETIME,\n            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n            is_active INTEGER DEFAULT 1,\n            FOREIGN KEY (customer_id) REFERENCES customers(customer_id)\n          )",
+      "primaryKey": [
+        "beneficiary_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "beneficiary_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "customer_id",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "beneficiary_name",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "account_number",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 4,
+          "name": "ifsc_code",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 5,
+          "name": "bank_name",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 6,
+          "name": "transfer_limit",
+          "type": "REAL",
+          "notnull": false,
+          "defaultValue": "100000.00",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 7,
+          "name": "cooling_until",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 99
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 9,
+          "name": "is_active",
+          "type": "INTEGER",
+          "notnull": false,
+          "defaultValue": "1",
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "customers",
+          "from": "customer_id",
+          "to": "customer_id",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_beneficiaries_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "beneficiary_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "branches",
+      "rowCount": 8,
+      "sql": "CREATE TABLE branches (\n      branch_id TEXT PRIMARY KEY,\n      branch_name TEXT NOT NULL,\n      ifsc_code TEXT UNIQUE NOT NULL,\n      city TEXT NOT NULL,\n      address TEXT NOT NULL,\n      timing TEXT DEFAULT '09:30 AM - 04:30 PM',\n      phone TEXT,\n      status TEXT DEFAULT 'Active'\n    )",
+      "primaryKey": [
+        "branch_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "branch_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "branch_name",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "ifsc_code",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "city",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 4,
+          "name": "address",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 5,
+          "name": "timing",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'09:30 AM - 04:30 PM'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 6,
+          "name": "phone",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 7,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Active'",
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_branches_2",
+          "unique": true,
+          "origin": "u",
+          "partial": false,
+          "columns": [
+            "ifsc_code"
+          ]
+        },
+        {
+          "name": "sqlite_autoindex_branches_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "branch_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "customers",
+      "rowCount": 124,
+      "sql": "CREATE TABLE customers (\n            customer_id TEXT PRIMARY KEY,\n            full_name TEXT NOT NULL,\n            email TEXT UNIQUE NOT NULL,\n            phone TEXT,\n            dob TEXT,\n            address TEXT,\n            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n            status TEXT DEFAULT 'Active',\n            kyc_status TEXT DEFAULT 'Pending',\n            password_hash TEXT NOT NULL,\n            credit_score INTEGER DEFAULT 700,\n            tier TEXT DEFAULT 'Silver'\n          , pan_number TEXT, aadhaar_number TEXT, gender TEXT, father_name TEXT, marital_status TEXT, occupation TEXT, annual_income TEXT, nominee_name TEXT, nominee_relation TEXT, nominee_dob TEXT, vkyc_status TEXT DEFAULT 'Completed', signature_data TEXT, avatar_data TEXT, card_pin TEXT DEFAULT '1234', card_pin_hash TEXT)",
+      "primaryKey": [
+        "customer_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "customer_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "full_name",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "email",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "phone",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 27
+        },
+        {
+          "cid": 4,
+          "name": "dob",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 85
+        },
+        {
+          "cid": 5,
+          "name": "address",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 111
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 7,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Active'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 8,
+          "name": "kyc_status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Pending'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 9,
+          "name": "password_hash",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 10,
+          "name": "credit_score",
+          "type": "INTEGER",
+          "notnull": false,
+          "defaultValue": "700",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 11,
+          "name": "tier",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Silver'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 12,
+          "name": "pan_number",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 116
+        },
+        {
+          "cid": 13,
+          "name": "aadhaar_number",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 116
+        },
+        {
+          "cid": 14,
+          "name": "gender",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 6
+        },
+        {
+          "cid": 15,
+          "name": "father_name",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 116
+        },
+        {
+          "cid": 16,
+          "name": "marital_status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 6
+        },
+        {
+          "cid": 17,
+          "name": "occupation",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 6
+        },
+        {
+          "cid": 18,
+          "name": "annual_income",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 6
+        },
+        {
+          "cid": 19,
+          "name": "nominee_name",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 116
+        },
+        {
+          "cid": 20,
+          "name": "nominee_relation",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 116
+        },
+        {
+          "cid": 21,
+          "name": "nominee_dob",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 116
+        },
+        {
+          "cid": 22,
+          "name": "vkyc_status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Completed'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 23,
+          "name": "signature_data",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 116
+        },
+        {
+          "cid": 24,
+          "name": "avatar_data",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 116
+        },
+        {
+          "cid": 25,
+          "name": "card_pin",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'1234'",
+          "pk": 0,
+          "nullCount": 124
+        },
+        {
+          "cid": 26,
+          "name": "card_pin_hash",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_customers_2",
+          "unique": true,
+          "origin": "u",
+          "partial": false,
+          "columns": [
+            "email"
+          ]
+        },
+        {
+          "name": "sqlite_autoindex_customers_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "customer_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "deposits",
+      "rowCount": 74,
+      "sql": "CREATE TABLE deposits (\n            deposit_id TEXT PRIMARY KEY,\n            customer_id TEXT NOT NULL,\n            linked_account TEXT NOT NULL,\n            deposit_type TEXT NOT NULL,\n            principal_amount REAL NOT NULL,\n            interest_rate REAL NOT NULL,\n            tenure_months INTEGER NOT NULL,\n            maturity_amount REAL NOT NULL,\n            maturity_date DATETIME NOT NULL,\n            status TEXT DEFAULT 'Active',\n            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n            FOREIGN KEY (customer_id) REFERENCES customers(customer_id)\n          )",
+      "primaryKey": [
+        "deposit_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "deposit_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "customer_id",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "linked_account",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "deposit_type",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 4,
+          "name": "principal_amount",
+          "type": "REAL",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 5,
+          "name": "interest_rate",
+          "type": "REAL",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 6,
+          "name": "tenure_months",
+          "type": "INTEGER",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 7,
+          "name": "maturity_amount",
+          "type": "REAL",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 8,
+          "name": "maturity_date",
+          "type": "DATETIME",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 9,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Active'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 10,
+          "name": "created_at",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "customers",
+          "from": "customer_id",
+          "to": "customer_id",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_deposits_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "deposit_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "kyc_verifications",
+      "rowCount": 815,
+      "sql": "CREATE TABLE kyc_verifications (\n            verification_id TEXT PRIMARY KEY,\n            customer_id TEXT NOT NULL,\n            document_type TEXT NOT NULL,\n            document_number TEXT,\n            verification_method TEXT NOT NULL,\n            status TEXT DEFAULT 'Verified',\n            verified_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n            remarks TEXT,\n            FOREIGN KEY (customer_id) REFERENCES customers(customer_id)\n          )",
+      "primaryKey": [
+        "verification_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "verification_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "customer_id",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "document_type",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "document_number",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 4,
+          "name": "verification_method",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 5,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Verified'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 6,
+          "name": "verified_at",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 7,
+          "name": "remarks",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [
+        {
+          "id": 0,
+          "seq": 0,
+          "table": "customers",
+          "from": "customer_id",
+          "to": "customer_id",
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION",
+          "match": "NONE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_kyc_verifications_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "verification_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "otp_sessions",
+      "rowCount": 82,
+      "sql": "CREATE TABLE \"otp_sessions\" (session_id TEXT PRIMARY KEY, identifier TEXT NOT NULL, purpose TEXT NOT NULL, otp_code TEXT, otp_hash TEXT, expires_at INTEGER NOT NULL, verified INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, last_sent_at INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+      "primaryKey": [
+        "session_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "session_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "identifier",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "purpose",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "otp_code",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 82
+        },
+        {
+          "cid": 4,
+          "name": "otp_hash",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 5,
+          "name": "expires_at",
+          "type": "INTEGER",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 6,
+          "name": "verified",
+          "type": "INTEGER",
+          "notnull": false,
+          "defaultValue": "0",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 7,
+          "name": "attempts",
+          "type": "INTEGER",
+          "notnull": false,
+          "defaultValue": "0",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 8,
+          "name": "last_sent_at",
+          "type": "INTEGER",
+          "notnull": false,
+          "defaultValue": "0",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 9,
+          "name": "created_at",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_otp_sessions_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "session_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "security_rate_limits",
+      "rowCount": 26,
+      "sql": "CREATE TABLE security_rate_limits (\n        key_id TEXT PRIMARY KEY,\n        attempts INTEGER DEFAULT 1,\n        last_attempt_at INTEGER NOT NULL,\n        locked_until INTEGER DEFAULT 0\n      )",
+      "primaryKey": [
+        "key_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "key_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "attempts",
+          "type": "INTEGER",
+          "notnull": false,
+          "defaultValue": "1",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 2,
+          "name": "last_attempt_at",
+          "type": "INTEGER",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 3,
+          "name": "locked_until",
+          "type": "INTEGER",
+          "notnull": false,
+          "defaultValue": "0",
+          "pk": 0,
+          "nullCount": 0
+        }
+      ],
+      "foreignKeys": [],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_security_rate_limits_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "key_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    },
+    {
+      "name": "transactions",
+      "rowCount": 782,
+      "sql": "CREATE TABLE transactions (\n            transaction_id TEXT PRIMARY KEY,\n            sender_account TEXT,\n            receiver_account TEXT,\n            amount REAL NOT NULL,\n            type TEXT NOT NULL,\n            date_time DATETIME DEFAULT CURRENT_TIMESTAMP,\n            status TEXT DEFAULT 'Success',\n            description TEXT\n          , reference_number TEXT)",
+      "primaryKey": [
+        "transaction_id"
+      ],
+      "columns": [
+        {
+          "cid": 0,
+          "name": "transaction_id",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 1,
+          "nullCount": 0
+        },
+        {
+          "cid": 1,
+          "name": "sender_account",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 272
+        },
+        {
+          "cid": 2,
+          "name": "receiver_account",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 123
+        },
+        {
+          "cid": 3,
+          "name": "amount",
+          "type": "REAL",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 4,
+          "name": "type",
+          "type": "TEXT",
+          "notnull": true,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 5,
+          "name": "date_time",
+          "type": "DATETIME",
+          "notnull": false,
+          "defaultValue": "CURRENT_TIMESTAMP",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 6,
+          "name": "status",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": "'Success'",
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 7,
+          "name": "description",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 0
+        },
+        {
+          "cid": 8,
+          "name": "reference_number",
+          "type": "TEXT",
+          "notnull": false,
+          "defaultValue": null,
+          "pk": 0,
+          "nullCount": 27
+        }
+      ],
+      "foreignKeys": [],
+      "indexes": [
+        {
+          "name": "idx_transactions_reference",
+          "unique": true,
+          "origin": "c",
+          "partial": false,
+          "columns": [
+            "reference_number"
+          ]
+        },
+        {
+          "name": "sqlite_autoindex_transactions_1",
+          "unique": true,
+          "origin": "pk",
+          "partial": false,
+          "columns": [
+            "transaction_id"
+          ]
+        }
+      ],
+      "duplicatePkCount": 0
+    }
+  ],
+  "views": [
+    {
+      "name": "v_customer_portfolio",
+      "sql": "CREATE VIEW v_customer_portfolio AS\n      SELECT \n          c.customer_id,\n          c.full_name,\n          c.email,\n          c.phone,\n          c.tier,\n          c.credit_score,\n          COUNT(DISTINCT a.account_number) AS total_accounts,\n          COALESCE(SUM(a.balance), 0.00) AS total_liquid_balance\n      FROM customers c\n      LEFT JOIN accounts a ON c.customer_id = a.customer_id AND a.status = 'Active'\n      GROUP BY c.customer_id, c.full_name, c.email, c.phone, c.tier, c.credit_score"
+    }
+  ],
+  "triggers": [],
+  "indexes": [
+    {
+      "name": "idx_transactions_reference",
+      "table": "transactions",
+      "sql": "CREATE UNIQUE INDEX idx_transactions_reference ON transactions(reference_number)"
+    }
+  ]
+}

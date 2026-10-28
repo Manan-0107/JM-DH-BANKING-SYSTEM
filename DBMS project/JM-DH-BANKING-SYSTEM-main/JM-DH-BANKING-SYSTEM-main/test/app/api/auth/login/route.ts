@@ -94,15 +94,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Reset rate limit on successful authentication
-    await resetRateLimit(db, rateLimitKey);
-
-    if (customer.status === 'Blocked' || customer.status === 'Suspended') {
+    // Verify account eligibility before granting authentication or resetting rate limit
+    if (customer.status !== 'Active') {
+      const currentStatus = (customer.status || 'inactive').toLowerCase();
       return NextResponse.json(
-        { error: `Your account is currently ${customer.status.toLowerCase()}. Contact your home branch.` },
+        { error: `Your account is currently ${currentStatus}. Contact your home branch.` },
         { status: 403 }
       );
     }
+
+    // Reset rate limit strictly on eligible, active authenticated sessions
+    await resetRateLimit(db, rateLimitKey);
 
     // Record login audit trail
     const auditId = generateAuditId();
