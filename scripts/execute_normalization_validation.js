@@ -1,37 +1,91 @@
 #!/usr/bin/env node
 /**
  * ==============================================================================
- * BHARAT TRUST BANK — NORMALIZATION & MIGRATION VALIDATION RUNNER
+ * BHARAT TRUST BANK — REPAIRED NORMALIZATION VALIDATION RUNNER
  * ==============================================================================
  * 
- * Safely executes:
- * 1. Creation of disposable ephemeral database: `bankist_norm_test_<timestamp>`
- * 2. Application of `bankist_normalized.sql`
- * 3. Application of `bankist_migration.sql`
- * 4. Execution of all assertions from `bankist_normalization_tests.sql`
- * 5. Captures and records exact test results
- * 6. Drops the disposable database
- * 7. Asserts live `bankist` remains 100% untouched (3,041 rows, balance sum)
+ * Safety & Integrity Features:
+ * 1. Strict Database Context Validation:
+ *    - Destination database must be an explicitly generated, disposable database.
+ *    - Hardcoded refusal to execute if target == 'bankist' or target == source.
+ * 2. Cryptographic Pre-flight & Post-flight Fingerprinting:
+ *    - Captures schema structure and row checksums of live `bankist` before any test.
+ *    - Compares live database fingerprints before and after execution to prove zero mutation.
+ * 3. Robust Test Execution:
+ *    - Executes all 32 SQL assertions from `bankist_normalization_tests.sql`.
+ *    - Records exact SQL outputs, detects missing or skipped assertions.
+ *    - Exits with non-zero exit code (code 1) on any test failure or safety violation.
+ * 4. Safe Cleanup:
+ *    - Safely drops disposable target database after execution.
  */
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const WORKSPACE_ROOT = path.resolve(__dirname, '..');
 const TEST_DIR = path.resolve(WORKSPACE_ROOT, 'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test');
 require(path.resolve(TEST_DIR, 'node_modules/dotenv')).config({ path: path.resolve(TEST_DIR, '.env') });
 const mysql = require(path.resolve(TEST_DIR, 'node_modules/mysql2/promise'));
 
-const DISPOSABLE_DB = `bankist_norm_val_${Date.now()}`;
+const SOURCE_DB = process.env.SOURCE_DB || 'bankist';
+const DISPOSABLE_TARGET_DB = `bankist_norm_eval_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
 const DDL_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_normalized.sql');
 const MIGRATION_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_migration.sql');
 const TESTS_PATH = path.resolve(WORKSPACE_ROOT, 'DBMS project/bankist_normalization_tests.sql');
 
+async function computeLiveDbFingerprint(conn, dbName) {
+  const [tables] = await conn.query(`SHOW FULL TABLES FROM \`${dbName}\` WHERE Table_type = 'BASE TABLE'`);
+  const tableNames = tables.map(r => Object.values(r)[0]).sort();
+  
+  const fingerprint = {
+    database: dbName,
+    table_count: tableNames.length,
+    tables: {}
+  };
+
+  let combinedHashInput = '';
+  for (const t of tableNames) {
+    const [[{ cnt }]] = await conn.query(`SELECT COUNT(1) as cnt FROM \`${dbName}\`.\`${t}\``);
+    const [cols] = await conn.query(`DESCRIBE \`${dbName}\`.\`${t}\``);
+    const colSignature = cols.map(c => `${c.Field}:${c.Type}:${c.Null}:${c.Key}`).join('|');
+    
+    // Checksum table data
+    const [chk] = await conn.query(`CHECKSUM TABLE \`${dbName}\`.\`${t}\``);
+    const checksumVal = chk[0].Checksum || 0;
+
+    fingerprint.tables[t] = {
+      count: cnt,
+      checksum: checksumVal,
+      schema_hash: crypto.createHash('sha256').update(colSignature).digest('hex')
+    };
+
+    combinedHashInput += `${t}:${cnt}:${checksumVal}:${colSignature};`;
+  }
+
+  fingerprint.overall_hash = crypto.createHash('sha256').update(combinedHashInput).digest('hex');
+  return fingerprint;
+}
+
 async function runValidation() {
   console.log('====================================================================');
-  console.log('      BHARAT TRUST BANK — NORMALIZATION VALIDATION RUNNER           ');
+  console.log('   BHARAT TRUST BANK — SECURE NORMALIZATION & INTEGRITY VALIDATOR   ');
   console.log('====================================================================');
-  console.log(`Disposable Database: ${DISPOSABLE_DB}`);
+  console.log(`Configured Source Database: ${SOURCE_DB}`);
+  console.log(`Disposable Target Database: ${DISPOSABLE_TARGET_DB}`);
+
+  // Safety Assertion 1: Distinct database check
+  if (SOURCE_DB.toLowerCase() === DISPOSABLE_TARGET_DB.toLowerCase()) {
+    console.error('[CRITICAL ABORT] Source database and Target database are identical! Aborting to prevent data destruction.');
+    process.exit(1);
+  }
+
+  // Safety Assertion 2: Target cannot be live production
+  if (DISPOSABLE_TARGET_DB.toLowerCase() === 'bankist') {
+    console.error('[CRITICAL ABORT] Target database is live "bankist"! Direct mutation of live database is strictly forbidden.');
+    process.exit(1);
+  }
 
   const adminConn = await mysql.createConnection({
     host: process.env.DB_HOST || '127.0.0.1',
@@ -41,120 +95,147 @@ async function runValidation() {
     multipleStatements: true
   });
 
-  try {
-    // 1. Create disposable DB
-    console.log(`\n[1/6] Creating disposable database ${DISPOSABLE_DB}...`);
-    await adminConn.query(`CREATE DATABASE \`${DISPOSABLE_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-    console.log('Disposable database created.');
+  let disposableCreated = false;
 
-    // 2. Connect to disposable DB and apply DDL
+  try {
+    // 1. Capture Pre-flight Live Database Fingerprint
+    console.log(`\n[1/7] Capturing Pre-flight Cryptographic Fingerprint of Live Database '${SOURCE_DB}'...`);
+    const preFlightFingerprint = await computeLiveDbFingerprint(adminConn, SOURCE_DB);
+    console.log(`  Live '${SOURCE_DB}' Base Tables: ${preFlightFingerprint.table_count}`);
+    console.log(`  Live '${SOURCE_DB}' Overall Cryptographic Hash: ${preFlightFingerprint.overall_hash}`);
+
+    // Verify source database integrity before migration
+    if (preFlightFingerprint.table_count < 11) {
+      throw new Error(`Source database '${SOURCE_DB}' contains insufficient tables (${preFlightFingerprint.table_count} found, 11 expected).`);
+    }
+
+    // 2. Create Disposable Target Database
+    console.log(`\n[2/7] Creating disposable target database \`${DISPOSABLE_TARGET_DB}\`...`);
+    await adminConn.query(`CREATE DATABASE \`${DISPOSABLE_TARGET_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+    disposableCreated = true;
+    console.log('  Disposable database created cleanly.');
+
+    // 3. Apply Normalized BCNF Schema
+    console.log(`\n[3/7] Applying normalized schema DDL (${DDL_PATH})...`);
     const testConn = await mysql.createConnection({
       host: process.env.DB_HOST || '127.0.0.1',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD,
       port: parseInt(process.env.DB_PORT || '3306'),
-      database: DISPOSABLE_DB,
+      database: DISPOSABLE_TARGET_DB,
       multipleStatements: true
     });
 
-    console.log(`\n[2/6] Applying normalized DDL schema (${DDL_PATH})...`);
     const ddlContent = fs.readFileSync(DDL_PATH, 'utf8');
     await testConn.query(ddlContent);
-    console.log('Normalized DDL schema applied successfully.');
+    console.log('  Normalized schema DDL applied successfully.');
 
-    // 3. Apply migration script
-    console.log(`\n[3/6] Applying migration script (${MIGRATION_PATH})...`);
+    // 4. Apply Lossless Data Migration Script
+    console.log(`\n[4/7] Applying safe data migration (${MIGRATION_PATH})...`);
+    await testConn.query(`SET @MIGRATION_SRC_DB = '${SOURCE_DB}';`);
     const migrationContent = fs.readFileSync(MIGRATION_PATH, 'utf8');
     await testConn.query(migrationContent);
-    console.log('Migration completed successfully.');
+    console.log('  Data migration completed successfully.');
 
-    // 4. Run tests
-    console.log(`\n[4/6] Executing test assertions from ${TESTS_PATH}...`);
+    // 5. Execute 32-Assertion Test Suite
+    console.log(`\n[5/7] Executing test assertions from ${TESTS_PATH}...`);
     const testsContent = fs.readFileSync(TESTS_PATH, 'utf8');
     
-    // Split test content into individual queries, stripping comments
+    // Parse statements while stripping comments
     const queries = testsContent
       .split(';')
-      .map(q => {
-        // Strip line comments
-        return q.replace(/--.*$/gm, '').trim();
-      })
+      .map(q => q.replace(/--.*$/gm, '').trim())
       .filter(q => q.length > 0 && (q.toUpperCase().startsWith('SELECT') || q.toUpperCase().startsWith('SET')));
 
-    let totalTests = 0;
-    let passedTests = 0;
-    let failedTests = 0;
-    const testSummary = [];
+    const EXPECTED_MIN_ASSERTIONS = 30;
+    let totalAssertions = 0;
+    let passedAssertions = 0;
+    let failedAssertions = 0;
+    const testResults = [];
 
     for (const q of queries) {
-      if (q.startsWith('SET')) {
+      if (q.toUpperCase().startsWith('SET')) {
         await testConn.query(q);
         continue;
       }
       const [rows] = await testConn.query(q);
       if (rows && rows.length > 0) {
         for (const row of rows) {
-          totalTests++;
-          const status = row.status || (row.actual_count === row.expected_count ? 'PASS' : 'FAIL');
+          totalAssertions++;
+          const status = row.status || 'FAIL';
           if (status === 'PASS') {
-            passedTests++;
+            passedAssertions++;
             console.log(`  [PASS] ${row.test_name}: ${JSON.stringify(row)}`);
           } else {
-            failedTests++;
+            failedAssertions++;
             console.error(`  [FAIL] ${row.test_name}: ${JSON.stringify(row)}`);
           }
-          testSummary.push(row);
+          testResults.push(row);
         }
       }
     }
 
     console.log(`\n--- Test Execution Summary ---`);
-    console.log(`Total Assertions Executed: ${totalTests}`);
-    console.log(`Passed: ${passedTests}`);
-    console.log(`Failed: ${failedTests}`);
+    console.log(`Total Assertions Executed: ${totalAssertions}`);
+    console.log(`Passed: ${passedAssertions}`);
+    console.log(`Failed: ${failedAssertions}`);
 
-    const scratchDir = path.resolve('C:/Users/MANAN/.gemini/antigravity/brain/ea3fc8f6-b56a-484e-aae2-e0dc4502e50e/scratch');
-    if (!fs.existsSync(scratchDir)) {
-      fs.mkdirSync(scratchDir, { recursive: true });
+    if (totalAssertions < EXPECTED_MIN_ASSERTIONS) {
+      throw new Error(`Incomplete test suite execution: Only ${totalAssertions} assertions ran (Expected >= ${EXPECTED_MIN_ASSERTIONS}).`);
     }
-    fs.writeFileSync(
-      path.resolve(scratchDir, 'normalization_test_results.json'),
-      JSON.stringify({ totalTests, passedTests, failedTests, results: testSummary }, null, 2)
-    );
 
-    // 5. Clean up test connection & drop disposable DB
-    console.log(`\n[5/6] Dropping disposable database ${DISPOSABLE_DB}...`);
+    if (failedAssertions > 0) {
+      throw new Error(`${failedAssertions} assertion(s) failed during validation.`);
+    }
+
+    // 6. Cleanup Disposable Database
+    console.log(`\n[6/7] Safely dropping disposable target database \`${DISPOSABLE_TARGET_DB}\`...`);
     await testConn.end();
-    await adminConn.query(`DROP DATABASE IF EXISTS \`${DISPOSABLE_DB}\`;`);
-    console.log('Disposable database cleaned up.');
+    await adminConn.query(`DROP DATABASE IF EXISTS \`${DISPOSABLE_TARGET_DB}\`;`);
+    disposableCreated = false;
+    console.log('  Disposable database dropped cleanly.');
 
-    // 6. Verify live bankist database remains untouched
-    console.log('\n[6/6] Verifying live `bankist` database pristine status...');
-    const [liveTables] = await adminConn.query('SHOW FULL TABLES FROM `bankist` WHERE Table_type = \'BASE TABLE\'');
-    let liveTotalRows = 0;
-    for (const row of liveTables) {
-      const tableName = Object.values(row)[0];
-      const [[{ count }]] = await adminConn.query(`SELECT COUNT(*) as count FROM \`bankist\`.\`${tableName}\``);
-      liveTotalRows += count;
-    }
-    const [[{ liveBalanceSum }]] = await adminConn.query('SELECT SUM(balance) as liveBalanceSum FROM `bankist`.accounts');
+    // 7. Verify Post-flight Live Database Fingerprint
+    console.log(`\n[7/7] Capturing Post-flight Cryptographic Fingerprint of Live Database '${SOURCE_DB}'...`);
+    const postFlightFingerprint = await computeLiveDbFingerprint(adminConn, SOURCE_DB);
+    console.log(`  Live '${SOURCE_DB}' Post-flight Overall Hash: ${postFlightFingerprint.overall_hash}`);
 
-    console.log(`Live 'bankist' Base Tables: ${liveTables.length} (Expected: 11)`);
-    console.log(`Live 'bankist' Total Rows: ${liveTotalRows} (Expected: 3041)`);
-    console.log(`Live 'bankist' Balance Sum: ${liveBalanceSum} (Expected: 19155216.07)`);
-
-    if (liveTotalRows === 3041 && parseFloat(liveBalanceSum) === 19155216.07) {
-      console.log('[VERIFIED] Live database `bankist` is 100% UNTOUCHED and PRISTINE.');
+    if (preFlightFingerprint.overall_hash !== postFlightFingerprint.overall_hash) {
+      console.error('[CRITICAL FAILURE] Live database fingerprint mismatch! Live database was mutated!');
+      process.exit(1);
     } else {
-      console.error('[CRITICAL] Live database row count or balance mismatch!');
+      console.log('  [VERIFIED] Live database cryptographic fingerprint matches 100% (Bit-for-bit identical, zero mutation).');
     }
+
+    // Save test results artifact
+    const scratchDir = path.resolve('C:/Users/MANAN/.gemini/antigravity/brain/ea3fc8f6-b56a-484e-aae2-e0dc4502e50e/scratch');
+    if (!fs.existsSync(scratchDir)) fs.mkdirSync(scratchDir, { recursive: true });
+    fs.writeFileSync(
+      path.resolve(scratchDir, 'normalization_audit_results.json'),
+      JSON.stringify({
+        validated_at: new Date().toISOString(),
+        source_db: SOURCE_DB,
+        pre_flight_hash: preFlightFingerprint.overall_hash,
+        post_flight_hash: postFlightFingerprint.overall_hash,
+        fingerprints_match: true,
+        total_assertions: totalAssertions,
+        passed_assertions: passedAssertions,
+        failed_assertions: failedAssertions,
+        results: testResults
+      }, null, 2)
+    );
+    console.log(`\nAudit results persisted to scratch/normalization_audit_results.json`);
+    console.log('\n[ALL CHECKS PASSED] Normalization schema and data migration successfully validated!');
 
   } catch (err) {
-    console.error('Validation failed with error:', err);
-    // Cleanup if needed
-    try {
-      await adminConn.query(`DROP DATABASE IF EXISTS \`${DISPOSABLE_DB}\`;`);
-    } catch (e) {}
+    console.error('\n[VALIDATION FAILED]', err.message);
+    if (disposableCreated) {
+      try {
+        console.log(`Emergency cleanup: Dropping \`${DISPOSABLE_TARGET_DB}\`...`);
+        await adminConn.query(`DROP DATABASE IF EXISTS \`${DISPOSABLE_TARGET_DB}\`;`);
+      } catch (e) {}
+    }
+    process.exit(1);
   } finally {
     await adminConn.end();
   }
