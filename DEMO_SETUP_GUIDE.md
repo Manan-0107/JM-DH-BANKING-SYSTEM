@@ -89,7 +89,7 @@ mysql -h 127.0.0.1 -P 3306 -u root -p < DBMS_LAB_FINAL.sql
 **What this demonstrates to the professor:**
 - Creates a clean BCNF database `bankist_college_demo`.
 - Builds all 13 normalized tables with foreign keys and cascade constraints.
-- Builds 5 non-blocking SQL views (including Error 1055-free window aggregate nominee view).
+- Builds 8 non-blocking SQL views (including Error 1055-free window aggregate nominee view).
 - Compiles 2 atomic stored procedures (`sp_deposit_funds` and `sp_transfer_funds`).
 - Populates seed data for Aarav Patel (`ACC-1001`, initial ₹5,000) and Priya Nair (`ACC-1002`, initial ₹2,000).
 - Runs 7 live SQL tests directly inside the console, displaying formatted tabular balance transformations.

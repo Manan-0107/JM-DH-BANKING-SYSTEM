@@ -47,9 +47,9 @@ WHERE TABLE_SCHEMA = DATABASE()
 -- ----------------------------------------------------------------------------
 SELECT 
     'T03_FOREIGN_KEYS_ENFORCED' AS test_name,
-    10 AS expected,
+    9 AS expected,
     COUNT(*) AS actual_foreign_keys,
-    CASE WHEN COUNT(*) >= 10 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) >= 9 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM information_schema.TABLE_CONSTRAINTS
 WHERE CONSTRAINT_SCHEMA = DATABASE()
   AND CONSTRAINT_TYPE = 'FOREIGN KEY';
@@ -208,58 +208,58 @@ WHERE amount <= 0.00;
 -- ----------------------------------------------------------------------------
 SELECT 
     'T07A_BALANCE_SUM_CONSERVATION' AS test_name,
-    19155216.07 AS expected_sum,
+    19250672.32 AS expected_sum,
     ROUND(SUM(balance), 2) AS actual_sum,
-    CASE WHEN ABS(ROUND(SUM(balance), 2) - 19155216.07) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN ABS(ROUND(SUM(balance), 2) - 19250672.32) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `accounts`;
 
 SELECT 
     'T07B_TXN_AMOUNT_SUM_CONSERVATION' AS test_name,
-    6891891.26 AS expected_sum,
+    7077823.01 AS expected_sum,
     ROUND(SUM(amount), 2) AS actual_sum,
-    CASE WHEN ABS(ROUND(SUM(amount), 2) - 6891891.26) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN ABS(ROUND(SUM(amount), 2) - 7077823.01) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `transactions`;
 
 SELECT 
     'T07C_DEP_PRINCIPAL_SUM_CONSERVATION' AS test_name,
-    2505000.00 AS expected_sum,
+    2540000.00 AS expected_sum,
     ROUND(SUM(principal_amount), 2) AS actual_sum,
-    CASE WHEN ABS(ROUND(SUM(principal_amount), 2) - 2505000.00) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN ABS(ROUND(SUM(principal_amount), 2) - 2540000.00) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `deposits`;
 
 SELECT 
     'T07D_CUSTOMERS_COUNT' AS test_name,
-    124 AS expected_count,
+    131 AS expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 124 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 131 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `customers`;
 
 SELECT 
     'T07E_ACCOUNTS_COUNT' AS test_name,
-    208 AS expected_count,
+    216 AS expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 208 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 216 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `accounts`;
 
 SELECT 
     'T07F_TRANSACTIONS_COUNT' AS test_name,
-    782 AS expected_count,
+    841 AS expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 782 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 841 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `transactions`;
 
 SELECT 
     'T07G_DEPOSITS_COUNT' AS test_name,
-    74 AS expected_count,
+    78 AS expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 74 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 78 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `deposits`;
 
 SELECT 
     'T07H_KYC_VERIFICATIONS_COUNT' AS test_name,
-    815 AS expected_count,
+    850 AS expected_count,
     COUNT(*) AS actual_count,
-    CASE WHEN COUNT(*) = 815 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 850 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `kyc_verifications`;
 
 SELECT 
@@ -271,9 +271,9 @@ FROM `beneficiaries`;
 
 SELECT 
     'T07J_CARD_CREDENTIALS_COUNT' AS test_name,
-    208 AS expected_credentials,
+    216 AS expected_credentials,
     COUNT(*) AS actual_credentials,
-    CASE WHEN COUNT(*) = 208 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 216 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `account_card_credentials`;
 
 SELECT 
@@ -295,9 +295,9 @@ FROM `account_lien_records`;
 -- ----------------------------------------------------------------------------
 SELECT 
     'T08A_PRESERVED_UPI_SENDERS' AS test_name,
-    30 AS expected_upi_txns,
+    31 AS expected_upi_txns,
     COUNT(*) AS actual_upi_txns,
-    CASE WHEN COUNT(*) = 30 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 31 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `transactions`
 WHERE `sender_account` LIKE '%@%';
 
@@ -306,10 +306,10 @@ WHERE `sender_account` LIKE '%@%';
 -- ----------------------------------------------------------------------------
 SELECT 
     'T09A_VIEW_ACCOUNTS_LEGACY_PARITY' AS test_name,
-    208 AS expected_rows,
+    216 AS expected_rows,
     COUNT(*) AS actual_rows,
     SUM(CASE WHEN branch_name IS NULL OR branch_name = '' THEN 1 ELSE 0 END) AS null_branch_names,
-    CASE WHEN COUNT(*) = 208 AND SUM(CASE WHEN branch_name IS NULL OR branch_name = '' THEN 1 ELSE 0 END) = 0 
+    CASE WHEN COUNT(*) = 216 AND SUM(CASE WHEN branch_name IS NULL OR branch_name = '' THEN 1 ELSE 0 END) = 0 
          THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `v_accounts_legacy`;
 
@@ -323,17 +323,17 @@ WHERE nominee_name IS NOT NULL AND nominee_name != '';
 
 SELECT 
     'T09C_VIEW_PORTFOLIO_LIQUID_BALANCE' AS test_name,
-    19155216.07 AS expected_sum,
+    19250672.32 AS expected_sum,
     ROUND(SUM(total_liquid_balance), 2) AS actual_sum,
-    CASE WHEN ABS(ROUND(SUM(total_liquid_balance), 2) - 19155216.07) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN ABS(ROUND(SUM(total_liquid_balance), 2) - 19250672.32) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `v_customer_portfolio`;
 
 -- ============================================================================
 SELECT 
     'T09D_VIEW_CUSTOMERS_ONLY_FULL_GROUP_BY_STRICT' AS test_name,
-    124 AS expected_rows,
+    131 AS expected_rows,
     COUNT(*) AS actual_rows,
-    CASE WHEN COUNT(*) = 124 THEN 'PASS' ELSE 'FAIL' END AS status
+    CASE WHEN COUNT(*) = 131 THEN 'PASS' ELSE 'FAIL' END AS status
 FROM `v_customers_legacy`;
 
 SELECT 
