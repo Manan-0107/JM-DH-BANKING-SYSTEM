@@ -64,14 +64,14 @@ export async function POST(request: Request) {
       // 6. Increment attempt counter atomically
       await conn.query(`UPDATE otp_sessions SET attempts = attempts + 1 WHERE session_id = ?`, [session.session_id]);
 
-      // 7. Cryptographic Hash Verification
-      let isValid = false;
-      if (session.otp_hash) {
-        isValid = verifyOtpHash(cleanOtp, session.otp_hash, session.session_id);
-      } else if (session.otp_code) {
-        // Legacy fallback for unmigrated sessions
-        isValid = session.otp_code === cleanOtp;
+      // 7. Cryptographic Hash Verification (HMAC-SHA256 strictly required; plaintext fallback eliminated)
+      if (!session.otp_hash) {
+        return {
+          status: 400,
+          error: 'Invalid OTP session: cryptographic hash missing. Please request a new OTP.',
+        };
       }
+      const isValid = verifyOtpHash(cleanOtp, session.otp_hash, session.session_id);
 
       if (!isValid) {
         const remainingAttempts = Math.max(0, 4 - currentAttempts);

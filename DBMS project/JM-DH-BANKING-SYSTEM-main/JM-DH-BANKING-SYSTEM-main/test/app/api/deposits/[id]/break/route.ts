@@ -33,11 +33,15 @@ export async function POST(
       return NextResponse.json({ error: `This deposit certificate is already ${deposit.status.toLowerCase()}.` }, { status: 400 });
     }
 
-    // 2. Verify PIN if provided
-    if (pin) {
-      const credCheck = await verifyCustomerCredentials(db, authUser.customer_id, pin, 'Invalid PIN entered for liquidation');
-      if (credCheck.errorResponse) return credCheck.errorResponse;
+    // 2. Enforce mandatory PIN verification
+    if (!pin || typeof pin !== 'string' || !pin.trim()) {
+      return NextResponse.json(
+        { error: 'ATM Card PIN is required for premature deposit liquidation' },
+        { status: 400 }
+      );
     }
+    const credCheck = await verifyCustomerCredentials(db, authUser.customer_id, pin, 'Invalid PIN entered for liquidation');
+    if (credCheck.errorResponse) return credCheck.errorResponse;
 
     // 3. Payout calculation
     const principal = parseFloat(deposit.principal_amount);

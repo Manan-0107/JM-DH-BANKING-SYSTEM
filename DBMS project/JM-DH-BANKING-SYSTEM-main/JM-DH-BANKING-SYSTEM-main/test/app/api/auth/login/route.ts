@@ -29,6 +29,12 @@ export async function POST(request: Request) {
     // 1. Check Rate Limit / Account Lockout
     const rateLimit = await checkRateLimit(db, rateLimitKey, loginRateLimitOptions);
     if (!rateLimit.allowed) {
+      if (rateLimit.serviceUnavailable) {
+        return NextResponse.json(
+          { error: 'Security verification service temporarily unavailable. Please try again shortly.' },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         {
           error: `Too many failed login attempts. Account temporarily locked for security. Please try again in ${rateLimit.retryAfterSec || 900} seconds.`,
@@ -44,6 +50,12 @@ export async function POST(request: Request) {
 
     if (!rows || rows.length === 0) {
       const failedInfo = await recordFailedAttempt(db, rateLimitKey, loginRateLimitOptions);
+      if (failedInfo.serviceUnavailable) {
+        return NextResponse.json(
+          { error: 'Security verification service temporarily unavailable. Please try again shortly.' },
+          { status: 503 }
+        );
+      }
       if (failedInfo.locked) {
         return NextResponse.json(
           { error: 'Maximum login attempts exceeded. Account is now locked for 15 minutes.' },
@@ -64,6 +76,12 @@ export async function POST(request: Request) {
 
     if (!isPasswordMatch && !isPinMatch) {
       const failedInfo = await recordFailedAttempt(db, rateLimitKey, loginRateLimitOptions);
+      if (failedInfo.serviceUnavailable) {
+        return NextResponse.json(
+          { error: 'Security verification service temporarily unavailable. Please try again shortly.' },
+          { status: 503 }
+        );
+      }
       if (failedInfo.locked) {
         return NextResponse.json(
           { error: 'Maximum login attempts exceeded. Account is now locked for 15 minutes.' },
