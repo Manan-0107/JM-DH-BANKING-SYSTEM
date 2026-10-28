@@ -4,7 +4,8 @@
 -- Features: Joins, Subqueries, CTEs, Recursive CTEs, Window Functions, Sets
 -- ============================================================================
 
-USE `bankist`;
+-- Note: Database context must be explicitly selected by the caller (e.g. USE <database>; or via connection pool/CLI).
+-- Do NOT hardcode 'USE bankist;' here to prevent accidental mutation of live environments during test/disposable setups.
 
 -- ----------------------------------------------------------------------------
 -- 1. Multi-Table INNER & LEFT Joins: Comprehensive Customer Asset Profile

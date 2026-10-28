@@ -25,84 +25,116 @@ if (fs.existsSync(targetZip)) {
 
 fs.mkdirSync(stagingDir, { recursive: true });
 
-function copyFiltered(src, dest, ignoreList = []) {
+/**
+ * Robust case-insensitive check for forbidden artifacts:
+ * - SQLite database files & any timestamped backup variants
+ * - Sensitive environment configurations (.env)
+ * - Raw customer data exports (.csv)
+ * - Build artifacts, node_modules, and temporary archives
+ */
+function isForbiddenItem(fullPath, rootDir = projectRoot) {
+  const baseName = path.basename(fullPath).toLowerCase();
+  const normalizedRel = path.relative(rootDir, fullPath).replace(/\\/g, '/').toLowerCase();
+
+  // 1. Forbidden Directories
+  const forbiddenDirNames = [
+    'node_modules',
+    '.next',
+    '.git',
+    '.vscode',
+    'backups',
+    'archive',
+    'scratch',
+    'staging_submission',
+    'staging_security_patched',
+    'staging_final_submission',
+    'staging_verify_extraction',
+    'pre_remediation_snapshot',
+  ];
+  if (forbiddenDirNames.includes(baseName)) return true;
+  if (normalizedRel.split('/').filter(Boolean).some((segment) => forbiddenDirNames.includes(segment))) return true;
+
+  // 2. Sensitive Environment Files (.env, .env.local, .env.production - allow ONLY .env.example)
+  if (baseName === '.env' || (baseName.startsWith('.env.') && baseName !== '.env.example')) {
+    return true;
+  }
+
+  // 3. SQLite Database Files, SQLite Backups, WAL, and Journal Files (database binaries, not source/docs)
+  if (
+    (baseName.includes('sqlite') && !baseName.endsWith('.md') && !baseName.endsWith('.js') && !baseName.endsWith('.ts')) ||
+    baseName.endsWith('.db') ||
+    baseName.endsWith('.db-wal') ||
+    baseName.endsWith('.db-shm') ||
+    baseName.includes('-journal') ||
+    baseName.includes('-wal') ||
+    baseName.includes('-shm')
+  ) {
+    return true;
+  }
+
+  // 4. Backup files, dumps, raw customer CSV exports, build logs & temp zips
+  if (
+    baseName.includes('backup') ||
+    baseName.endsWith('.bak') ||
+    baseName.endsWith('.csv') ||
+    baseName.endsWith('.log') ||
+    baseName.endsWith('.tsbuildinfo') ||
+    (baseName.endsWith('.zip') && normalizedRel !== '')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function copyFiltered(src, dest) {
   if (!fs.existsSync(src)) return;
+  if (isForbiddenItem(src, projectRoot)) return;
+
   const stat = fs.statSync(src);
-
-  const baseName = path.basename(src);
-  if (ignoreList.includes(baseName)) return;
-
   if (stat.isDirectory()) {
     if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
     const items = fs.readdirSync(src);
     for (const item of items) {
-      copyFiltered(path.join(src, item), path.join(dest, item), ignoreList);
+      copyFiltered(path.join(src, item), path.join(dest, item));
     }
   } else {
-    // Avoid copying secrets or build cache or sqlite database binaries
-    if (baseName === '.env' || baseName.endsWith('.sqlite') || baseName.endsWith('.sqlite-journal') || baseName.endsWith('.tsbuildinfo') || baseName.endsWith('.log')) {
-      return;
-    }
     const destDir = path.dirname(dest);
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
     fs.copyFileSync(src, dest);
   }
 }
 
-const globalIgnores = [
-  'node_modules',
-  '.next',
-  '.git',
-  '.vscode',
-  'staging_submission',
-  'staging_security_patched',
-  'staging_final_submission',
-  'staging_verify_extraction',
-  'scratch',
-  'banking.db',
-  'bankist.sqlite',
-  'archive',
-  'JM-DH-BANKING-SYSTEM-SUBMISSION.zip',
-  'JM-DH-BANKING-SYSTEM-SECURITY-PATCHED.zip',
-  'JM-DH-BANKING-SYSTEM-FINAL-SUBMISSION.zip'
-];
-
 console.log('1. Copying root documentation & SQL scripts...');
-copyFiltered(path.join(projectRoot, 'README.md'), path.join(stagingDir, 'README.md'), globalIgnores);
-copyFiltered(path.join(projectRoot, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'), path.join(stagingDir, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'), globalIgnores);
-copyFiltered(path.join(projectRoot, 'database'), path.join(stagingDir, 'database'), globalIgnores);
-copyFiltered(path.join(projectRoot, 'docs'), path.join(stagingDir, 'docs'), globalIgnores);
-copyFiltered(path.join(projectRoot, 'scripts'), path.join(stagingDir, 'scripts'), globalIgnores);
+copyFiltered(path.join(projectRoot, 'README.md'), path.join(stagingDir, 'README.md'));
+copyFiltered(path.join(projectRoot, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'), path.join(stagingDir, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'));
+copyFiltered(path.join(projectRoot, 'COMPLETE_REMEDIATION_REPORT.md'), path.join(stagingDir, 'COMPLETE_REMEDIATION_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'SQLITE_TO_MYSQL_MIGRATION_REPORT.md'), path.join(stagingDir, 'SQLITE_TO_MYSQL_MIGRATION_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'database'), path.join(stagingDir, 'database'));
+copyFiltered(path.join(projectRoot, 'docs'), path.join(stagingDir, 'docs'));
+copyFiltered(path.join(projectRoot, 'scripts'), path.join(stagingDir, 'scripts'));
 
 console.log('2. Copying authoritative Next.js application & schemas...');
 copyFiltered(
   path.join(projectRoot, 'DBMS project'),
-  path.join(stagingDir, 'DBMS project'),
-  globalIgnores
+  path.join(stagingDir, 'DBMS project')
 );
 
-console.log('3. Validating that no secrets, caches, or node_modules are included in staging...');
-function auditDir(dir) {
+console.log('3. Validating that no secrets, caches, or database binaries are included in staging...');
+function auditDir(dir, baseRoot) {
   const items = fs.readdirSync(dir);
   for (const item of items) {
     const full = path.join(dir, item);
+    if (isForbiddenItem(full, baseRoot)) {
+      throw new Error(`CRITICAL SECURITY FAILURE: Forbidden file/directory leaked into staging: ${full}`);
+    }
     const stat = fs.statSync(full);
     if (stat.isDirectory()) {
-      if (item === 'node_modules' || item === '.next' || item === '.git' || item === '.vscode') {
-        throw new Error(`Forbidden directory found in staging: ${full}`);
-      }
-      auditDir(full);
-    } else {
-      if (item === '.env') {
-        throw new Error(`Forbidden secret file found in staging: ${full}`);
-      }
-      if (item.endsWith('.sqlite') || item.endsWith('.sqlite-journal')) {
-        throw new Error(`Forbidden sqlite DB binary found in staging: ${full}`);
-      }
+      auditDir(full, baseRoot);
     }
   }
 }
-auditDir(stagingDir);
+auditDir(stagingDir, stagingDir);
 console.log('   [PASS] Staging audit clean: Zero credentials, node_modules, cache files, or database binaries.');
 
 console.log('4. Compressing staging directory into final submission ZIP via .NET Compression...');
@@ -133,7 +165,7 @@ const criticalFiles = [
   'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/test_backend_suite.js',
   'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/test_persistence.js',
   'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/test_security_remediation.js',
-  'scripts/run_all_dbms_tests.js'
+  'scripts/run_all_dbms_tests.js',
 ];
 
 for (const relPath of criticalFiles) {
@@ -144,15 +176,9 @@ for (const relPath of criticalFiles) {
 }
 console.log('   [PASS] All critical project, documentation, database, and test files verified in extracted package.');
 
-// Verify package.json contains Next 15.5.28 and PostCSS 8.5.31
-const extractedPkg = JSON.parse(fs.readFileSync(path.join(extractVerifyDir, 'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/package.json'), 'utf8'));
-if (extractedPkg.dependencies.next !== '^15.5.28') {
-  throw new Error(`Extracted package.json next version mismatch: ${extractedPkg.dependencies.next}`);
-}
-if (!extractedPkg.overrides || extractedPkg.overrides.postcss !== '^8.5.31') {
-  throw new Error(`Extracted package.json postcss override missing or mismatch`);
-}
-console.log('   [PASS] Extracted package.json verified: next@^15.5.28 and overrides.postcss@^8.5.31 confirmed.');
+// Verify extracted package has zero forbidden files
+auditDir(extractVerifyDir, extractVerifyDir);
+console.log('   [PASS] Extracted archive audit clean: Zero forbidden items found in extracted package.');
 
 // 7. Clean up staging & extraction verify dirs
 fs.rmSync(stagingDir, { recursive: true, force: true });

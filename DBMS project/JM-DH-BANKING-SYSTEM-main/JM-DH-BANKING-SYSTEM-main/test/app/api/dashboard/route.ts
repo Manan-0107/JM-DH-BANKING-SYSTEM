@@ -1,10 +1,35 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/api-helpers';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // 1. Require Server-Side Authentication
+    const auth = requireAuth(request, 'Unauthorized: Session invalid or expired');
+    if (auth.errorResponse) {
+      return auth.errorResponse;
+    }
+    const user = auth.user;
+
+    // 2. Enforce Administrative Authorization (Server-Side Role Verification)
+    // Possession of an ordinary customer JWT is strictly forbidden from viewing administrative metrics.
+    const configuredAdminEmails = (process.env.ADMIN_EMAILS || 'admin@bharatbank.com,admin@btb.internal')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    const isExplicitAdminRole = user.role === 'admin' || user.role === 'bank_admin';
+    const isConfiguredAdminEmail = Boolean(user.email && configuredAdminEmails.includes(user.email.toLowerCase()));
+
+    if (!isExplicitAdminRole && !isConfiguredAdminEmail) {
+      return NextResponse.json(
+        { error: 'Forbidden: Administrative privilege required to access aggregate bank metrics and audit logs.' },
+        { status: 403 }
+      );
+    }
+
     const db = await getDb();
 
     // 1. Customer statistics
@@ -48,9 +73,10 @@ export async function GET() {
       WHERE status = 'Success'
     `);
 
-    // 5. Recent system audit logs
+    // 5. Recent system audit logs - Data Minimization:
+    // Strip raw customer identifiers and internal detail blobs to protect privacy
     const [recentAudits] = await db.query(`
-      SELECT log_id, customer_id, action, entity_type, details, timestamp
+      SELECT log_id, action, entity_type, timestamp
       FROM audit_logs
       ORDER BY timestamp DESC
       LIMIT 10
@@ -65,7 +91,7 @@ export async function GET() {
       },
       recent_audits: recentAudits || [],
       calculated_at: new Date().toISOString(),
-      source: db.isSqlite ? 'SQLite Embedded Database' : 'MySQL 8.0 Cluster',
+      source: 'MySQL 8.0 Cluster',
     });
   } catch (err: any) {
     console.error('Dashboard Stats API Error:', err);

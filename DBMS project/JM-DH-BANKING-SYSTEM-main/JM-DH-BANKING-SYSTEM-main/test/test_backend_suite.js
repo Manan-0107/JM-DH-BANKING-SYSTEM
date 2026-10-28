@@ -21,82 +21,67 @@ try {
   require('dotenv').config();
 } catch (e) {}
 
-const sqlite3 = require('sqlite3').verbose();
 const BASE_URL = 'http://localhost:3000';
 
-function createTestDbVerifier(engineInfo) {
-  if (engineInfo && engineInfo.engine === 'mysql') {
-    const mysql = require('mysql2/promise');
-    const pool = mysql.createPool({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'bankist',
-      port: parseInt(process.env.DB_PORT || '3306', 10),
-      waitForConnections: true,
-      connectionLimit: 5,
-    });
+function createTestDbVerifier() {
+  const mysql = require('mysql2/promise');
+  const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'bankist',
+    port: parseInt(process.env.DB_PORT || '3306', 10),
+    waitForConnections: true,
+    connectionLimit: 5,
+  });
 
-    return {
-      engine: 'mysql',
-      get: (sql, ...args) => {
-        let params = [];
-        let cb = null;
-        if (typeof args[0] === 'function') {
-          cb = args[0];
-        } else if (Array.isArray(args[0])) {
-          params = args[0];
-          cb = typeof args[1] === 'function' ? args[1] : null;
-        }
-        return pool.query(sql, params)
-          .then(([rows]) => {
-            const row = (rows && rows.length > 0) ? rows[0] : null;
-            if (cb) cb(null, row);
-            return row;
-          })
-          .catch((err) => {
-            if (cb) cb(err, null);
-            else throw err;
-          });
-      },
-      all: (sql, ...args) => {
-        let params = [];
-        let cb = null;
-        if (typeof args[0] === 'function') {
-          cb = args[0];
-        } else if (Array.isArray(args[0])) {
-          params = args[0];
-          cb = typeof args[1] === 'function' ? args[1] : null;
-        }
-        return pool.query(sql, params)
-          .then(([rows]) => {
-            if (cb) cb(null, rows || []);
-            return rows || [];
-          })
-          .catch((err) => {
-            if (cb) cb(err, []);
-            else throw err;
-          });
-      },
-      getConnection: () => pool.getConnection(),
-      close: (cb) => {
-        pool.end()
-          .then(() => { if (cb) cb(null); })
-          .catch((err) => { if (cb) cb(err); });
-      },
-    };
-  }
-
-  // SQLite engine
-  const db = new sqlite3.Database('bankist.sqlite');
-  db.on('error', () => {});
   return {
-    engine: 'sqlite',
-    get: function (sql, ...args) { return db.get(sql, ...args); },
-    all: function (sql, ...args) { return db.all(sql, ...args); },
-    serialize: function (fn) { return db.serialize(fn); },
-    run: function (sql, ...args) { return db.run(sql, ...args); },
-    close: function (cb) { return db.close(cb); },
+    engine: 'mysql',
+    get: (sql, ...args) => {
+      let params = [];
+      let cb = null;
+      if (typeof args[0] === 'function') {
+        cb = args[0];
+      } else if (Array.isArray(args[0])) {
+        params = args[0];
+        cb = typeof args[1] === 'function' ? args[1] : null;
+      }
+      return pool.query(sql, params)
+        .then(([rows]) => {
+          const row = (rows && rows.length > 0) ? rows[0] : null;
+          if (cb) cb(null, row);
+          return row;
+        })
+        .catch((err) => {
+          if (cb) cb(err, null);
+          else throw err;
+        });
+    },
+    all: (sql, ...args) => {
+      let params = [];
+      let cb = null;
+      if (typeof args[0] === 'function') {
+        cb = args[0];
+      } else if (Array.isArray(args[0])) {
+        params = args[0];
+        cb = typeof args[1] === 'function' ? args[1] : null;
+      }
+      return pool.query(sql, params)
+        .then(([rows]) => {
+          if (cb) cb(null, rows || []);
+          return rows || [];
+        })
+        .catch((err) => {
+          if (cb) cb(err, []);
+          else throw err;
+        });
+    },
+    getConnection: () => pool.getConnection(),
+    close: (cb) => {
+      pool.end()
+        .then(() => { if (cb) cb(null); })
+        .catch((err) => { if (cb) cb(err); });
+    },
   };
 }
 
@@ -134,9 +119,9 @@ async function runTests() {
       throw new Error('Test execution aborted: Running test suites against NODE_ENV=production is strictly prohibited!');
     }
 
-    // Fallback Guard: Fail closed if MySQL was explicitly requested via USE_MYSQL=true, but server is running SQLite
-    if (process.env.USE_MYSQL === 'true' && engineInfo.engine !== 'mysql') {
-      assert(false, 'Silent Fallback Guard: USE_MYSQL=true was configured, but server silently fell back to SQLite!');
+    // Strict Engine Guard: Server must run MySQL unconditionally
+    if (engineInfo.engine !== 'mysql') {
+      assert(false, `Engine Guard: Expected MySQL 8.0+, but server reported ${engineInfo.engine}!`);
       return;
     }
 
@@ -637,59 +622,23 @@ async function runTests() {
     });
     assert(!probeTxnRecord, 'Failure-Driven Rollback: Uncommitted transaction/ledger record was completely rolled back from database');
 
-    // 5. Engine-Specific Rollback Verification
-    if (engineInfo.engine === 'sqlite') {
-      let sqliteEngineRollbackPassed = false;
+    // 5. Direct MySQL Engine Rollback Verification
+    let mysqlEngineRollbackPassed = false;
+    try {
+      const mConn = await verifyDb.getConnection();
+      await mConn.beginTransaction();
+      await mConn.query('UPDATE accounts SET balance = balance - 500 WHERE account_number = ?', [aaravAccount]);
       try {
-        await new Promise((resolve, reject) => {
-          verifyDb.serialize(() => {
-            verifyDb.run("BEGIN IMMEDIATE TRANSACTION");
-            verifyDb.run("UPDATE accounts SET balance = balance - 1000 WHERE account_number = ?", [aaravAccount]);
-            verifyDb.run(
-              "INSERT INTO transactions (transaction_id, reference_number, sender_account, amount, type, date_time, status, description) VALUES (?, ?, ?, 1000, 'Transfer', datetime('now'), 'Pending', 'Engine Probe')",
-              [`TXN-SQLITE-${Date.now()}`, `PROBE-${Date.now()}`, aaravAccount]
-            );
-            // Trigger deliberate SQL failure
-            verifyDb.run("INSERT INTO non_existent_table_direct_sqlite VALUES (1)", function (err) {
-              if (err) {
-                // Engine error caught; rollback
-                verifyDb.run("ROLLBACK", (rbErr) => {
-                  if (rbErr) reject(rbErr);
-                  else {
-                    sqliteEngineRollbackPassed = true;
-                    resolve(true);
-                  }
-                });
-              } else {
-                reject(new Error('Expected SQL error was not triggered'));
-              }
-            });
-          });
-        });
-      } catch (e) {
-        sqliteEngineRollbackPassed = false;
+        await mConn.query('INSERT INTO non_existent_table_mysql_probe VALUES (1)');
+      } catch (mErr) {
+        await mConn.rollback();
+        mysqlEngineRollbackPassed = true;
       }
-      assert(sqliteEngineRollbackPassed, 'Direct SQLite engine: Caught failure after writes and rolled back atomically');
-      console.log('[SKIP] MySQL integration test explicitly skipped: MySQL server is not configured or offline (USE_MYSQL=false). Testing SQLite active engine.');
-    } else {
-      let mysqlEngineRollbackPassed = false;
-      try {
-        const mConn = await verifyDb.getConnection();
-        await mConn.beginTransaction();
-        await mConn.query('UPDATE accounts SET balance = balance - 500 WHERE account_number = ?', [aaravAccount]);
-        try {
-          await mConn.query('INSERT INTO non_existent_table_mysql_probe VALUES (1)');
-        } catch (mErr) {
-          await mConn.rollback();
-          mysqlEngineRollbackPassed = true;
-        }
-        await mConn.release();
-      } catch (mysqlErr) {
-        mysqlEngineRollbackPassed = false;
-      }
-      assert(mysqlEngineRollbackPassed, 'Direct MySQL engine: Caught failure after writes and rolled back atomically');
-      console.log('[SKIP] SQLite direct rollback test skipped: Active engine is MySQL.');
+      await mConn.release();
+    } catch (mysqlErr) {
+      mysqlEngineRollbackPassed = false;
     }
+    assert(mysqlEngineRollbackPassed, 'Direct MySQL engine: Caught failure after writes and rolled back atomically');
 
     // TEST 17: Multi-Threaded Overdraft Race Condition (Preventing Negative Balances)
     console.log('\n--- 17. Testing Multi-Threaded Overdraft Race Condition ---');
@@ -957,40 +906,32 @@ async function runTests() {
     assert(localVerifyTransactionPin('9876', { password_hash: '', card_pin_hash: '' }) === false, 'localVerifyTransactionPin fails closed when hashes missing');
     assert(localVerifyTransactionPin('9876', { password_hash: 'plainTextPassword', card_pin: '9876' }) === false, 'localVerifyTransactionPin never authenticates against plaintext card_pin');
 
-    // Isolated In-Memory SQLite Legacy Migration Simulation
-    const tempLegacyDb = new sqlite3.Database(':memory:');
-    const runAsync = (sql, params = []) => new Promise((res, rej) => tempLegacyDb.run(sql, params, (err) => err ? rej(err) : res()));
-    const allAsync = (sql, params = []) => new Promise((res, rej) => tempLegacyDb.all(sql, params, (err, rows) => err ? rej(err) : res(rows || [])));
-
-    await runAsync(`
-      CREATE TABLE legacy_customers (
-        customer_id TEXT PRIMARY KEY,
-        card_pin TEXT,
-        card_pin_hash TEXT
-      )
-    `);
-    await runAsync("INSERT INTO legacy_customers (customer_id, card_pin, card_pin_hash) VALUES ('LEGACY-1', '5555', NULL)");
-    await runAsync("INSERT INTO legacy_customers (customer_id, card_pin, card_pin_hash) VALUES ('LEGACY-2', '7777', NULL)");
+    // Isolated In-Memory Legacy Migration Simulation
+    const legacyCustomers = [
+      { customer_id: 'LEGACY-1', card_pin: '5555', card_pin_hash: null },
+      { customer_id: 'LEGACY-2', card_pin: '7777', card_pin_hash: null },
+    ];
 
     // Step 1: Migrate plaintext PINs to bcrypt hashes
-    const legacyRows = await allAsync("SELECT customer_id, card_pin FROM legacy_customers WHERE card_pin IS NOT NULL AND (card_pin_hash IS NULL OR card_pin_hash = '')");
-    for (const r of legacyRows) {
-      const h = bcrypt.hashSync(r.card_pin, 10);
-      await runAsync("UPDATE legacy_customers SET card_pin_hash = ? WHERE customer_id = ?", [h, r.customer_id]);
+    for (const r of legacyCustomers) {
+      if (r.card_pin && (!r.card_pin_hash || r.card_pin_hash === '')) {
+        r.card_pin_hash = bcrypt.hashSync(r.card_pin, 10);
+      }
     }
 
     // Step 2: Scrub plaintext PIN column
-    await runAsync("UPDATE legacy_customers SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''");
+    for (const r of legacyCustomers) {
+      if (r.card_pin_hash && r.card_pin_hash !== '') {
+        r.card_pin = null;
+      }
+    }
 
     // Step 3: Verify migration
-    const migratedRows = await allAsync("SELECT * FROM legacy_customers");
-    assert(migratedRows.length === 2, 'Isolated legacy migration processed 2 records');
-    assert(migratedRows.every(r => r.card_pin === null), 'Isolated legacy migration set card_pin = NULL for all records');
-    assert(migratedRows.every(r => r.card_pin_hash && r.card_pin_hash.startsWith('$2a$')), 'Isolated legacy migration generated bcrypt hashes');
-    assert(bcrypt.compareSync('5555', migratedRows[0].card_pin_hash), 'Migrated hash matches original legacy PIN for LEGACY-1');
-    assert(bcrypt.compareSync('7777', migratedRows[1].card_pin_hash), 'Migrated hash matches original legacy PIN for LEGACY-2');
-
-    tempLegacyDb.close();
+    assert(legacyCustomers.length === 2, 'Isolated legacy migration processed 2 records');
+    assert(legacyCustomers.every(r => r.card_pin === null), 'Isolated legacy migration set card_pin = NULL for all records');
+    assert(legacyCustomers.every(r => r.card_pin_hash && r.card_pin_hash.startsWith('$2a$')), 'Isolated legacy migration generated bcrypt hashes');
+    assert(bcrypt.compareSync('5555', legacyCustomers[0].card_pin_hash), 'Migrated hash matches original legacy PIN for LEGACY-1');
+    assert(bcrypt.compareSync('7777', legacyCustomers[1].card_pin_hash), 'Migrated hash matches original legacy PIN for LEGACY-2');
 
     // TEST 21: Cryptographic OTP Security, Hashed Storage, Rate Limiting & Bounded Attempts
     console.log('\n--- 21. Testing Cryptographic OTP Security, Hashed Storage & Rate Limiting ---');

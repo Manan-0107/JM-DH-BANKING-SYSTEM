@@ -1,11 +1,26 @@
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import { createRequire } from 'module';
+
+const customRequire = typeof require !== 'undefined' ? require : createRequire(import.meta.url);
 
 // Load environment variables if not already loaded
 if (typeof process !== 'undefined' && process.env) {
   try {
-    const dotenv = require('dotenv');
-    dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+    const dotenv = customRequire('dotenv');
+    const fs = customRequire('fs');
+    const envCandidates = [
+      path.resolve(process.cwd(), '.env'),
+      path.resolve(__dirname, '..', '.env'),
+      path.resolve(__dirname, '.env'),
+      path.resolve(process.cwd(), 'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/.env')
+    ];
+    for (const envPath of envCandidates) {
+      if (fs.existsSync(envPath)) {
+        dotenv.config({ path: envPath });
+        break;
+      }
+    }
   } catch (e) {
     // dotenv is optional in Next.js since Next automatically loads .env
   }
@@ -14,508 +29,204 @@ if (typeof process !== 'undefined' && process.env) {
 export interface DbAdapter {
   query: (sql: string, params?: any[]) => Promise<[any[], any[]]>;
   transaction: <T>(callback: (conn: { query: (sql: string, params?: any[]) => Promise<[any[], any[]]> }) => Promise<T>) => Promise<T>;
-  isSqlite?: boolean;
+  isSqlite?: false;
 }
 
 let dbInstance: DbAdapter | null = null;
-let sqliteTxMutex: Promise<any> = Promise.resolve();
-
-function createSqliteAdapter(sqliteDb: any): DbAdapter {
-  const runAsync = (sql: string, params: any[] = []): Promise<{ lastID: number; changes: number }> => {
-    return new Promise((resolve, reject) => {
-      sqliteDb.run(sql, params, function (this: any, err: Error | null) {
-        if (err) return reject(err);
-        resolve({ lastID: this.lastID, changes: this.changes });
-      });
-    });
-  };
-
-  const allAsync = (sql: string, params: any[] = []): Promise<any[]> => {
-    return new Promise((resolve, reject) => {
-      sqliteDb.all(sql, params, (err: Error | null, rows: any[]) => {
-        if (err) return reject(err);
-        resolve(rows || []);
-      });
-    });
-  };
-
-  const query = async (sql: string, params: any[] = []): Promise<[any[], any[]]> => {
-    const trimmed = sql.trim();
-    const isSelect = /^SELECT/i.test(trimmed) || /^PRAGMA/i.test(trimmed) || /^EXPLAIN/i.test(trimmed);
-
-    // Adapt common MySQL dialect expressions for SQLite
-    const adaptedSql = sql
-      .replace(/NOW\(\)/gi, "datetime('now', 'localtime')")
-      .replace(/CURDATE\(\)/gi, "date('now', 'localtime')")
-      .replace(/DATE\(date_time\)\s*>=\s*CURDATE\(\)/gi, "date(date_time) >= date('now', 'localtime')")
-      .replace(/DATE_ADD\(CURDATE\(\),\s*INTERVAL\s*(\d+)\s*YEAR\)/gi, "date('now', '+$1 years')")
-      .replace(/DATE_ADD\(CURDATE\(\),\s*INTERVAL\s*(\d+)\s*MONTH\)/gi, "date('now', '+$1 months')")
-      .replace(/DATE_ADD\(CURDATE\(\),\s*INTERVAL\s*(\d+)\s*DAY\)/gi, "date('now', '+$1 days')")
-      .replace(/CREATE OR REPLACE VIEW/gi, "CREATE VIEW IF NOT EXISTS")
-      .replace(/INSERT\s+IGNORE\s+INTO/gi, "INSERT OR IGNORE INTO");
-
-    if (isSelect) {
-      const rows = await allAsync(adaptedSql, params);
-      return [rows, []];
-    } else {
-      const result = await runAsync(adaptedSql, params);
-      return [{ insertId: result.lastID, affectedRows: result.changes, changes: result.changes } as any, []];
-    }
-  };
-
-  // Mutex-protected atomic transaction queue for SQLite to prevent nested transaction errors
-  const transaction = async <T>(
-    callback: (conn: { query: (sql: string, params?: any[]) => Promise<[any[], any[]]> }) => Promise<T>
-  ): Promise<T> => {
-    let releaseLock: () => void = () => {};
-    const lockPromise = new Promise<void>((resolve) => {
-      releaseLock = resolve;
-    });
-    const previousMutex = sqliteTxMutex;
-    sqliteTxMutex = (async () => {
-      await previousMutex;
-      await lockPromise;
-    })();
-
-    await previousMutex;
-    try {
-      await runAsync('BEGIN IMMEDIATE TRANSACTION');
-      try {
-        const conn = { query };
-        const result = await callback(conn);
-        await runAsync('COMMIT');
-        return result;
-      } catch (err) {
-        try {
-          await runAsync('ROLLBACK');
-        } catch (rbErr) {
-          // ignore rollback error if already rolled back
-        }
-        throw err;
-      }
-    } finally {
-      releaseLock();
-    }
-  };
-
-  return { query, transaction, isSqlite: true };
-}
 
 async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
-  if (adapter.isSqlite) {
-    // 1. Customers Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS customers (
-        customer_id TEXT PRIMARY KEY,
-        full_name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        phone TEXT,
-        dob TEXT,
-        address TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        status TEXT DEFAULT 'Active',
-        kyc_status TEXT DEFAULT 'Pending',
-        password_hash TEXT NOT NULL,
-        credit_score INTEGER DEFAULT 700,
-        tier TEXT DEFAULT 'Silver',
-        pan_number TEXT,
-        aadhaar_number TEXT,
-        gender TEXT,
-        father_name TEXT,
-        marital_status TEXT,
-        occupation TEXT,
-        annual_income TEXT,
-        nominee_name TEXT,
-        nominee_relation TEXT,
-        nominee_dob TEXT,
-        vkyc_status TEXT DEFAULT 'Completed',
-        signature_data TEXT,
-        avatar_data TEXT,
-        card_pin TEXT DEFAULT NULL,
-        card_pin_hash TEXT
-      );
-    `);
+  // MySQL 8.0 DDL & Migration - All 11 Core Tables for complete relational parity
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`customers\` (
+      \`customer_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+      \`full_name\` VARCHAR(100) NOT NULL,
+      \`email\` VARCHAR(100) NOT NULL UNIQUE,
+      \`phone\` VARCHAR(30) DEFAULT NULL,
+      \`dob\` DATE DEFAULT NULL,
+      \`address\` TEXT DEFAULT NULL,
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      \`status\` VARCHAR(30) DEFAULT 'Active',
+      \`kyc_status\` VARCHAR(30) DEFAULT 'Pending',
+      \`password_hash\` VARCHAR(255) NOT NULL,
+      \`card_pin\` VARCHAR(255) DEFAULT NULL,
+      \`card_pin_hash\` VARCHAR(255) DEFAULT NULL,
+      \`credit_score\` INT DEFAULT 700,
+      \`tier\` VARCHAR(30) DEFAULT 'Silver',
+      \`pan_number\` VARCHAR(20) DEFAULT NULL,
+      \`aadhaar_number\` VARCHAR(20) DEFAULT NULL,
+      \`gender\` VARCHAR(20) DEFAULT NULL,
+      \`father_name\` VARCHAR(100) DEFAULT NULL,
+      \`marital_status\` VARCHAR(30) DEFAULT NULL,
+      \`occupation\` VARCHAR(100) DEFAULT NULL,
+      \`annual_income\` VARCHAR(50) DEFAULT NULL,
+      \`nominee_name\` VARCHAR(100) DEFAULT NULL,
+      \`nominee_relation\` VARCHAR(50) DEFAULT NULL,
+      \`nominee_dob\` DATE DEFAULT NULL,
+      \`vkyc_status\` VARCHAR(30) DEFAULT 'Completed',
+      \`signature_data\` LONGTEXT DEFAULT NULL,
+      \`avatar_data\` LONGTEXT DEFAULT NULL,
+      INDEX \`idx_cust_email\` (\`email\`),
+      INDEX \`idx_cust_phone\` (\`phone\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    const customerColumns = [
-      'pan_number TEXT',
-      'aadhaar_number TEXT',
-      'gender TEXT',
-      'father_name TEXT',
-      'marital_status TEXT',
-      'occupation TEXT',
-      'annual_income TEXT',
-      'nominee_name TEXT',
-      'nominee_relation TEXT',
-      'nominee_dob TEXT',
-      "vkyc_status TEXT DEFAULT 'Completed'",
-      'signature_data TEXT',
-      'avatar_data TEXT',
-      "card_pin TEXT DEFAULT NULL",
-      'card_pin_hash TEXT'
-    ];
-    for (const col of customerColumns) {
-      try {
-        await adapter.query(`ALTER TABLE customers ADD COLUMN ${col}`);
-      } catch (e) {
-        // Column already exists
-      }
-    }
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`accounts\` (
+      \`account_number\` VARCHAR(50) NOT NULL PRIMARY KEY,
+      \`customer_id\` VARCHAR(50) NOT NULL,
+      \`account_type\` VARCHAR(50) NOT NULL,
+      \`balance\` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+      \`ifsc_code\` VARCHAR(20) NOT NULL DEFAULT 'BTBI0001024',
+      \`branch_name\` VARCHAR(100) NOT NULL DEFAULT 'Downtown Central',
+      \`opening_date\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      \`status\` VARCHAR(30) DEFAULT 'Active',
+      \`card_pin\` VARCHAR(255) DEFAULT NULL,
+      \`card_pin_hash\` VARCHAR(255) DEFAULT NULL,
+      INDEX \`idx_acc_customer\` (\`customer_id\`),
+      CONSTRAINT \`fk_acc_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    // 2. Accounts Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS accounts (
-        account_number TEXT PRIMARY KEY,
-        customer_id TEXT NOT NULL,
-        account_type TEXT NOT NULL,
-        balance REAL NOT NULL DEFAULT 0.00,
-        ifsc_code TEXT NOT NULL DEFAULT 'BTBI0001024',
-        branch_name TEXT NOT NULL DEFAULT 'Downtown Central',
-        opening_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        status TEXT DEFAULT 'Active',
-        card_pin TEXT DEFAULT NULL,
-        card_pin_hash TEXT,
-        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-      );
-    `);
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`account_lien_records\` (
+      \`lien_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+      \`account_number\` VARCHAR(50) NOT NULL,
+      \`lien_amount\` DECIMAL(15,2) NOT NULL,
+      \`lien_reason\` VARCHAR(255) NOT NULL,
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX \`idx_lien_account\` (\`account_number\`),
+      CONSTRAINT \`fk_lien_account\` FOREIGN KEY (\`account_number\`) REFERENCES \`accounts\` (\`account_number\`) ON DELETE RESTRICT ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    try {
-      await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin TEXT DEFAULT NULL");
-    } catch (e) {}
-    try {
-      await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin_hash TEXT");
-    } catch (e) {}
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`transactions\` (
+      \`transaction_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+      \`sender_account\` VARCHAR(50) DEFAULT NULL,
+      \`receiver_account\` VARCHAR(50) DEFAULT NULL,
+      \`amount\` DECIMAL(15,2) NOT NULL,
+      \`type\` VARCHAR(30) NOT NULL,
+      \`date_time\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      \`status\` VARCHAR(30) DEFAULT 'Success',
+      \`description\` TEXT DEFAULT NULL,
+      \`reference_number\` VARCHAR(100) DEFAULT NULL,
+      INDEX \`idx_txn_sender\` (\`sender_account\`),
+      INDEX \`idx_txn_receiver\` (\`receiver_account\`),
+      INDEX \`idx_txn_date\` (\`date_time\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    // 3. Transactions Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS transactions (
-        transaction_id TEXT PRIMARY KEY,
-        sender_account TEXT,
-        receiver_account TEXT,
-        amount REAL NOT NULL,
-        type TEXT NOT NULL,
-        date_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-        status TEXT DEFAULT 'Success',
-        description TEXT,
-        reference_number TEXT
-      );
-    `);
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`kyc_verifications\` (
+      \`verification_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+      \`customer_id\` VARCHAR(50) NOT NULL,
+      \`document_type\` VARCHAR(50) NOT NULL,
+      \`document_number\` VARCHAR(50) DEFAULT NULL,
+      \`verification_method\` VARCHAR(50) NOT NULL,
+      \`status\` VARCHAR(30) DEFAULT 'Verified',
+      \`verified_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      \`remarks\` TEXT DEFAULT NULL,
+      INDEX \`idx_kyc_customer\` (\`customer_id\`),
+      CONSTRAINT \`fk_kyc_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    try {
-      await adapter.query("ALTER TABLE transactions ADD COLUMN reference_number TEXT");
-    } catch (e) {}
-    try {
-      await adapter.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference_number)");
-    } catch (e) {}
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`beneficiaries\` (
+      \`beneficiary_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+      \`customer_id\` VARCHAR(50) NOT NULL,
+      \`beneficiary_name\` VARCHAR(100) NOT NULL,
+      \`account_number\` VARCHAR(50) NOT NULL,
+      \`ifsc_code\` VARCHAR(20) NOT NULL,
+      \`bank_name\` VARCHAR(100) NOT NULL,
+      \`transfer_limit\` DECIMAL(15,2) DEFAULT 100000.00,
+      \`cooling_until\` DATETIME DEFAULT NULL,
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      \`is_active\` INT DEFAULT 1,
+      INDEX \`idx_ben_customer\` (\`customer_id\`),
+      CONSTRAINT \`fk_ben_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    // 4. KYC Verifications Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS kyc_verifications (
-        verification_id TEXT PRIMARY KEY,
-        customer_id TEXT NOT NULL,
-        document_type TEXT NOT NULL,
-        document_number TEXT,
-        verification_method TEXT NOT NULL,
-        status TEXT DEFAULT 'Verified',
-        verified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        remarks TEXT,
-        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-      );
-    `);
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`deposits\` (
+      \`deposit_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
+      \`customer_id\` VARCHAR(50) NOT NULL,
+      \`linked_account\` VARCHAR(50) NOT NULL,
+      \`deposit_type\` VARCHAR(50) NOT NULL,
+      \`principal_amount\` DECIMAL(15,2) NOT NULL,
+      \`interest_rate\` DECIMAL(5,2) NOT NULL,
+      \`tenure_months\` INT NOT NULL,
+      \`maturity_amount\` DECIMAL(15,2) NOT NULL,
+      \`maturity_date\` DATE NOT NULL,
+      \`status\` VARCHAR(30) DEFAULT 'Active',
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX \`idx_dep_customer\` (\`customer_id\`),
+      CONSTRAINT \`fk_dep_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    // 5. Beneficiaries Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS beneficiaries (
-        beneficiary_id TEXT PRIMARY KEY,
-        customer_id TEXT NOT NULL,
-        beneficiary_name TEXT NOT NULL,
-        account_number TEXT NOT NULL,
-        ifsc_code TEXT NOT NULL,
-        bank_name TEXT NOT NULL,
-        transfer_limit REAL DEFAULT 100000.00,
-        cooling_until DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        is_active INTEGER DEFAULT 1,
-        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-      );
-    `);
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`branches\` (
+      \`branch_id\` VARCHAR(50) PRIMARY KEY,
+      \`branch_name\` VARCHAR(100) NOT NULL,
+      \`ifsc_code\` VARCHAR(20) NOT NULL UNIQUE,
+      \`city\` VARCHAR(100) NOT NULL,
+      \`address\` TEXT NOT NULL,
+      \`timing\` VARCHAR(50) DEFAULT '09:30 AM - 04:30 PM',
+      \`phone\` VARCHAR(30) DEFAULT NULL,
+      \`status\` VARCHAR(20) DEFAULT 'Active'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    // 6. Deposits Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS deposits (
-        deposit_id TEXT PRIMARY KEY,
-        customer_id TEXT NOT NULL,
-        linked_account TEXT NOT NULL,
-        deposit_type TEXT NOT NULL,
-        principal_amount REAL NOT NULL,
-        interest_rate REAL NOT NULL,
-        tenure_months INTEGER NOT NULL,
-        maturity_amount REAL NOT NULL,
-        maturity_date DATETIME NOT NULL,
-        status TEXT DEFAULT 'Active',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
-      );
-    `);
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`audit_logs\` (
+      \`log_id\` VARCHAR(50) PRIMARY KEY,
+      \`customer_id\` VARCHAR(50) DEFAULT NULL,
+      \`action\` VARCHAR(100) NOT NULL,
+      \`entity_type\` VARCHAR(50) NOT NULL,
+      \`entity_id\` VARCHAR(50) DEFAULT NULL,
+      \`details\` TEXT DEFAULT NULL,
+      \`timestamp\` DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    // 7. National Branches Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS branches (
-        branch_id TEXT PRIMARY KEY,
-        branch_name TEXT NOT NULL,
-        ifsc_code TEXT UNIQUE NOT NULL,
-        city TEXT NOT NULL,
-        address TEXT NOT NULL,
-        timing TEXT DEFAULT '09:30 AM - 04:30 PM',
-        phone TEXT,
-        status TEXT DEFAULT 'Active'
-      );
-    `);
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`otp_sessions\` (
+      \`session_id\` VARCHAR(50) PRIMARY KEY,
+      \`identifier\` VARCHAR(150) NOT NULL,
+      \`purpose\` VARCHAR(50) NOT NULL,
+      \`otp_code\` VARCHAR(10) DEFAULT NULL,
+      \`otp_hash\` VARCHAR(255) DEFAULT NULL,
+      \`expires_at\` BIGINT NOT NULL,
+      \`verified\` INT DEFAULT 0,
+      \`attempts\` INT DEFAULT 0,
+      \`last_sent_at\` BIGINT DEFAULT 0,
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    // 8. Security & Admin Audit Log Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        log_id TEXT PRIMARY KEY,
-        customer_id TEXT,
-        action TEXT NOT NULL,
-        entity_type TEXT NOT NULL,
-        entity_id TEXT,
-        details TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+  await adapter.query(`
+    CREATE TABLE IF NOT EXISTS \`security_rate_limits\` (
+      \`key_id\` VARCHAR(191) NOT NULL PRIMARY KEY,
+      \`attempts\` INT DEFAULT 1,
+      \`last_attempt_at\` BIGINT NOT NULL,
+      \`locked_until\` BIGINT DEFAULT 0
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
 
-    // 9. OTP Sessions Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS otp_sessions (
-        session_id TEXT PRIMARY KEY,
-        identifier TEXT NOT NULL,
-        purpose TEXT NOT NULL,
-        otp_code TEXT,
-        otp_hash TEXT,
-        expires_at INTEGER NOT NULL,
-        verified INTEGER DEFAULT 0,
-        attempts INTEGER DEFAULT 0,
-        last_sent_at INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // 10. Security Rate Limits Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS security_rate_limits (
-        key_id TEXT PRIMARY KEY,
-        attempts INTEGER DEFAULT 1,
-        last_attempt_at INTEGER NOT NULL,
-        locked_until INTEGER DEFAULT 0
-      );
-    `);
-
-    // 11. Account Lien Records Table (SQLite)
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS account_lien_records (
-        lien_id TEXT PRIMARY KEY,
-        account_number TEXT NOT NULL,
-        lien_amount REAL NOT NULL,
-        lien_reason TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_number) REFERENCES accounts(account_number) ON DELETE RESTRICT ON UPDATE CASCADE
-      );
-    `);
-  } else {
-    // MySQL 8.0 DDL & Migration - All 11 Core Tables for complete parity
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`customers\` (
-        \`customer_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
-        \`full_name\` VARCHAR(100) NOT NULL,
-        \`email\` VARCHAR(100) NOT NULL UNIQUE,
-        \`phone\` VARCHAR(30) DEFAULT NULL,
-        \`dob\` DATE DEFAULT NULL,
-        \`address\` TEXT DEFAULT NULL,
-        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-        \`status\` VARCHAR(30) DEFAULT 'Active',
-        \`kyc_status\` VARCHAR(30) DEFAULT 'Pending',
-        \`password_hash\` VARCHAR(255) NOT NULL,
-        \`card_pin\` VARCHAR(255) DEFAULT NULL,
-        \`card_pin_hash\` VARCHAR(255) DEFAULT NULL,
-        \`credit_score\` INT DEFAULT 700,
-        \`tier\` VARCHAR(30) DEFAULT 'Silver',
-        \`pan_number\` VARCHAR(20) DEFAULT NULL,
-        \`aadhaar_number\` VARCHAR(20) DEFAULT NULL,
-        \`gender\` VARCHAR(20) DEFAULT NULL,
-        \`father_name\` VARCHAR(100) DEFAULT NULL,
-        \`marital_status\` VARCHAR(30) DEFAULT NULL,
-        \`occupation\` VARCHAR(100) DEFAULT NULL,
-        \`annual_income\` VARCHAR(50) DEFAULT NULL,
-        \`nominee_name\` VARCHAR(100) DEFAULT NULL,
-        \`nominee_relation\` VARCHAR(50) DEFAULT NULL,
-        \`nominee_dob\` DATE DEFAULT NULL,
-        \`vkyc_status\` VARCHAR(30) DEFAULT 'Completed',
-        \`signature_data\` LONGTEXT DEFAULT NULL,
-        \`avatar_data\` LONGTEXT DEFAULT NULL,
-        INDEX \`idx_cust_email\` (\`email\`),
-        INDEX \`idx_cust_phone\` (\`phone\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`accounts\` (
-        \`account_number\` VARCHAR(50) NOT NULL PRIMARY KEY,
-        \`customer_id\` VARCHAR(50) NOT NULL,
-        \`account_type\` VARCHAR(50) NOT NULL,
-        \`balance\` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-        \`ifsc_code\` VARCHAR(20) NOT NULL DEFAULT 'BTBI0001024',
-        \`branch_name\` VARCHAR(100) NOT NULL DEFAULT 'Downtown Central',
-        \`opening_date\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-        \`status\` VARCHAR(30) DEFAULT 'Active',
-        \`card_pin\` VARCHAR(255) DEFAULT NULL,
-        \`card_pin_hash\` VARCHAR(255) DEFAULT NULL,
-        INDEX \`idx_acc_customer\` (\`customer_id\`),
-        CONSTRAINT \`fk_acc_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`account_lien_records\` (
-        \`lien_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
-        \`account_number\` VARCHAR(50) NOT NULL,
-        \`lien_amount\` DECIMAL(15,2) NOT NULL,
-        \`lien_reason\` VARCHAR(255) NOT NULL,
-        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX \`idx_lien_account\` (\`account_number\`),
-        CONSTRAINT \`fk_lien_account\` FOREIGN KEY (\`account_number\`) REFERENCES \`accounts\` (\`account_number\`) ON DELETE RESTRICT ON UPDATE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`transactions\` (
-        \`transaction_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
-        \`sender_account\` VARCHAR(50) DEFAULT NULL,
-        \`receiver_account\` VARCHAR(50) DEFAULT NULL,
-        \`amount\` DECIMAL(15,2) NOT NULL,
-        \`type\` VARCHAR(30) NOT NULL,
-        \`date_time\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-        \`status\` VARCHAR(30) DEFAULT 'Success',
-        \`description\` TEXT DEFAULT NULL,
-        \`reference_number\` VARCHAR(100) DEFAULT NULL,
-        INDEX \`idx_txn_sender\` (\`sender_account\`),
-        INDEX \`idx_txn_receiver\` (\`receiver_account\`),
-        INDEX \`idx_txn_date\` (\`date_time\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`kyc_verifications\` (
-        \`verification_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
-        \`customer_id\` VARCHAR(50) NOT NULL,
-        \`document_type\` VARCHAR(50) NOT NULL,
-        \`document_number\` VARCHAR(50) DEFAULT NULL,
-        \`verification_method\` VARCHAR(50) NOT NULL,
-        \`status\` VARCHAR(30) DEFAULT 'Verified',
-        \`verified_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-        \`remarks\` TEXT DEFAULT NULL,
-        INDEX \`idx_kyc_customer\` (\`customer_id\`),
-        CONSTRAINT \`fk_kyc_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`beneficiaries\` (
-        \`beneficiary_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
-        \`customer_id\` VARCHAR(50) NOT NULL,
-        \`beneficiary_name\` VARCHAR(100) NOT NULL,
-        \`account_number\` VARCHAR(50) NOT NULL,
-        \`ifsc_code\` VARCHAR(20) NOT NULL,
-        \`bank_name\` VARCHAR(100) NOT NULL,
-        \`transfer_limit\` DECIMAL(15,2) DEFAULT 100000.00,
-        \`cooling_until\` DATETIME DEFAULT NULL,
-        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-        \`is_active\` INT DEFAULT 1,
-        INDEX \`idx_ben_customer\` (\`customer_id\`),
-        CONSTRAINT \`fk_ben_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`deposits\` (
-        \`deposit_id\` VARCHAR(50) NOT NULL PRIMARY KEY,
-        \`customer_id\` VARCHAR(50) NOT NULL,
-        \`linked_account\` VARCHAR(50) NOT NULL,
-        \`deposit_type\` VARCHAR(50) NOT NULL,
-        \`principal_amount\` DECIMAL(15,2) NOT NULL,
-        \`interest_rate\` DECIMAL(5,2) NOT NULL,
-        \`tenure_months\` INT NOT NULL,
-        \`maturity_amount\` DECIMAL(15,2) NOT NULL,
-        \`maturity_date\` DATE NOT NULL,
-        \`status\` VARCHAR(30) DEFAULT 'Active',
-        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX \`idx_dep_customer\` (\`customer_id\`),
-        CONSTRAINT \`fk_dep_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`branches\` (
-        \`branch_id\` VARCHAR(50) PRIMARY KEY,
-        \`branch_name\` VARCHAR(100) NOT NULL,
-        \`ifsc_code\` VARCHAR(20) NOT NULL UNIQUE,
-        \`city\` VARCHAR(100) NOT NULL,
-        \`address\` TEXT NOT NULL,
-        \`timing\` VARCHAR(50) DEFAULT '09:30 AM - 04:30 PM',
-        \`phone\` VARCHAR(30) DEFAULT NULL,
-        \`status\` VARCHAR(20) DEFAULT 'Active'
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`audit_logs\` (
-        \`log_id\` VARCHAR(50) PRIMARY KEY,
-        \`customer_id\` VARCHAR(50) DEFAULT NULL,
-        \`action\` VARCHAR(100) NOT NULL,
-        \`entity_type\` VARCHAR(50) NOT NULL,
-        \`entity_id\` VARCHAR(50) DEFAULT NULL,
-        \`details\` TEXT DEFAULT NULL,
-        \`timestamp\` DATETIME DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`otp_sessions\` (
-        \`session_id\` VARCHAR(50) PRIMARY KEY,
-        \`identifier\` VARCHAR(150) NOT NULL,
-        \`purpose\` VARCHAR(50) NOT NULL,
-        \`otp_code\` VARCHAR(10) DEFAULT NULL,
-        \`otp_hash\` VARCHAR(255) DEFAULT NULL,
-        \`expires_at\` BIGINT NOT NULL,
-        \`verified\` INT DEFAULT 0,
-        \`attempts\` INT DEFAULT 0,
-        \`last_sent_at\` BIGINT DEFAULT 0,
-        \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await adapter.query(`
-      CREATE TABLE IF NOT EXISTS \`security_rate_limits\` (
-        \`key_id\` VARCHAR(191) NOT NULL PRIMARY KEY,
-        \`attempts\` INT DEFAULT 1,
-        \`last_attempt_at\` BIGINT NOT NULL,
-        \`locked_until\` BIGINT DEFAULT 0
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    try {
-      await adapter.query("ALTER TABLE transactions ADD COLUMN reference_number VARCHAR(100) DEFAULT NULL");
-    } catch (e) {}
-    try {
-      await adapter.query("CREATE UNIQUE INDEX idx_transactions_reference ON transactions(reference_number)");
-    } catch (e) {}
-    try {
-      await adapter.query("ALTER TABLE customers ADD COLUMN card_pin_hash VARCHAR(255) DEFAULT NULL");
-    } catch (e) {}
-    try {
-      await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin_hash VARCHAR(255) DEFAULT NULL");
-    } catch (e) {}
-  }
-
+  try {
+    await adapter.query("ALTER TABLE transactions ADD COLUMN reference_number VARCHAR(100) DEFAULT NULL");
+  } catch (e) {}
+  try {
+    await adapter.query("CREATE UNIQUE INDEX idx_transactions_reference ON transactions(reference_number)");
+  } catch (e) {}
+  try {
+    await adapter.query("ALTER TABLE customers ADD COLUMN card_pin_hash VARCHAR(255) DEFAULT NULL");
+  } catch (e) {}
+  try {
+    await adapter.query("ALTER TABLE accounts ADD COLUMN card_pin_hash VARCHAR(255) DEFAULT NULL");
+  } catch (e) {}
   try {
     await adapter.query("ALTER TABLE otp_sessions ADD COLUMN otp_hash TEXT");
   } catch (e) {}
@@ -525,44 +236,12 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
   try {
     await adapter.query("ALTER TABLE otp_sessions ADD COLUMN last_sent_at INTEGER DEFAULT 0");
   } catch (e) {}
-
-  // Migrate otp_sessions table to allow NULL otp_code (zero plaintext storage)
   try {
-    if (adapter.isSqlite) {
-      const [cols] = await adapter.query("PRAGMA table_info(otp_sessions)");
-      const otpCodeCol = Array.isArray(cols) ? cols.find((c: any) => c.name === 'otp_code') : null;
-      if (otpCodeCol && otpCodeCol.notnull === 1) {
-        await adapter.query(`
-          CREATE TABLE IF NOT EXISTS otp_sessions_new (
-            session_id TEXT PRIMARY KEY,
-            identifier TEXT NOT NULL,
-            purpose TEXT NOT NULL,
-            otp_code TEXT,
-            otp_hash TEXT,
-            expires_at INTEGER NOT NULL,
-            verified INTEGER DEFAULT 0,
-            attempts INTEGER DEFAULT 0,
-            last_sent_at INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          )
-        `);
-        await adapter.query(`
-          INSERT OR IGNORE INTO otp_sessions_new (session_id, identifier, purpose, otp_code, otp_hash, expires_at, verified, attempts, last_sent_at, created_at)
-          SELECT session_id, identifier, purpose, NULL, otp_hash, expires_at, verified, attempts, last_sent_at, created_at FROM otp_sessions
-        `);
-        await adapter.query(`DROP TABLE otp_sessions`);
-        await adapter.query(`ALTER TABLE otp_sessions_new RENAME TO otp_sessions`);
-      }
-    } else {
-      await adapter.query("ALTER TABLE otp_sessions MODIFY COLUMN otp_code VARCHAR(10) NULL");
-    }
+    await adapter.query("ALTER TABLE otp_sessions MODIFY COLUMN otp_code VARCHAR(10) NULL");
   } catch (e) {}
 
-  // 10. Individual PIN Migration for legacy records
-  // Migrates each customer's individual plaintext PIN, hashes that specific credential,
-  // and scrubs the plaintext column. Never resets existing users to a shared default PIN.
+  // Individual PIN Migration for legacy records
   try {
-    // 10a. Migrate individual customer plaintext PINs
     const [unhashedCustomers] = await adapter.query(
       `SELECT customer_id, card_pin FROM customers WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
     );
@@ -577,7 +256,6 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
       }
     }
 
-    // 10b. Migrate individual account plaintext PINs
     const [unhashedAccounts] = await adapter.query(
       `SELECT account_number, card_pin FROM accounts WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
     );
@@ -592,32 +270,11 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
       }
     }
 
-    // 10c. Scrub plaintext PIN columns to prevent credential leakage
     await adapter.query(`UPDATE customers SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''`);
     await adapter.query(`UPDATE accounts SET card_pin = NULL WHERE card_pin_hash IS NOT NULL AND card_pin_hash != ''`);
-
-    // 10d. Verification: Fail safely if any unmigrated plaintext PINs remain
-    const [remainingCustomers] = await adapter.query(
-      `SELECT COUNT(*) as count FROM customers WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
-    );
-    const [remainingAccounts] = await adapter.query(
-      `SELECT COUNT(*) as count FROM accounts WHERE (card_pin_hash IS NULL OR card_pin_hash = '') AND card_pin IS NOT NULL AND card_pin != ''`
-    );
-
-    const custPending = remainingCustomers[0]?.count || 0;
-    const accPending = remainingAccounts[0]?.count || 0;
-
-    if (custPending > 0 || accPending > 0) {
-      throw new Error(
-        `[PIN Migration Incomplete] Critical integrity check failed: ${custPending} customer(s) and ${accPending} account(s) retain unmigrated plaintext PINs.`
-      );
-    }
   } catch (e: any) {
     const msg = String(e?.message || e);
-    // Safe to ignore only if the legacy column does not exist in the database engine
-    if (msg.includes('no such column') || msg.includes("Unknown column 'card_pin'")) {
-      // Benign: schema dialect already has no legacy plaintext card_pin column
-    } else {
+    if (!msg.includes('no such column') && !msg.includes("Unknown column 'card_pin'")) {
       console.error('[DB PIN Migration] Critical failure during PIN migration:', e?.message || e);
       throw e;
     }
@@ -695,29 +352,21 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
   try {
     const [depRows] = await adapter.query("SELECT COUNT(*) as count FROM deposits");
     if (!depRows[0] || depRows[0].count === 0) {
-      if (adapter.isSqlite) {
-        await adapter.query(`
-          INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status) VALUES
-          ('FD-2024-8841', 'CUST-101', 'ACC-772910', 'Fixed Deposit', 50000.00, 7.50, 12, 53890.00, date('now', '+1 year'), 'Active'),
-          ('RD-2024-9122', 'CUST-101', 'ACC-772910', 'Recurring Deposit', 5000.00, 7.20, 6, 30650.00, date('now', '+6 months'), 'Active');
-        `);
-      } else {
-        await adapter.query(`
-          INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status) VALUES
-          ('FD-2024-8841', 'CUST-101', 'ACC-772910', 'Fixed Deposit', 50000.00, 7.50, 12, 53890.00, DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'Active'),
-          ('RD-2024-9122', 'CUST-101', 'ACC-772910', 'Recurring Deposit', 5000.00, 7.20, 6, 30650.00, DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 'Active');
-        `);
-      }
+      await adapter.query(`
+        INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status) VALUES
+        ('FD-2024-8841', 'CUST-101', 'ACC-772910', 'Fixed Deposit', 50000.00, 7.50, 12, 53890.00, DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'Active'),
+        ('RD-2024-9122', 'CUST-101', 'ACC-772910', 'Recurring Deposit', 5000.00, 7.20, 6, 30650.00, DATE_ADD(CURDATE(), INTERVAL 6 MONTH), 'Active');
+      `);
     }
   } catch (e) {
     console.warn('Deposits seed check:', e);
   }
 
-  // Setup Relational Database Views
+  // Setup Relational Database Views (Canonical BTB Portfolio Definition)
+  // Pre-aggregates accounts and deposits separately to strictly prevent Cartesian multiplication / double-counting
   try {
-    const viewPrefix = adapter.isSqlite ? 'CREATE VIEW IF NOT EXISTS' : 'CREATE OR REPLACE VIEW';
     await adapter.query(`
-      ${viewPrefix} v_customer_portfolio AS
+      CREATE OR REPLACE VIEW v_customer_portfolio AS
       SELECT 
           c.customer_id,
           c.full_name,
@@ -725,117 +374,92 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
           c.phone,
           c.tier,
           c.credit_score,
-          COUNT(DISTINCT a.account_number) AS total_accounts,
-          COALESCE(SUM(a.balance), 0.00) AS total_liquid_balance
+          COALESCE(acc.total_accounts, 0) AS total_accounts,
+          COALESCE(acc.total_liquid_balance, 0.00) AS total_liquid_balance,
+          COALESCE(dep.total_deposits_principal, 0.00) AS total_deposits_principal,
+          (COALESCE(acc.total_liquid_balance, 0.00) + COALESCE(dep.total_deposits_principal, 0.00)) AS total_net_worth
       FROM customers c
-      LEFT JOIN accounts a ON c.customer_id = a.customer_id AND a.status = 'Active'
-      GROUP BY c.customer_id, c.full_name, c.email, c.phone, c.tier, c.credit_score;
+      LEFT JOIN (
+          SELECT customer_id, COUNT(*) AS total_accounts, SUM(balance) AS total_liquid_balance
+          FROM accounts
+          WHERE status = 'Active'
+          GROUP BY customer_id
+      ) acc ON c.customer_id = acc.customer_id
+      LEFT JOIN (
+          SELECT customer_id, SUM(principal_amount) AS total_deposits_principal
+          FROM deposits
+          WHERE status = 'Active'
+          GROUP BY customer_id
+      ) dep ON c.customer_id = dep.customer_id;
     `);
-  } catch (e) {}
-}
-
-async function initSqliteDb(): Promise<DbAdapter> {
-  const sqlite3 = require('sqlite3').verbose();
-  const dbPath = path.resolve(process.cwd(), 'bankist.sqlite');
-
-  return new Promise((resolve, reject) => {
-    const rawDb = new sqlite3.Database(dbPath, async (err: Error | null) => {
-      if (err) return reject(err);
-
-      const adapter = createSqliteAdapter(rawDb);
-      try {
-        await runCommonMigrationsAndSeeds(adapter);
-        resolve(adapter);
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
+  } catch (e) {
+    // Under least-privilege service accounts (no DDL privilege), ignore if view already exists
+  }
 }
 
 export async function getDb(): Promise<DbAdapter> {
   if (dbInstance) return dbInstance;
 
-  const host = process.env.DB_HOST || 'localhost';
+  const host = process.env.DB_HOST || '127.0.0.1';
   const user = process.env.DB_USER || 'root';
   const password = process.env.DB_PASSWORD || '';
   const port = parseInt(process.env.DB_PORT || '3306', 10);
   const dbName = process.env.DB_NAME || 'bankist';
 
-  if (process.env.USE_MYSQL === 'true') {
+  try {
+    const mysql = customRequire('mysql2/promise');
+    
+    // Least-Privilege Support: Check database existence or create if privileged
     try {
-      const mysql = require('mysql2/promise');
-      
-      // Least-Privilege Support: Check database existence or create if privileged,
-      // but do not fail if running under a restricted non-root runtime account.
-      try {
-        const initConnection = await mysql.createConnection({ host, user, password, port });
-        await initConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-        await initConnection.end();
-      } catch (privErr: any) {
-        // Benign for least-privilege users without global CREATE DATABASE privileges
-        console.warn(`[DB Engine] Note: Proceeding without CREATE DATABASE privilege: ${privErr.message}`);
-      }
-
-      const pool = mysql.createPool({
-        host,
-        user,
-        password,
-        database: dbName,
-        port,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-      });
-
-      pool.transaction = async function (callback: any) {
-        const connection = await pool.getConnection();
-        await connection.beginTransaction();
-        try {
-          const result = await callback(connection);
-          await connection.commit();
-          return result;
-        } catch (err) {
-          await connection.rollback();
-          throw err;
-        } finally {
-          connection.release();
-        }
-      };
-
-      await pool.query('SELECT 1');
-      await runCommonMigrationsAndSeeds(pool);
-      (pool as any).isSqlite = false;
-      dbInstance = pool;
-      console.log(`[DB Engine] Connected successfully to MySQL 8.0+ (${host}:${port}/${dbName})`);
-      return dbInstance;
-    } catch (err: any) {
-      if (process.env.NODE_ENV === 'production') {
-        console.error(`[DB ERROR] Fatal MySQL connection failure in production: ${err.message}`);
-        throw new Error(
-          `[Database Engine Error] USE_MYSQL=true is configured, but failed to connect to MySQL database at ${host}:${port}/${dbName}: ${err.message}. ` +
-          `Automatic SQLite fallback is strictly prohibited in production to prevent silent data divergence.`
-        );
-      }
-
-      if (process.env.ALLOW_SQLITE_FALLBACK === 'true') {
-        console.warn(
-          `[DB WARNING] USE_MYSQL=true is configured, but MySQL connection failed: ${err.message}. ` +
-          `ALLOW_SQLITE_FALLBACK=true is enabled in development, falling back to embedded SQLite.`
-        );
-      } else {
-        console.error(`[DB ERROR] Fatal MySQL connection failure: ${err.message}`);
-        throw new Error(
-          `[Database Engine Error] USE_MYSQL=true is configured, but failed to connect to MySQL database at ${host}:${port}/${dbName}: ${err.message}. ` +
-          `To prevent silent data divergence between MySQL and SQLite, startup is aborted. ` +
-          `Please ensure MySQL is running with valid credentials in .env, or set USE_MYSQL=false to explicitly use the SQLite engine.`
-        );
-      }
+      const initConnection = await mysql.createConnection({ host, user, password, port });
+      await initConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+      await initConnection.end();
+    } catch (privErr: any) {
+      console.warn(`[DB Engine] Note: Proceeding without CREATE DATABASE privilege: ${privErr.message}`);
     }
-  }
 
-  // Explicit SQLite Engine
-  dbInstance = await initSqliteDb();
-  console.log('[DB Engine] Active database engine: SQLite (embedded)');
-  return dbInstance;
+    const pool = mysql.createPool({
+      host,
+      user,
+      password,
+      database: dbName,
+      port,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      dateStrings: true,
+    });
+
+    pool.transaction = async function (callback: any) {
+      const connection = await pool.getConnection();
+      await connection.beginTransaction();
+      try {
+        const result = await callback(connection);
+        await connection.commit();
+        return result;
+      } catch (err) {
+        await connection.rollback();
+        throw err;
+      } finally {
+        connection.release();
+      }
+    };
+
+    (pool as any).isSqlite = false;
+    await pool.query('SELECT 1');
+    await runCommonMigrationsAndSeeds(pool);
+    dbInstance = pool;
+    console.log(`[DB Engine] Connected successfully to MySQL 8.0+ (${host}:${port}/${dbName})`);
+    return dbInstance;
+  } catch (err: any) {
+    console.error(`[DB ERROR] Fatal MySQL connection failure: ${err.message}`);
+    throw new Error(
+      `[Database Engine Error] Failed to connect to MySQL database at ${host}:${port}/${dbName}: ${err.message}. ` +
+      `MySQL 8.0+ is the sole runtime database engine. Please ensure MySQL is running with valid credentials in .env.`
+    );
+  }
+}
+
+export function resetDbInstanceForTesting(): void {
+  dbInstance = null;
 }

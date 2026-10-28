@@ -5,9 +5,23 @@ import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
+    // 1. Strict Security Gating: Simulated Inward Payment Endpoints Must Be Disabled in Production
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowSimulatedUpi = !isProduction && (process.env.ALLOW_SIMULATED_UPI === 'true' || process.env.ENABLE_SIMULATED_UPI === 'true');
+
+    if (!allowSimulatedUpi) {
+      return NextResponse.json(
+        {
+          error: 'Forbidden: Simulated UPI credit endpoint is disabled in this environment. Inward credits require verified external payment settlement.',
+        },
+        { status: 403 }
+      );
+    }
+
+    // 2. Authentication & Session Validation
     const authUser = getUserFromRequest(request);
     if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized: Session invalid' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Session invalid or expired' }, { status: 401 });
     }
 
     const body = await request.json().catch(() => ({}));
@@ -29,7 +43,7 @@ export async function POST(request: Request) {
 
     const db = await getDb();
 
-    // 1. Verify recipient account exists and belongs to authenticated user
+    // 3. Verify recipient account exists, belongs to authenticated user, and is active
     const [accRows] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [account_number]);
     if (!accRows || accRows.length === 0) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
@@ -44,7 +58,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Account is currently frozen or inactive. Please unfreeze before receiving funds.' }, { status: 400 });
     }
 
-    // 2. Generate simulated NPCI UPI UTR (12 digits) and TXN ID
+    // 4. Generate simulated NPCI UPI UTR (12 digits) and TXN ID
     const randomRrnSuffix = crypto.randomInt(10000000, 99999999);
     const utr = `4256${randomRrnSuffix}`;
     const txnId = `TXN-UPI${Date.now().toString().slice(-8)}`;
@@ -55,7 +69,7 @@ export async function POST(request: Request) {
     const note = remarks ? remarks.trim() : 'Instant UPI Payment';
     const description = `UPI Credit: ${note} (from ${senderName} [${vpa}] | UTR: ${utr})`;
 
-    // 3. Run database updates in transaction
+    // 5. Run database updates atomically inside a transaction
     const result = await db.transaction(async (conn) => {
       // 1. Credit account balance
       await conn.query('UPDATE accounts SET balance = balance + ? WHERE account_number = ?', [numAmount, account_number]);
@@ -75,7 +89,7 @@ export async function POST(request: Request) {
         [auditId, authUser.customer_id, account_number, `Received UPI credit ₹${numAmount} from ${vpa}. UTR: ${utr}`, nowTime]
       );
 
-      // 4. Fetch new balance
+      // 4. Fetch updated balance
       const [updatedAccRows] = await conn.query('SELECT balance FROM accounts WHERE account_number = ?', [account_number]);
       return {
         newBalance: updatedAccRows[0]?.balance ?? (parseFloat(account.balance) + numAmount),
@@ -91,7 +105,7 @@ export async function POST(request: Request) {
       payer_vpa: vpa,
       payer_name: senderName,
       amount: numAmount,
-      disclaimer: 'College DBMS Project Simulation: UPI transaction simulated via internal database ledger.',
+      disclaimer: 'Non-Production Simulation: UPI transaction simulated via internal test ledger.',
     });
   } catch (error: any) {
     console.error('UPI Receive Error:', error);

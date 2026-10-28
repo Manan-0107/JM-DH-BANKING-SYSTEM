@@ -4,11 +4,28 @@ import { generateToken, verifyPin, generateAuditId } from '@/lib/auth';
 import { sanitizeCustomer, sanitizeAccounts, checkRateLimit, recordFailedAttempt, resetRateLimit } from '@/lib/api-helpers';
 import bcrypt from 'bcryptjs';
 
-const loginRateLimitOptions = {
+const loginAccountRateLimitOptions = {
   maxAttempts: 5,
   windowMs: 15 * 60 * 1000,       // 15 minutes
   lockDurationMs: 15 * 60 * 1000, // 15 minutes lock
 };
+
+const loginIpRateLimitOptions = {
+  maxAttempts: 25,                // 25 failed attempts per IP window (protects against distributed password spraying)
+  windowMs: 15 * 60 * 1000,       // 15 minutes
+  lockDurationMs: 15 * 60 * 1000, // 15 minutes lock
+};
+
+function getClientIp(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const firstIp = forwarded.split(',')[0].trim();
+    if (firstIp) return firstIp;
+  }
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+  return '127.0.0.1';
+}
 
 export async function POST(request: Request) {
   try {
@@ -24,12 +41,14 @@ export async function POST(request: Request) {
     }
 
     const db = await getDb();
-    const rateLimitKey = `login:id:${email.toLowerCase()}`;
+    const clientIp = getClientIp(request);
+    const ipRateLimitKey = `login:ip:${clientIp}`;
+    const accountRateLimitKey = `login:id:${email.toLowerCase()}`;
 
-    // 1. Check Rate Limit / Account Lockout
-    const rateLimit = await checkRateLimit(db, rateLimitKey, loginRateLimitOptions);
-    if (!rateLimit.allowed) {
-      if (rateLimit.serviceUnavailable) {
+    // 1. IP-Level Rate Limiting Check (Blocks distributed password spraying)
+    const ipLimit = await checkRateLimit(db, ipRateLimitKey, loginIpRateLimitOptions);
+    if (!ipLimit.allowed) {
+      if (ipLimit.serviceUnavailable) {
         return NextResponse.json(
           { error: 'Security verification service temporarily unavailable. Please try again shortly.' },
           { status: 503 }
@@ -37,7 +56,24 @@ export async function POST(request: Request) {
       }
       return NextResponse.json(
         {
-          error: `Too many failed login attempts. Account temporarily locked for security. Please try again in ${rateLimit.retryAfterSec || 900} seconds.`,
+          error: `Too many login attempts from this network. Access temporarily restricted. Please try again in ${ipLimit.retryAfterSec || 900} seconds.`,
+        },
+        { status: 429 }
+      );
+    }
+
+    // 2. Account-Level Rate Limiting Check (Account lockout protection)
+    const accountLimit = await checkRateLimit(db, accountRateLimitKey, loginAccountRateLimitOptions);
+    if (!accountLimit.allowed) {
+      if (accountLimit.serviceUnavailable) {
+        return NextResponse.json(
+          { error: 'Security verification service temporarily unavailable. Please try again shortly.' },
+          { status: 503 }
+        );
+      }
+      return NextResponse.json(
+        {
+          error: `Too many failed login attempts. Account temporarily locked for security. Please try again in ${accountLimit.retryAfterSec || 900} seconds.`,
         },
         { status: 429 }
       );
@@ -49,16 +85,18 @@ export async function POST(request: Request) {
     );
 
     if (!rows || rows.length === 0) {
-      const failedInfo = await recordFailedAttempt(db, rateLimitKey, loginRateLimitOptions);
-      if (failedInfo.serviceUnavailable) {
+      const failedAccount = await recordFailedAttempt(db, accountRateLimitKey, loginAccountRateLimitOptions);
+      const failedIp = await recordFailedAttempt(db, ipRateLimitKey, loginIpRateLimitOptions);
+
+      if (failedAccount.serviceUnavailable || failedIp.serviceUnavailable) {
         return NextResponse.json(
           { error: 'Security verification service temporarily unavailable. Please try again shortly.' },
           { status: 503 }
         );
       }
-      if (failedInfo.locked) {
+      if (failedAccount.locked || failedIp.locked) {
         return NextResponse.json(
-          { error: 'Maximum login attempts exceeded. Account is now locked for 15 minutes.' },
+          { error: 'Maximum login attempts exceeded. Access is now locked for 15 minutes.' },
           { status: 429 }
         );
       }
@@ -75,16 +113,18 @@ export async function POST(request: Request) {
     const isPinMatch = customer.card_pin_hash && verifyPin(password, customer.card_pin_hash);
 
     if (!isPasswordMatch && !isPinMatch) {
-      const failedInfo = await recordFailedAttempt(db, rateLimitKey, loginRateLimitOptions);
-      if (failedInfo.serviceUnavailable) {
+      const failedAccount = await recordFailedAttempt(db, accountRateLimitKey, loginAccountRateLimitOptions);
+      const failedIp = await recordFailedAttempt(db, ipRateLimitKey, loginIpRateLimitOptions);
+
+      if (failedAccount.serviceUnavailable || failedIp.serviceUnavailable) {
         return NextResponse.json(
           { error: 'Security verification service temporarily unavailable. Please try again shortly.' },
           { status: 503 }
         );
       }
-      if (failedInfo.locked) {
+      if (failedAccount.locked || failedIp.locked) {
         return NextResponse.json(
-          { error: 'Maximum login attempts exceeded. Account is now locked for 15 minutes.' },
+          { error: 'Maximum login attempts exceeded. Access is now locked for 15 minutes.' },
           { status: 429 }
         );
       }
@@ -103,8 +143,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Reset rate limit strictly on eligible, active authenticated sessions
-    await resetRateLimit(db, rateLimitKey);
+    // Reset account rate limit strictly on eligible, active authenticated sessions
+    await resetRateLimit(db, accountRateLimitKey);
 
     // Record login audit trail
     const auditId = generateAuditId();
@@ -113,6 +153,16 @@ export async function POST(request: Request) {
        VALUES (?, ?, 'USER_LOGIN', 'SESSION', ?, 'Customer logged into NetBanking portal')`,
       [auditId, customer.customer_id, customer.customer_id]
     );
+
+    // Check if customer email is configured for administrative privileges
+    const configuredAdminEmails = (process.env.ADMIN_EMAILS || 'admin@bharatbank.com,admin@btb.internal')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (customer.email && configuredAdminEmails.includes(customer.email.toLowerCase())) {
+      customer.role = 'admin';
+    }
 
     const token = generateToken(customer);
     const cleanCustomer = sanitizeCustomer(customer);
