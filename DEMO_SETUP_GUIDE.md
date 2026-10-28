@@ -141,31 +141,55 @@ Use the following pre-configured credentials in the web UI:
 
 ---
 
-## 4. Key Viva Questions & Model Answers
+## 4. Comprehensive College DBMS Viva Defense Q&A
 
-### Q1: Why did you normalize the database to BCNF instead of stopping at 3NF?
-> **Answer:** "A table is in 3NF if for every functional dependency $X \to Y$, either $Y$ is a prime attribute or $X$ is a superkey. However, 3NF allows non-trivial dependencies where $X$ is not a superkey if $Y$ is prime. This permits redundancies and update anomalies when overlapping candidate keys exist. Boyce-Codd Normal Form (BCNF) enforces a strictly stronger condition: for every non-trivial functional dependency $X \to Y$, $X$ must be a superkey. In our banking system, card credentials, customer nominees, and account associations have been decomposed so that every determinant is a superkey, completely eliminating insertion, update, and deletion anomalies."
+### Q1: What is database normalization?
+> **Answer:** Normalization is the formal process of structuring a relational database schema to eliminate data redundancy, prevent relational update anomalies (insertion, deletion, and modification anomalies), and ensure that data dependencies are logically enforced by keys.
 
-### Q2: How does the system handle concurrent fund transfers without causing deadlocks?
-> **Answer:** "In stored procedure `sp_transfer_funds`, if User A transfers to User B while User B concurrently transfers to User A, an unordered `SELECT ... FOR UPDATE` could result in a cyclical lock wait (deadlock). To prevent this, we implemented **lexicographical lock ordering**:
-> ```sql
-> IF p_sender_acc < p_receiver_acc THEN
->     SELECT balance FROM accounts WHERE account_number = p_sender_acc FOR UPDATE;
->     SELECT balance FROM accounts WHERE account_number = p_receiver_acc FOR UPDATE;
-> ELSE
->     SELECT balance FROM accounts WHERE account_number = p_receiver_acc FOR UPDATE;
->     SELECT balance FROM accounts WHERE account_number = p_sender_acc FOR UPDATE;
-> END IF;
-> ```
-> Because every concurrent transaction acquires locks in the exact same alphanumeric order, circular wait graph cycles are mathematically impossible, guaranteeing deadlock-free execution."
+### Q2: What are 1NF, 2NF, 3NF, and BCNF?
+> **Answer:**
+> - **1NF (First Normal Form):** Every table cell contains an atomic (indivisible) scalar value; there are no repeating groups or arrays.
+> - **2NF (Second Normal Form):** Satisfies 1NF and contains no **partial functional dependencies**—no non-prime attribute depends on a proper subset of any composite candidate key.
+> - **3NF (Third Normal Form):** Satisfies 2NF and contains no **transitive dependencies**—for every non-trivial functional dependency $X \to Y$, either $X$ is a superkey or $Y$ is a prime attribute.
+> - **BCNF (Boyce-Codd Normal Form):** A strictly stronger form of 3NF where for *every* non-trivial functional dependency $X \to Y$, the determinant $X$ must be a **superkey**.
 
-### Q3: What caused MySQL Error 1055 (`ONLY_FULL_GROUP_BY`) and how did you resolve it?
-> **Answer:** "MySQL 8.0 enables `ONLY_FULL_GROUP_BY` by default under SQL strict mode. In legacy queries, `customer_nominees` was queried using `SELECT customer_id, nominee_name ... GROUP BY customer_id`. Because `nominee_name` was neither in the `GROUP BY` clause nor wrapped in an aggregate function like `MAX()` or `ANY_VALUE()`, MySQL rejected it with Error 1055. We resolved this deterministically by using a Common Table Expression (CTE) with the `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY nominee_id)` window function to select exactly the primary nominee without nondeterminism or SQL syntax errors."
+### Q3: What is a functional dependency?
+> **Answer:** A functional dependency $X \to Y$ between two sets of attributes $X$ and $Y$ in relation $R$ is a constraint stating that if two tuples agree on all values in $X$, they must also agree on all values in $Y$. For example, in our `branches` table, $ifsc\_code \to \{bank\_name, branch\_name, city\}$ because every unique IFSC code deterministically identifies one branch.
 
-### Q4: How is ACID compliance maintained across financial transactions?
-> **Answer:** 
-> - **Atomicity:** All debits, credits, and ledger insertions are enclosed within `START TRANSACTION` and `COMMIT`. Any error triggers an `EXIT HANDLER FOR SQLEXCEPTION` executing `ROLLBACK`.
-> - **Consistency:** Schema-level `CHECK (balance >= 0)` and foreign keys prevent invalid database states.
-> - **Isolation:** `SELECT ... FOR UPDATE` row-level exclusive locks isolate concurrent updates.
-> - **Durability:** The InnoDB ACID storage engine guarantees committed transactions persist via write-ahead logging (WAL) and redo logs.
+### Q4: What is a candidate key?
+> **Answer:** A candidate key is a minimal superkey—a set of attributes that uniquely identifies every tuple in a relation such that no proper subset can uniquely identify the tuple. For example, in `branches`, both $\{branch\_id\}$ and $\{ifsc\_code\}$ are candidate keys.
+
+### Q5: What is a partial dependency?
+> **Answer:** A partial dependency occurs when a non-prime attribute depends on only a proper subset of a composite candidate key. For example, if relation $R(A, B, C)$ has composite candidate key $\{A, B\}$, and $A \to C$, then $C$ is partially dependent on $\{A, B\}$, violating 2NF. Relations with single-attribute candidate keys cannot violate 2NF.
+
+### Q6: What is a transitive dependency?
+> **Answer:** A transitive dependency occurs when $X \to Y$ and $Y \to Z$, where $Y$ is not a candidate key and $Z$ is a non-prime attribute, causing $X \to Z$ indirectly. In our banking system, `deposits` previously stored $deposit\_id \to linked\_account \to customer\_id$. Because $linked\_account$ was not a superkey in `deposits`, storing `customer_id` created a transitive dependency violating 3NF and BCNF.
+
+### Q7: Why were particular tables decomposed in this project?
+> **Answer:**
+> 1. **`deposits`:** Removed redundant `customer_id` because `linked_account -> accounts(account_number) -> customer_id`. Customer ownership is derived through `accounts`, eliminating 3NF/BCNF transitive dependency and update anomalies.
+> 2. **`beneficiaries`:** Removed `bank_name` because `ifsc_code -> bank_name` is an attribute of the bank branch. Moved bank details to `branches(ifsc_code)`, resolving the transitive dependency.
+> 3. **`account_card_credentials`:** Decoupled card PIN hashes from `accounts` and removed redundant `customer_id`, preventing multi-attribute denormalization.
+> 4. **`customer_nominees`:** Decomposed 1:N nominee facts from `customers`, removing 1NF repeating group limits while supporting multiple beneficiaries per customer.
+
+### Q8: What is a lossless-join decomposition?
+> **Answer:** A decomposition of relation $R$ into $R_1$ and $R_2$ is lossless if taking the natural join of the projections produces the exact original relation without creating spurious (false) tuples: $\Pi_{R_1}(r) \bowtie \Pi_{R_2}(r) = r$. Mathematically, this holds if $(R_1 \cap R_2) \to R_1$ or $(R_1 \cap R_2) \to R_2$. In our schema, decomposing `deposits` across common attribute `linked_account` is lossless because `linked_account` is a primary key of `accounts`.
+
+### Q9: What are primary and foreign keys?
+> **Answer:**
+> - **Primary Key:** The candidate key chosen by the database architect to uniquely identify tuples in a table. It cannot contain NULL values.
+> - **Foreign Key:** An attribute or set of attributes in a referencing table whose values must match a candidate/primary key in a referenced table, enforcing referential integrity. In our system, `deposits.linked_account` references `accounts.account_number` with `ON DELETE RESTRICT`.
+
+### Q10: What are ACID properties?
+> **Answer:**
+> - **Atomicity:** All operations within a transaction succeed together or fail together (All-or-Nothing via `START TRANSACTION` / `COMMIT` / `ROLLBACK`).
+> - **Consistency:** The transaction moves the database from one valid state to another, satisfying all constraints (`CHECK (balance >= 0)`).
+> - **Isolation:** Concurrent transactions execute without interfering with one another, implemented via InnoDB row-level `SELECT ... FOR UPDATE` locks.
+> - **Durability:** Committed data is written to InnoDB write-ahead redo logs and persists across server crashes.
+
+### Q11: Why do deposit and transfer operations require transactions?
+> **Answer:** A fund transfer requires at least three distinct database mutations: debiting the sender, crediting the receiver, and inserting an immutable transaction record. Without a transaction, a crash between debit and credit would cause money to disappear from the sender's account without reaching the receiver, corrupting the institutional balance. Wrapping the steps in an atomic transaction guarantees that either all mutations commit, or everything rolls back.
+
+### Q12: How does rollback protect the database?
+> **Answer:** When an unexpected exception, insufficient funds condition, or constraint violation occurs mid-operation, the `ROLLBACK` command reverts all uncommitted modifications back to the state recorded at `START TRANSACTION` using InnoDB undo logs. This ensures zero orphaned records, zero balance corruption, and 100% preservation of financial parity.
 

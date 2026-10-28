@@ -30,13 +30,14 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- ------------------------------------------------------------------------------
 -- Table 1: `branches`
 -- Normal Form: BCNF
--- FDs: branch_id -> {ifsc_code, branch_name, city, address, timing, phone, status}
---      ifsc_code -> {branch_id, branch_name, city, address, timing, phone, status}
+-- FDs: branch_id -> {ifsc_code, bank_name, branch_name, city, address, timing, phone, status}
+--      ifsc_code -> {branch_id, bank_name, branch_name, city, address, timing, phone, status}
 -- Superkeys: {branch_id}, {ifsc_code}
 -- ------------------------------------------------------------------------------
 CREATE TABLE `branches` (
     `branch_id` VARCHAR(50) NOT NULL,
     `ifsc_code` VARCHAR(20) NOT NULL,
+    `bank_name` VARCHAR(100) NOT NULL DEFAULT 'Bharat Trust Bank',
     `branch_name` VARCHAR(100) NOT NULL,
     `city` VARCHAR(100) NOT NULL,
     `address` TEXT NOT NULL,
@@ -129,26 +130,22 @@ CREATE TABLE `accounts` (
 -- ------------------------------------------------------------------------------
 -- Table 5: `account_card_credentials`
 -- Normal Form: BCNF
--- FDs: credential_id -> {account_number, customer_id, card_pin_hash, status}
---      account_number -> {credential_id, customer_id, card_pin_hash, status}
+-- FDs: credential_id -> {account_number, card_pin_hash, status, created_at, updated_at}
+--      account_number -> {credential_id, card_pin_hash, status, created_at, updated_at}
 -- Superkeys: {credential_id}, {account_number}
--- Stores salted Bcrypt hashes for card PIN verification. Fails closed on NULL.
+-- Eliminates redundant customer_id ownership duplication (derived via accounts.customer_id).
 -- ------------------------------------------------------------------------------
 CREATE TABLE `account_card_credentials` (
     `credential_id` VARCHAR(64) NOT NULL,
     `account_number` VARCHAR(50) NOT NULL,
-    `customer_id` VARCHAR(50) NOT NULL,
     `card_pin_hash` VARCHAR(255) DEFAULT NULL,
     `status` ENUM('Active', 'Blocked', 'Pending', 'NoCard') DEFAULT 'Active',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`credential_id`),
     UNIQUE KEY `uk_card_account` (`account_number`),
-    INDEX `idx_card_customer` (`customer_id`),
     CONSTRAINT `fk_card_account` FOREIGN KEY (`account_number`)
-        REFERENCES `accounts` (`account_number`) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT `fk_card_customer` FOREIGN KEY (`customer_id`)
-        REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE
+        REFERENCES `accounts` (`account_number`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------------------------
@@ -182,13 +179,12 @@ CREATE TABLE `transactions` (
 -- ------------------------------------------------------------------------------
 -- Table 7: `deposits`
 -- Normal Form: BCNF
--- FDs: deposit_id -> {customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status}
+-- FDs: deposit_id -> {linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at}
 -- Superkeys: {deposit_id}
--- Term deposits contracts (Fixed & Recurring).
+-- Eliminates 3NF/BCNF transitive dependency: customer_id removed (derived via accounts.customer_id).
 -- ------------------------------------------------------------------------------
 CREATE TABLE `deposits` (
     `deposit_id` VARCHAR(50) NOT NULL,
-    `customer_id` VARCHAR(50) NOT NULL,
     `linked_account` VARCHAR(50) NOT NULL,
     `deposit_type` ENUM('Fixed', 'Recurring') NOT NULL DEFAULT 'Fixed',
     `principal_amount` DECIMAL(15,2) NOT NULL,
@@ -199,11 +195,8 @@ CREATE TABLE `deposits` (
     `status` ENUM('Active', 'Matured', 'Liquidated', 'Foreclosed') DEFAULT 'Active',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`deposit_id`),
-    INDEX `idx_dep_customer` (`customer_id`),
     INDEX `idx_dep_account` (`linked_account`),
     INDEX `idx_dep_status` (`status`),
-    CONSTRAINT `fk_dep_customer` FOREIGN KEY (`customer_id`)
-        REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT `fk_dep_account` FOREIGN KEY (`linked_account`)
         REFERENCES `accounts` (`account_number`) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT `chk_dep_principal_min` CHECK (`principal_amount` >= 1000.00),
@@ -213,8 +206,10 @@ CREATE TABLE `deposits` (
 -- ------------------------------------------------------------------------------
 -- Table 8: `beneficiaries`
 -- Normal Form: BCNF
--- FDs: beneficiary_id -> {customer_id, beneficiary_name, account_number, ifsc_code, bank_name, transfer_limit, is_active}
+-- FDs: beneficiary_id -> {customer_id, beneficiary_name, account_number, ifsc_code, transfer_limit, cooling_until, is_active, created_at}
+--      {customer_id, account_number, ifsc_code} -> {beneficiary_id, ...}
 -- Superkeys: {beneficiary_id}, {customer_id, account_number, ifsc_code}
+-- Eliminates 3NF/BCNF transitive dependency: bank_name removed (resolved dynamically via branches.bank_name).
 -- ------------------------------------------------------------------------------
 CREATE TABLE `beneficiaries` (
     `beneficiary_id` VARCHAR(50) NOT NULL,
@@ -222,7 +217,6 @@ CREATE TABLE `beneficiaries` (
     `beneficiary_name` VARCHAR(150) NOT NULL,
     `account_number` VARCHAR(50) NOT NULL,
     `ifsc_code` VARCHAR(20) NOT NULL,
-    `bank_name` VARCHAR(150) NOT NULL,
     `transfer_limit` DECIMAL(15,2) DEFAULT 100000.00,
     `cooling_until` DATETIME DEFAULT NULL,
     `is_active` TINYINT(1) DEFAULT 1,
@@ -230,8 +224,11 @@ CREATE TABLE `beneficiaries` (
     PRIMARY KEY (`beneficiary_id`),
     UNIQUE KEY `uk_ben_account` (`customer_id`, `account_number`, `ifsc_code`),
     INDEX `idx_ben_customer` (`customer_id`),
+    INDEX `idx_ben_ifsc` (`ifsc_code`),
     CONSTRAINT `fk_ben_customer` FOREIGN KEY (`customer_id`)
         REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_ben_branch` FOREIGN KEY (`ifsc_code`)
+        REFERENCES `branches` (`ifsc_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT `chk_ben_limit_positive` CHECK (`transfer_limit` > 0.00)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -317,6 +314,7 @@ LEFT JOIN (
 -- ------------------------------------------------------------------------------
 -- View 3: `v_customer_portfolio`
 -- Canonical wealth summary. Pre-aggregates accounts and deposits independently to prevent Cartesian bloat.
+-- Resolves deposit ownership dynamically through linked_account -> accounts(account_number).
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW `v_customer_portfolio` AS
 SELECT 
@@ -338,11 +336,58 @@ LEFT JOIN (
     GROUP BY customer_id
 ) acc ON c.customer_id = acc.customer_id
 LEFT JOIN (
-    SELECT customer_id, SUM(principal_amount) AS total_deposits_principal
-    FROM `deposits`
-    WHERE status = 'Active'
-    GROUP BY customer_id
+    SELECT a.customer_id, SUM(d.principal_amount) AS total_deposits_principal
+    FROM `deposits` d
+    JOIN `accounts` a ON d.linked_account = a.account_number
+    WHERE d.status = 'Active'
+    GROUP BY a.customer_id
 ) dep ON c.customer_id = dep.customer_id;
+
+-- ------------------------------------------------------------------------------
+-- View 4: `v_deposits`
+-- Dynamically derives customer ownership via linked_account -> accounts(account_number)
+-- Satisfies 3NF/BCNF by eliminating redundant customer_id from base deposits table.
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW `v_deposits` AS
+SELECT 
+    d.deposit_id,
+    a.customer_id,
+    c.full_name,
+    d.linked_account,
+    a.account_type,
+    d.deposit_type,
+    d.principal_amount,
+    d.interest_rate,
+    d.tenure_months,
+    d.maturity_amount,
+    d.maturity_date,
+    d.status,
+    d.created_at
+FROM `deposits` d
+JOIN `accounts` a ON d.linked_account = a.account_number
+JOIN `customers` c ON a.customer_id = c.customer_id;
+
+-- ------------------------------------------------------------------------------
+-- View 5: `v_beneficiaries`
+-- Resolves bank and branch details dynamically via ifsc_code -> branches(ifsc_code)
+-- Satisfies 3NF/BCNF by eliminating transitive bank_name dependency from beneficiaries table.
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW `v_beneficiaries` AS
+SELECT 
+    b.beneficiary_id,
+    b.customer_id,
+    b.beneficiary_name,
+    b.account_number,
+    b.ifsc_code,
+    br.bank_name,
+    br.branch_name,
+    br.city AS branch_city,
+    b.transfer_limit,
+    b.cooling_until,
+    b.is_active,
+    b.created_at
+FROM `beneficiaries` b
+LEFT JOIN `branches` br ON b.ifsc_code = br.ifsc_code;
 
 -- ==============================================================================
 -- SECTION 4: ATOMIC STORED PROCEDURES (ACID TRANSACTIONS)
@@ -610,9 +655,9 @@ DELIMITER ;
 -- ==============================================================================
 
 -- 1. Insert Branch Directory
-INSERT INTO `branches` (`branch_id`, `ifsc_code`, `branch_name`, `city`, `address`, `phone`, `status`) VALUES
-('BR-101', 'BTBI0001024', 'Mumbai Nariman Point Hub', 'Mumbai', 'Ground Floor, Express Towers, Nariman Point, Mumbai 400021', '022-22881024', 'Active'),
-('BR-102', 'BTBI0002018', 'Bengaluru MG Road Branch', 'Bengaluru', 'Prestige Meridian, 29 MG Road, Bengaluru 560001', '080-25582018', 'Active');
+INSERT INTO `branches` (`branch_id`, `ifsc_code`, `bank_name`, `branch_name`, `city`, `address`, `phone`, `status`) VALUES
+('BR-101', 'BTBI0001024', 'Bharat Trust Bank', 'Mumbai Nariman Point Hub', 'Mumbai', 'Ground Floor, Express Towers, Nariman Point, Mumbai 400021', '022-22881024', 'Active'),
+('BR-102', 'BTBI0002018', 'Bharat Trust Bank', 'Bengaluru MG Road Branch', 'Bengaluru', 'Prestige Meridian, 29 MG Road, Bengaluru 560001', '080-25582018', 'Active');
 
 -- 2. Insert Customers (Password: "Student@123", PIN: "1234" - Bcrypt Hashed)
 INSERT INTO `customers` (`customer_id`, `full_name`, `email`, `phone`, `dob`, `address`, `status`, `kyc_status`, `password_hash`, `credit_score`, `tier`, `pan_number`, `aadhaar_number`) VALUES
@@ -631,14 +676,18 @@ INSERT INTO `accounts` (`account_number`, `customer_id`, `account_type`, `balanc
 ('ACC-1001', 'CUST-101', 'Savings', 5000.00, 'BTBI0001024', 'Active'),
 ('ACC-1002', 'CUST-102', 'Savings', 2000.00, 'BTBI0002018', 'Active');
 
--- 5. Insert Card Credentials (PIN: "1234" - Bcrypt Hashed)
-INSERT INTO `account_card_credentials` (`credential_id`, `account_number`, `customer_id`, `card_pin_hash`, `status`) VALUES
-('CARD-1001', 'ACC-1001', 'CUST-101', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC', 'Active'),
-('CARD-1002', 'ACC-1002', 'CUST-102', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC', 'Active');
+-- 5. Insert Card Credentials (PIN: "1234" - Bcrypt Hashed, customer ownership derived via accounts)
+INSERT INTO `account_card_credentials` (`credential_id`, `account_number`, `card_pin_hash`, `status`) VALUES
+('CARD-1001', 'ACC-1001', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC', 'Active'),
+('CARD-1002', 'ACC-1002', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC', 'Active');
 
--- 6. Insert Beneficiary Payee
-INSERT INTO `beneficiaries` (`beneficiary_id`, `customer_id`, `beneficiary_name`, `account_number`, `ifsc_code`, `bank_name`, `transfer_limit`) VALUES
-('BEN-101', 'CUST-101', 'Priya Nair', 'ACC-1002', 'BTBI0002018', 'Bharat Trust Bank (MG Road)', 100000.00);
+-- 6. Insert Beneficiary Payee (bank_name derived via branches.bank_name)
+INSERT INTO `beneficiaries` (`beneficiary_id`, `customer_id`, `beneficiary_name`, `account_number`, `ifsc_code`, `transfer_limit`) VALUES
+('BEN-101', 'CUST-101', 'Priya Nair', 'ACC-1002', 'BTBI0002018', 100000.00);
+
+-- 7. Insert Fixed Deposit (customer ownership derived via linked_account)
+INSERT INTO `deposits` (`deposit_id`, `linked_account`, `deposit_type`, `principal_amount`, `interest_rate`, `tenure_months`, `maturity_amount`, `maturity_date`, `status`) VALUES
+('DEP-101', 'ACC-1001', 'Fixed', 10000.00, 7.50, 12, 10772.00, DATE_ADD(CURRENT_DATE, INTERVAL 1 YEAR), 'Active');
 
 -- ==============================================================================
 -- SECTION 6: POSITIVE AND NEGATIVE TEST DEMONSTRATIONS
@@ -724,7 +773,7 @@ SELECT account_number, balance, 'Restored atomically after ROLLBACK' AS verifica
 FROM `accounts` WHERE account_number = 'ACC-1001';
 
 -- ------------------------------------------------------------------------------
--- TEST 7: Querying Analytical Views
+-- TEST 7: Querying Analytical & Normalized Compatibility Views
 -- ------------------------------------------------------------------------------
 SELECT '--- TEST 7: CANONICAL PORTFOLIO AGGREGATION VIEW ---' AS test_banner;
 SELECT customer_id, full_name, total_accounts, total_liquid_balance, total_net_worth 
@@ -733,6 +782,14 @@ FROM `v_customer_portfolio`;
 SELECT '--- TEST 7B: STRICT MODE LEGACY CUSTOMER & NOMINEE VIEW ---' AS test_banner;
 SELECT customer_id, full_name, nominee_name, nominee_relation, nominee_dob 
 FROM `v_customers_legacy`;
+
+SELECT '--- TEST 7C: BCNF DEPOSIT OWNERSHIP DERIVATION VIEW ---' AS test_banner;
+SELECT deposit_id, customer_id, full_name, linked_account, principal_amount, status 
+FROM `v_deposits`;
+
+SELECT '--- TEST 7D: BCNF BENEFICIARY BRANCH LOOKUP VIEW ---' AS test_banner;
+SELECT beneficiary_id, customer_id, beneficiary_name, account_number, ifsc_code, bank_name, branch_name 
+FROM `v_beneficiaries`;
 
 -- ==============================================================================
 -- SECTION 7: SAFE DEMO CLEANUP & RESET INSTRUCTIONS
