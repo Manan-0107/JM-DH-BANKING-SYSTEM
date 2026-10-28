@@ -22,8 +22,9 @@ SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO,STRICT_TRANS_TABLES';
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `branches` (
   `branch_id` VARCHAR(50) NOT NULL,
-  `branch_name` VARCHAR(100) NOT NULL,
   `ifsc_code` VARCHAR(20) NOT NULL,
+  `bank_name` VARCHAR(100) NOT NULL DEFAULT 'Bharat Trust Bank',
+  `branch_name` VARCHAR(100) NOT NULL,
   `city` VARCHAR(100) NOT NULL,
   `address` TEXT NOT NULL,
   `timing` VARCHAR(50) DEFAULT '09:30 AM - 04:30 PM',
@@ -139,18 +140,14 @@ CREATE TABLE IF NOT EXISTS `accounts` (
 CREATE TABLE IF NOT EXISTS `account_card_credentials` (
   `credential_id` VARCHAR(50) NOT NULL,
   `account_number` VARCHAR(50) NOT NULL,
-  `customer_id` VARCHAR(50) NOT NULL,
   `card_pin_hash` VARCHAR(255) DEFAULT NULL,
   `status` ENUM('Active', 'Blocked', 'Pending', 'NoCard') DEFAULT 'Active',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`credential_id`),
   UNIQUE KEY `uk_card_account` (`account_number`),
-  INDEX `idx_card_customer` (`customer_id`),
   CONSTRAINT `fk_card_cred_account` FOREIGN KEY (`account_number`) 
-    REFERENCES `accounts` (`account_number`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_card_cred_customer` FOREIGN KEY (`customer_id`) 
-    REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE
+    REFERENCES `accounts` (`account_number`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
@@ -184,11 +181,10 @@ CREATE TABLE IF NOT EXISTS `transactions` (
 -- ----------------------------------------------------------------------------
 -- 7. Table structure for `deposits`
 -- Term contracts (Fixed & Recurring Deposits) in BCNF
--- Enforces referential integrity on linked_account and customer_id
+-- Enforces referential integrity on linked_account. Customer ownership derived via accounts.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `deposits` (
   `deposit_id` VARCHAR(50) NOT NULL,
-  `customer_id` VARCHAR(50) NOT NULL,
   `linked_account` VARCHAR(50) NOT NULL,
   `deposit_type` VARCHAR(50) NOT NULL,
   `principal_amount` DECIMAL(15,2) NOT NULL,
@@ -199,11 +195,8 @@ CREATE TABLE IF NOT EXISTS `deposits` (
   `status` ENUM('Active', 'Matured', 'Liquidated', 'Foreclosed') DEFAULT 'Active',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`deposit_id`),
-  INDEX `idx_dep_customer` (`customer_id`),
   INDEX `idx_dep_account` (`linked_account`),
   INDEX `idx_dep_status` (`status`),
-  CONSTRAINT `fk_dep_customer` FOREIGN KEY (`customer_id`) 
-    REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_dep_account` FOREIGN KEY (`linked_account`) 
     REFERENCES `accounts` (`account_number`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `chk_dep_principal` CHECK (`principal_amount` >= 1000.00),
@@ -215,6 +208,7 @@ CREATE TABLE IF NOT EXISTS `deposits` (
 -- ----------------------------------------------------------------------------
 -- 8. Table structure for `beneficiaries`
 -- Registered payee directory in BCNF
+-- Bank details resolved dynamically through branches(ifsc_code)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `beneficiaries` (
   `beneficiary_id` VARCHAR(50) NOT NULL,
@@ -222,7 +216,6 @@ CREATE TABLE IF NOT EXISTS `beneficiaries` (
   `beneficiary_name` VARCHAR(150) NOT NULL,
   `account_number` VARCHAR(50) NOT NULL,
   `ifsc_code` VARCHAR(20) NOT NULL,
-  `bank_name` VARCHAR(150) NOT NULL,
   `transfer_limit` DECIMAL(15,2) DEFAULT 100000.00,
   `cooling_until` DATETIME DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -230,8 +223,11 @@ CREATE TABLE IF NOT EXISTS `beneficiaries` (
   PRIMARY KEY (`beneficiary_id`),
   UNIQUE KEY `uk_ben_account` (`customer_id`, `account_number`, `ifsc_code`),
   INDEX `idx_ben_customer` (`customer_id`),
+  INDEX `idx_ben_ifsc` (`ifsc_code`),
   CONSTRAINT `fk_ben_customer` FOREIGN KEY (`customer_id`) 
     REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_ben_branch` FOREIGN KEY (`ifsc_code`) 
+    REFERENCES `branches` (`ifsc_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `chk_ben_limit` CHECK (`transfer_limit` >= 0.00)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -428,11 +424,58 @@ LEFT JOIN (
     GROUP BY customer_id
 ) acc ON c.customer_id = acc.customer_id
 LEFT JOIN (
-    SELECT customer_id, SUM(principal_amount) AS total_deposits_principal
-    FROM `deposits`
-    WHERE status = 'Active'
-    GROUP BY customer_id
+    SELECT a.customer_id, SUM(d.principal_amount) AS total_deposits_principal
+    FROM `deposits` d
+    JOIN `accounts` a ON d.linked_account = a.account_number
+    WHERE d.status = 'Active'
+    GROUP BY a.customer_id
 ) dep ON c.customer_id = dep.customer_id;
+
+-- ----------------------------------------------------------------------------
+-- View: `v_deposits`
+-- Dynamically derives customer ownership via linked_account -> accounts(account_number)
+-- Satisfies 3NF/BCNF by eliminating redundant customer_id from base deposits table.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW `v_deposits` AS
+SELECT 
+    d.deposit_id,
+    a.customer_id,
+    c.full_name,
+    d.linked_account,
+    a.account_type,
+    d.deposit_type,
+    d.principal_amount,
+    d.interest_rate,
+    d.tenure_months,
+    d.maturity_amount,
+    d.maturity_date,
+    d.status,
+    d.created_at
+FROM `deposits` d
+JOIN `accounts` a ON d.linked_account = a.account_number
+JOIN `customers` c ON a.customer_id = c.customer_id;
+
+-- ----------------------------------------------------------------------------
+-- View: `v_beneficiaries`
+-- Resolves bank and branch details dynamically via ifsc_code -> branches(ifsc_code)
+-- Satisfies 3NF/BCNF by eliminating transitive bank_name dependency from beneficiaries table.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW `v_beneficiaries` AS
+SELECT 
+    b.beneficiary_id,
+    b.customer_id,
+    b.beneficiary_name,
+    b.account_number,
+    b.ifsc_code,
+    br.bank_name,
+    br.branch_name,
+    br.city AS branch_city,
+    b.transfer_limit,
+    b.cooling_until,
+    b.is_active,
+    b.created_at
+FROM `beneficiaries` b
+LEFT JOIN `branches` br ON b.ifsc_code = br.ifsc_code;
 
 -- ----------------------------------------------------------------------------
 -- View: `v_high_value_transactions`

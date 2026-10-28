@@ -1,217 +1,131 @@
-# BHARAT TRUST BANK (BTB) — FORMAL DATABASE NORMALIZATION REPORT
+# BHARAT TRUST BANK (BTB) — COMPREHENSIVE DATABASE NORMALIZATION REPORT
 ## Table-by-Table Mathematical Normalization: 1NF to BCNF (Boyce-Codd Normal Form)
 
-- **Institution:** Bharat Trust Bank (BTB) / Bankist Enterprise Banking System
-- **Database Engine:** MySQL 8.0 (InnoDB Storage Engine)
-- **Authoritative SQL Script:** `DBMS_LAB_FINAL.sql` & `DBMS project/bankist_normalized.sql`
+- **Institution:** Bharat Trust Bank (BTB) / Bankist Banking System
+- **Database Engine:** MySQL 8.0.42 Community Server (InnoDB Storage Engine)
+- **Authoritative SQL Files:** `DBMS_LAB_FINAL.sql` & `DBMS project/bankist_normalized.sql`
 - **Audit Date:** October 2026
+- **Evaluation Target:** College DBMS Viva & Lab Evaluation
 
 ---
 
-## 1. Executive Summary & Relational Design Objectives
+## 1. Summary Normalization Matrix
 
-The original un-normalized schema suffered from severe relational anomalies:
-1. **Multi-Valued Dependency & Non-Atomic Attributes (1NF violations):** Customer contact details, nominee details, and branch IFSC data were partially denormalized or coupled.
-2. **Partial Functional Dependencies (2NF violations):** Composite attributes in transaction and deposit schemas had dependencies on subsets of candidate keys.
-3. **Transitive Functional Dependencies (3NF violations):** Customer address and branch attributes were stored directly inside customer and account tables ($A \to B \to C$).
-4. **Non-Trivial Determinants Not Being Superkeys (BCNF violations):** Card credentials and authentication tokens depended on account/customer pairs where individual determinants could cause anomalies.
-
-Through a rigorous **Lossless-Join Decomposition** and **Dependency-Preserving Normalization**, the authoritative schema decomposes the banking core into **13 independent, 4NF/BCNF relations**.
-
----
-
-## 2. Table-by-Table Decomposition, Functional Dependencies & Normal Forms
-
-### 2.1 Table: `branches`
-- **Domain:** Bank Branch Infrastructure
-- **Attributes:** `branch_id` (PK), `ifsc_code` (UQ), `branch_name`, `city`, `address`, `phone`, `status`
-- **Candidate Keys:** $\{branch\_id\}$, $\{ifsc\_code\}$
-- **Primary Key:** `branch_id`
-- **Functional Dependencies (FDs):**
-  - $FD_1: branch\_id \to \{ifsc\_code, branch\_name, city, address, phone, status\}$
-  - $FD_2: ifsc\_code \to \{branch\_id, branch\_name, city, address, phone, status\}$
-- **Normal Form Analysis:**
-  - **1NF:** All attributes are atomic scalar values (no repeating groups).
-  - **2NF:** No partial dependencies (single-attribute candidate keys).
-  - **3NF:** No transitive dependencies. Every non-prime attribute depends directly on the candidate keys.
-  - **BCNF:** In all non-trivial dependencies $X \to Y$, $X$ is a superkey ($branch\_id$ and $ifsc\_code$ are both unique superkeys).
-- **Result:** **BCNF Compliant**.
+| Table | Candidate Key(s) | Important Functional Dependencies | 1NF | 2NF | 3NF | BCNF | Status / Verdict |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **`branches`** | $\{branch\_id\}$, $\{ifsc\_code\}$ | $branch\_id \leftrightarrow ifsc\_code \to \{bank\_name, branch\_name, city, address, timing, phone, status\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Every determinant is a candidate key. |
+| **`customers`** | $\{customer\_id\}$, $\{email\}$, $\{pan\_number\}$ | $customer\_id \to \{full\_name, email, phone, dob, address, status, kyc\_status, password\_hash, credit\_score, tier, pan\_number, aadhaar\_number\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Multi-valued nominee and card PIN facts decomposed. |
+| **`customer_nominees`** | $\{nominee\_id\}$, $\{customer\_id, nominee\_name\}$ | $nominee\_id \leftrightarrow \{customer\_id, nominee\_name\} \to \{relationship, dob, allocation\_percentage\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Resolves 1NF repeating group in customer profile. |
+| **`accounts`** | $\{account\_number\}$ | $account\_number \to \{customer\_id, account\_type, balance, ifsc\_code, opening\_date, status\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Branch details normalized via `ifsc_code` FK. |
+| **`account_card_credentials`** | $\{credential\_id\}$, $\{account\_number\}$ | $credential\_id \leftrightarrow account\_number \to \{card\_pin\_hash, status, created\_at, updated\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Customer ownership redundancy eliminated; derived via `accounts`. |
+| **`transactions`** | $\{transaction\_id\}$, $\{reference\_number\}$ | $transaction\_id \leftrightarrow reference\_number \to \{sender\_account, receiver\_account, channel, amount, type, date\_time, status, description\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Atomic double-entry financial ledger. |
+| **`deposits`** | $\{deposit\_id\}$ | $deposit\_id \to \{linked\_account, deposit\_type, principal\_amount, interest\_rate, tenure\_months, maturity\_amount, maturity\_date, status\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Redundant `customer_id` removed; resolved via `linked_account -> accounts`. |
+| **`beneficiaries`** | $\{beneficiary\_id\}$, $\{customer\_id, account\_number, ifsc\_code\}$ | $beneficiary\_id \leftrightarrow \{customer\_id, account\_number, ifsc\_code\} \to \{beneficiary\_name, transfer\_limit, cooling\_until, is\_active\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Transitive `bank_name` removed; resolved via `branches(ifsc_code)`. |
+| **`audit_logs`** | $\{log\_id\}$ | $log\_id \to \{customer\_id, action, entity\_type, entity\_id, details, timestamp\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Immutable compliance audit log. |
+| **`account_liens`** | $\{lien\_id\}$ | $lien\_id \to \{account\_number, lien\_amount, reason, placed_by, status, placed\_at, released\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Legal encumbrance holds. |
+| **`customer_kyc`** | $\{kyc\_id\}$, $\{customer\_id\}$ | $kyc\_id \leftrightarrow customer\_id \to \{document\_type, document\_number, verification\_method, status, verified\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. 1:1 regulatory identity relation. |
+| **`security_rate_limits`** | $\{rate\_key\}$ | $rate\_key \to \{failed\_attempts, first\_attempt\_at, last\_attempt\_at, locked\_until\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Anti-brute-force defense state. |
+| **`branch_summary_mv`** | $\{ifsc\_code\}$ | $ifsc\_code \to \{branch\_name, total\_accounts, total\_balance, total\_active\_customers, last\_refreshed\_at\}$ | Yes | Yes | Yes | **Yes** | **BCNF**. Materialized view table for branch aggregations. |
 
 ---
 
-### 2.2 Table: `customers`
-- **Domain:** Bank Customer Master Profile
-- **Attributes:** `customer_id` (PK), `full_name`, `email` (UQ), `phone`, `dob`, `address`, `status`, `kyc_status`, `password_hash`, `credit_score`, `tier`, `pan_number` (UQ), `aadhaar_number`
-- **Candidate Keys:** $\{customer\_id\}$, $\{email\}$, $\{pan\_number\}$
-- **Primary Key:** `customer_id`
-- **Functional Dependencies (FDs):**
-  - $FD_1: customer\_id \to \{full\_name, email, phone, dob, address, status, kyc\_status, password\_hash, credit\_score, tier, pan\_number, aadhaar\_number\}$
-  - $FD_2: email \to \{customer\_id, \dots\}$
-  - $FD_3: pan\_number \to \{customer\_id, \dots\}$
-- **Normal Form Analysis:**
-  - **1NF:** Atomic attributes.
-  - **2NF:** No composite primary key, therefore no partial dependency exists.
-  - **3NF:** Every non-prime attribute is non-transitively dependent on candidate keys.
-  - **BCNF:** Every left-hand determinant $\{customer\_id, email, pan\_number\}$ is a superkey. Nominee details have been decomposed into `customer_nominees`.
-- **Result:** **BCNF Compliant**.
+## 2. Before-and-After Decomposition Analysis & Anomaly Elimination
 
----
+### A. Table: `deposits` (Fixed / Recurring Deposits)
+- **Before Normalization:**
+  - Attributes: `(deposit_id, customer_id, linked_account, deposit_type, principal_amount, ...)`
+  - Functional Dependencies:
+    - $FD_1: deposit\_id \to \{customer\_id, linked\_account, \dots\}$
+    - $FD_2: linked\_account \to customer\_id$ (since each account belongs to exactly one customer)
+  - **Violation:** In `deposits`, the candidate key is only $\{deposit\_id\}$. The determinant $linked\_account$ is **NOT a superkey**.
+  - Since $deposit\_id \to linked\_account \to customer\_id$, the attribute `customer_id` is transitively dependent on a non-superkey. This violates **3NF** and **BCNF**.
+  - **Relational Anomalies:**
+    - *Insertion Anomaly:* An application could insert a deposit with account `ACC-1001` (owned by `CUST-101`) but assign `customer_id = 'CUST-102'`, creating conflicting ownership data.
+    - *Update Anomaly:* If an account ownership transfer occurs, updating `accounts` without updating `deposits` leads to inconsistent financial ownership.
+  - **After Normalization:**
+    - `deposits` table: `(deposit_id PK, linked_account FK, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at)`
+    - Ownership is derived losslessly: `JOIN accounts a ON deposits.linked_account = a.account_number`.
+    - Transitive dependency eliminated. **BCNF Achieved**.
 
-### 2.3 Table: `customer_nominees`
-- **Domain:** Customer Nominee & Succession Allocation (1-to-N decomposition)
-- **Attributes:** `nominee_id` (PK), `customer_id` (FK), `nominee_name`, `relationship`, `dob`, `allocation_percentage`
-- **Candidate Keys:** $\{nominee\_id\}$, $\{customer\_id, nominee\_name\}$
-- **Primary Key:** `nominee_id`
-- **Foreign Key:** `customer_id` REFERENCES `customers(customer_id)` ON DELETE CASCADE
-- **Functional Dependencies (FDs):**
-  - $FD_1: nominee\_id \to \{customer\_id, nominee\_name, relationship, dob, allocation\_percentage\}$
-  - $FD_2: \{customer\_id, nominee\_name\} \to \{nominee\_id, relationship, dob, allocation\_percentage\}$
-- **Normal Form Analysis:**
-  - Eliminates multi-valued nominee anomalies from the customer profile.
-  - Decomposes the 1:N relationship losslessly.
-  - All determinants are candidate keys.
-- **Result:** **BCNF Compliant**.
+### B. Table: `beneficiaries` (Payee Directory)
+- **Before Normalization:**
+  - Attributes: `(beneficiary_id, customer_id, beneficiary_name, account_number, ifsc_code, bank_name, ...)`
+  - Functional Dependencies:
+    - $FD_1: beneficiary\_id \to \{customer\_id, account\_number, ifsc\_code, bank\_name, \dots\}$
+    - $FD_2: ifsc\_code \to bank\_name$ (the bank is functionally determined by the IFSC prefix/code)
+  - **Violation:** In `beneficiaries`, candidate keys are $\{beneficiary\_id\}$ and $\{customer\_id, account\_number, ifsc\_code\}$. The determinant $ifsc\_code$ is **NOT a superkey**.
+  - Since $beneficiary\_id \to ifsc\_code \to bank\_name$, `bank_name` is transitively dependent on a non-superkey. This violates **3NF** and **BCNF**.
+  - **Relational Anomalies:**
+    - *Update Anomaly:* If a bank changes its legal trade name or branch title, thousands of beneficiary records storing that string would need updating, risking partial updates.
+    - *Redundancy:* Every customer saving an account at `BTBI0002018` duplicated the string `"Bharat Trust Bank (MG Road)"`.
+  - **After Normalization:**
+    - `branches` relation holds: `(ifsc_code UQ, bank_name, branch_name, city, address, ...)`
+    - `beneficiaries` table holds: `(beneficiary_id PK, customer_id FK, beneficiary_name, account_number, ifsc_code FK, transfer_limit, cooling_until, is_active, created_at)`
+    - `bank_name` is removed from `beneficiaries` and resolved dynamically via `branches(ifsc_code)`. **BCNF Achieved**.
 
----
+### C. Table: `account_card_credentials` (Card PIN Hashes)
+- **Before Normalization:**
+  - Stored `(credential_id, account_number, customer_id, card_pin_hash, status)`
+  - Account `account_number` already uniquely determines `customer_id` via `accounts(account_number)`.
+  - Storing `customer_id` duplicated account ownership facts and allowed potential mismatch between `accounts.customer_id` and `account_card_credentials.customer_id`.
+  - **After Normalization:**
+    - Table: `(credential_id PK, account_number UQ FK, card_pin_hash, status, created_at, updated_at)`
+    - Redundant customer ownership removed. Resolves through `accounts`. **BCNF Achieved**.
 
-### 2.4 Table: `accounts`
-- **Domain:** Deposit & Savings Bank Accounts
-- **Attributes:** `account_number` (PK), `customer_id` (FK), `account_type`, `balance`, `ifsc_code` (FK), `status`, `created_at`
-- **Candidate Keys:** $\{account\_number\}$
-- **Primary Key:** `account_number`
-- **Foreign Keys:**
-  - `customer_id` REFERENCES `customers(customer_id)` ON DELETE RESTRICT
-  - `ifsc_code` REFERENCES `branches(ifsc_code)` ON DELETE RESTRICT
-- **Functional Dependencies (FDs):**
-  - $FD_1: account\_number \to \{customer\_id, account\_type, balance, ifsc\_code, status, created\_at\}$
-- **Normal Form Analysis:**
-  - In original denormalized tables, branch city and address were repeatedly stored alongside account numbers ($account\_number \to ifsc\_code \to branch\_address$).
-  - In normalized schema, transitive dependency is broken: branch details reside strictly in `branches`.
-  - Determinant $\{account\_number\}$ is a superkey.
-- **Result:** **BCNF Compliant**.
-
----
-
-### 2.5 Table: `account_card_credentials`
-- **Domain:** Account ATM/Debit Card PIN Security
-- **Attributes:** `credential_id` (PK), `account_number` (FK, UQ), `customer_id` (FK), `card_pin_hash`, `status`
-- **Candidate Keys:** $\{credential\_id\}$, $\{account\_number\}$
-- **Primary Key:** `credential_id`
-- **Foreign Keys:**
-  - `account_number` REFERENCES `accounts(account_number)` ON DELETE CASCADE
-  - `customer_id` REFERENCES `customers(customer_id)` ON DELETE RESTRICT
-- **Functional Dependencies (FDs):**
-  - $FD_1: credential\_id \to \{account\_number, customer\_id, card\_pin\_hash, status\}$
-  - $FD_2: account\_number \to \{credential\_id, customer\_id, card\_pin\_hash, status\}$
-- **Normal Form Analysis:**
-  - Separates highly sensitive card PIN hashes and security tokens from general account query paths.
-  - Both determinants are superkeys.
-- **Result:** **BCNF Compliant**.
-
----
-
-### 2.6 Table: `transactions`
-- **Domain:** Core Double-Entry Transaction Ledger
-- **Attributes:** `transaction_id` (PK), `sender_account` (FK, Nullable), `receiver_account` (FK, Nullable), `channel`, `amount`, `type`, `date_time`, `status`, `description`, `reference_number` (UQ)
-- **Candidate Keys:** $\{transaction\_id\}$, $\{reference\_number\}$
-- **Primary Key:** `transaction_id`
-- **Foreign Keys:**
-  - `sender_account` REFERENCES `accounts(account_number)` ON DELETE SET NULL
-  - `receiver_account` REFERENCES `accounts(account_number)` ON DELETE SET NULL
-- **Functional Dependencies (FDs):**
-  - $FD_1: transaction\_id \to \{sender\_account, receiver\_account, channel, amount, type, date\_time, status, description, reference\_number\}$
-  - $FD_2: reference\_number \to \{transaction\_id, \dots\}$
-- **Normal Form Analysis:**
-  - All attributes describe a single immutable financial movement event.
-  - No partial or transitive dependencies.
-- **Result:** **BCNF Compliant**.
-
----
-
-### 2.7 Table: `deposits` (Fixed / Recurring Deposits)
-- **Domain:** Term Investments & Time Deposits
-- **Attributes:** `deposit_id` (PK), `customer_id` (FK), `account_number` (FK), `deposit_type`, `principal_amount`, `interest_rate`, `tenure_months`, `start_date`, `maturity_date`, `maturity_amount`, `status`
-- **Candidate Keys:** $\{deposit\_id\}$
-- **Primary Key:** `deposit_id`
-- **Foreign Keys:**
-  - `customer_id` REFERENCES `customers(customer_id)` ON DELETE RESTRICT
-  - `account_number` REFERENCES `accounts(account_number)` ON DELETE RESTRICT
-- **Functional Dependencies (FDs):**
-  - $FD_1: deposit\_id \to \{customer\_id, account\_number, deposit\_type, principal\_amount, interest\_rate, tenure\_months, start\_date, maturity\_date, maturity\_amount, status\}$
-- **Normal Form Analysis:**
-  - Every non-prime attribute depends directly on `deposit_id`.
-  - Maturity amount is calculated deterministically at booking time based on tenure and interest rate schedule.
-- **Result:** **BCNF Compliant**.
-
----
-
-### 2.8 Table: `beneficiaries`
-- **Domain:** Whitelisted Payee Directory
-- **Attributes:** `beneficiary_id` (PK), `customer_id` (FK), `beneficiary_name`, `account_number`, `ifsc_code`, `bank_name`, `transfer_limit`
-- **Candidate Keys:** $\{beneficiary\_id\}$, $\{customer\_id, account\_number, ifsc\_code\}$
-- **Primary Key:** `beneficiary_id`
-- **Foreign Key:** `customer_id` REFERENCES `customers(customer_id)` ON DELETE CASCADE
-- **Functional Dependencies (FDs):**
-  - $FD_1: beneficiary\_id \to \{customer\_id, beneficiary\_name, account\_number, ifsc\_code, bank\_name, transfer\_limit\}$
-  - $FD_2: \{customer\_id, account\_number, ifsc\_code\} \to \{beneficiary\_id, beneficiary\_name, bank\_name, transfer\_limit\}$
-- **Normal Form Analysis:**
-  - Preserves payee details without duplicating recipient banking profiles.
-  - Superkey determinant condition holds.
-- **Result:** **BCNF Compliant**.
-
----
-
-### 2.9 Table: `account_liens`
-- **Domain:** Collateral & Judicial Lien Holds
-- **Attributes:** `lien_id` (PK), `account_number` (FK), `amount`, `reason`, `status`, `placed_at`, `released_at`
-- **Candidate Keys:** $\{lien\_id\}$
-- **Primary Key:** `lien_id`
-- **Foreign Key:** `account_number` REFERENCES `accounts(account_number)` ON DELETE CASCADE
-- **Functional Dependencies:** $lien\_id \to \{account\_number, amount, reason, status, placed\_at, released\_at\}$
-- **Result:** **BCNF Compliant**.
-
----
-
-### 2.10 Supporting Subsystems in BCNF
-- **`customer_kyc`:** `(kyc_id PK, customer_id FK UQ, document_type, document_number, status, verified_at)` $\implies$ BCNF.
-- **`audit_logs`:** `(log_id PK, customer_id FK, action, entity_type, entity_id, details, timestamp)` $\implies$ BCNF.
-- **`security_rate_limits`:** `(rate_key PK, failed_attempts, first_attempt_at, last_attempt_at, locked_until)` $\implies$ BCNF.
-- **`branch_summary_mv`:** `(ifsc_code PK, total_accounts, total_balance, total_active_customers, last_refreshed_at)` $\implies$ BCNF Materialized View.
+### D. Table: `customers` & `customer_nominees`
+- **Before Normalization:**
+  - Stored repeating nominee columns `(nominee_name, nominee_relation, nominee_dob)` inside the customer master table.
+  - Violated **1NF** (repeating groups and restriction to single nominee).
+  - **After Normalization:**
+    - Decomposed into 1:N relation `customer_nominees(nominee_id PK, customer_id FK, nominee_name, relationship, dob, allocation_percentage)`.
+    - Preserved 100% backward compatibility via `v_customers_legacy` view using `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY allocation_percentage DESC)` window function without triggering MySQL Error 1055 (`ONLY_FULL_GROUP_BY`).
 
 ---
 
 ## 3. Mathematical Proof of Lossless-Join Decomposition
 
-Let schema $R = \{customer\_id, full\_name, email, phone, ifsc\_code, branch\_name, city\}$ be decomposed into:
-- $R_1 = \{customer\_id, full\_name, email, phone, ifsc\_code\}$
-- $R_2 = \{ifsc\_code, branch\_name, city\}$
+Let relation $R = \{deposit\_id, linked\_account, customer\_id, principal\_amount\}$ be decomposed into:
+- $R_1 = \{deposit\_id, linked\_account, principal\_amount\}$
+- $R_2 = \{linked\_account, customer\_id\}$ (from `accounts`)
 
 **Theorem:** A decomposition of $R$ into $\{R_1, R_2\}$ is lossless with respect to a set of functional dependencies $F$ if and only if:
 $$(R_1 \cap R_2) \to R_1 \quad \text{OR} \quad (R_1 \cap R_2) \to R_2$$
 
 **Proof:**
-1. $R_1 \cap R_2 = \{ifsc\_code\}$.
-2. From the branch functional dependencies, $ifsc\_code \to \{branch\_name, city\}$.
-3. Thus, $(R_1 \cap R_2) \to R_2$.
-4. By relational database theory, natural join $R_1 \bowtie R_2$ yields exactly $R$ without generating spurious tuples:
+1. Compute the common attribute set:
+   $$R_1 \cap R_2 = \{linked\_account\}$$
+2. In the `accounts` schema, `account_number` (which corresponds to `linked_account`) is a candidate key.
+3. Therefore:
+   $$\{linked\_account\} \to \{customer\_id\}$$
+   which means $(R_1 \cap R_2) \to R_2$.
+4. By the Relational Decomposition Theorem, the natural join $R_1 \bowtie R_2$ reconstructs $R$ identically:
    $$\Pi_{R_1}(r) \bowtie \Pi_{R_2}(r) = r$$
-5. Therefore, the decomposition is **Lossless**. $\blacksquare$
+5. No spurious tuples can be generated, and no data is lost.
+6. Therefore, the decomposition is **Lossless**. $\blacksquare$
 
 ---
 
-## 4. Elimination of Operational Relational Anomalies
+## 4. Dependency Preservation Analysis
 
-| Relational Anomaly | Un-Normalized Schema Vulnerability | Normalized BCNF Architecture Resolution |
-| :--- | :--- | :--- |
-| **Insertion Anomaly** | Cannot create a new bank branch in the system unless at least one customer opens an account at that branch. | `branches` is independent; new branches can be created without requiring existing customer or account tuples. |
-| **Update Anomaly** | Changing a branch address or phone number required updating thousands of customer/account records. Inconsistent updates created corrupted address states. | Single point of update: update `branches` row once; foreign keys and views instantly reflect the change across the bank. |
-| **Deletion Anomaly** | Closing all customer accounts at a branch deleted the entire branch directory entry and IFSC record from the database. | Closing accounts deletes or archives tuples in `accounts`; the branch entity remains intact in `branches`. |
+- **Definition:** A decomposition of schema $R$ with FDs $F$ into $\{R_1, R_2, \dots, R_k\}$ preserves dependencies if:
+  $$(F_1 \cup F_2 \cup \dots \cup F_k)^+ = F^+$$
+  where $F_i$ is the projection of $F$ onto $R_i$.
+- **Verification:**
+  1. $deposit\_id \to linked\_account$: Enforced by Primary Key on `deposits(deposit_id)`.
+  2. $linked\_account \to customer\_id$: Enforced by Primary Key on `accounts(account_number)`.
+  3. $ifsc\_code \to bank\_name$: Enforced by Unique Key on `branches(ifsc_code)`.
+  4. $beneficiary\_id \to \{customer\_id, account\_number, ifsc\_code\}$: Enforced by Primary Key on `beneficiaries(beneficiary_id)`.
+  5. $\{customer\_id, account\_number, ifsc\_code\} \to beneficiary\_id$: Enforced by Unique Key `uk_ben_account`.
+- Every functional dependency is enforced directly by either a `PRIMARY KEY` or a `UNIQUE KEY` constraint on a single relation without requiring cross-table joins during insertion or modification.
+- Therefore, the decomposition is **100% Dependency-Preserving**.
 
 ---
 
-## 5. Verification & Schema Validation Evidence
+## 5. Verification Evidence on MySQL 8.0
 
-All 13 tables, 5 legacy views, 2 stored procedures, and 50 performance indexes were validated using:
-1. `DBMS_LAB_FINAL.sql`: Executed directly against MySQL 8.0 without syntax or runtime errors.
-2. `scripts/test_college_demo.js`: Verified table schema constraints, row-level locking, foreign keys, and transaction atomicity with 100% assertion pass rate.
-
+The normalized schema was executed against MySQL 8.0 via `DBMS_LAB_FINAL.sql` and verified via `scripts/test_college_demo.js`:
+1. **Table Count:** Exactly 13 BCNF tables created.
+2. **Constraint Enforcement:** Negative deposits rejected by `chk_dep_principal_min` and `chk_dep_maturity_gte_principal`.
+3. **Lossless Join Retrieval:** `v_deposits` verified dynamically: `DEP-101` retrieved `customer_id = 'CUST-101'` and `full_name = 'Aarav Patel'` through `accounts`.
+4. **Beneficiary Bank Resolution:** `v_beneficiaries` verified dynamically: `BEN-101` retrieved `bank_name = 'Bharat Trust Bank'` through `branches`.
+5. **Ledger Parity:** Double-entry conservation confirmed across transfers ($Total\ Liquidity = \text{₹}8,000.00$).

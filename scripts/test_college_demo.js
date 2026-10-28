@@ -43,6 +43,12 @@ async function runDirectSqlLabTest(host, port, user, password) {
   const [txns] = await conn.query('SELECT COUNT(*) as cnt FROM transactions WHERE type IN ("Deposit", "Transfer")');
   assert(txns[0].cnt === 2, `Exactly 2 transactions (1 deposit, 1 transfer) recorded in ledger: ${txns[0].cnt}`);
 
+  const [deps] = await conn.query('SELECT deposit_id, customer_id, full_name FROM v_deposits WHERE deposit_id = "DEP-101"');
+  assert(deps.length === 1 && deps[0].customer_id === 'CUST-101', `Deposit ownership dynamically resolved via accounts: ${deps[0].customer_id} (${deps[0].full_name})`);
+
+  const [bens] = await conn.query('SELECT beneficiary_id, bank_name, branch_name FROM v_beneficiaries WHERE beneficiary_id = "BEN-101"');
+  assert(bens.length === 1 && bens[0].bank_name === 'Bharat Trust Bank', `Beneficiary bank dynamically resolved via branches: ${bens[0].bank_name} (${bens[0].branch_name})`);
+
   await conn.end();
   console.log('[SUCCESS] PART 1: DBMS_LAB_FINAL.sql executed and verified with 100% compliance!\n');
 }

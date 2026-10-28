@@ -51,6 +51,18 @@ The live database `127.0.0.1:3306/bankist` was preserved without loss (verified 
 - **Root Cause:** The query `SELECT balance FROM accounts` returned row `{ balance: '...' }`, but destructuring expected `{ preBal }`.
 - **Remediation:** Aliased queries as `SELECT balance AS preBal` and `SELECT balance AS postBal`, ensuring verified numeric equality checks.
 
+### Error 6: 3NF/BCNF Transitive Ownership Dependency in `deposits`
+- **Symptom:** Storing `customer_id` alongside `linked_account` created a transitive dependency $deposit\_id \to linked\_account \to customer\_id$. Because $linked\_account$ is not a superkey in `deposits`, this violated 3NF and BCNF, risking conflicting customer ownership during insertion or transfer.
+- **Remediation:** Removed redundant `customer_id` from base `deposits` relation. Created `v_deposits` view and updated analytical queries to join `accounts a ON d.linked_account = a.account_number`.
+
+### Error 7: 3NF/BCNF Transitive Branch Details Dependency in `beneficiaries`
+- **Symptom:** Storing `bank_name` in `beneficiaries` created a transitive dependency $beneficiary\_id \to ifsc\_code \to bank\_name$. Because $ifsc\_code$ is not a superkey of `beneficiaries`, this violated 3NF and BCNF, causing string duplication across payees.
+- **Remediation:** Added `bank_name` to `branches` (where $ifsc\_code$ is a candidate key). Removed `bank_name` from base `beneficiaries` table, enforced foreign key `fk_ben_branch`, and created `v_beneficiaries` view for transparent dynamic joins.
+
+### Error 8: Customer Ownership Duplication in `account_card_credentials`
+- **Symptom:** Storing `customer_id` in `account_card_credentials` duplicated the account ownership relationship already established in `accounts(account_number)`.
+- **Remediation:** Removed `customer_id` from base `account_card_credentials` table, ensuring account-to-customer ownership is governed by a single source of truth in `accounts`.
+
 ---
 
 ## 3. Inventory of Authoritative Files Created and Modified
