@@ -65,7 +65,13 @@ export async function POST(
       );
     });
 
-    const [updatedAcc] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accountId]);
+    const [updatedAcc] = await db.query(
+      `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city
+       FROM accounts a
+       LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code
+       WHERE a.account_number = ?`,
+      [accountId]
+    );
     const cleanAccount = sanitizeAccount(updatedAcc?.[0]);
 
     return NextResponse.json({

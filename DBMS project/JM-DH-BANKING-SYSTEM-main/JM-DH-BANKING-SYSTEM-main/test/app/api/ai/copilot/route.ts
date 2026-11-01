@@ -39,12 +39,31 @@ export async function POST(request: Request) {
     const customer = custRows[0] || authUser;
 
     // 2. Fetch all customer accounts
-    const [accounts] = await db.query('SELECT * FROM accounts WHERE customer_id = ?', [authUser.customer_id]);
+    const [accounts] = await db.query(
+      `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city
+       FROM accounts a
+       LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code
+       WHERE a.customer_id = ?`,
+      [authUser.customer_id]
+    );
     const primaryAccount = accounts[0] || null;
     const totalBalance = accounts.reduce((acc: number, a: any) => acc + parseFloat(a.balance || '0'), 0);
 
-    // 3. Fetch active deposits
-    const [deposits] = await db.query('SELECT * FROM deposits WHERE customer_id = ? AND status = "Active"', [authUser.customer_id]);
+    // 3. Fetch active deposits (compatible with both BCNF linked_account derivation and legacy customer_id)
+    let deposits: any[] = [];
+    try {
+      const [depRows] = await db.query(
+        `SELECT d.* 
+         FROM deposits d 
+         JOIN accounts a ON d.linked_account = a.account_number 
+         WHERE a.customer_id = ? AND d.status = 'Active'`,
+        [authUser.customer_id]
+      );
+      deposits = depRows || [];
+    } catch (e) {
+      const [legacyDep] = await db.query('SELECT * FROM deposits WHERE customer_id = ? AND status = "Active"', [authUser.customer_id]);
+      deposits = legacyDep || [];
+    }
 
     // 4. Fetch recent transactions for cash-flow analytics
     const accountNumbers = accounts.map((a: any) => a.account_number);

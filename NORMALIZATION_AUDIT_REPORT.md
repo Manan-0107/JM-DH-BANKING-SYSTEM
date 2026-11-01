@@ -153,15 +153,21 @@ The authoritative normalized schema comprises **13 base relations** and **8 back
   - `ifsc_code` REFERENCES `branches(ifsc_code)` ON DELETE RESTRICT ON UPDATE CASCADE.
 - **Functional Dependencies ($F$):**
   - $FD_1: \{\text{account\_number}\} \to \{\text{customer\_id}, \text{account\_type}, \text{balance}, \text{ifsc\_code}, \text{opening\_date}, \text{status}\}$
-- **Transitive Dependency Elimination (3NF/BCNF):**
+- **Transitive Dependency Elimination & BCNF Proof:**
   - *Legacy Violation:* In unnormalized schemas, `accounts` frequently included `branch_name`, `branch_city`, and `card_pin_hash`.
   - *Transitive Dependency:* $\{\text{account\_number}\} \to \{\text{ifsc\_code}\} \to \{\text{branch\_name}, \text{city}\}$.
+  - *Attribute Closure Proof:* 
+    - $\{\text{account\_number}\}^+ = \text{All attributes of accounts}$ (Superkey)
+    - $\{\text{ifsc\_code}\}^+ = \{\text{ifsc\_code}, \text{branch\_name}, \text{city}\}$ ($\neq R$, NOT a superkey of accounts!)
+    - Since $\{\text{ifsc\_code}\} \to \{\text{branch\_name}\}$ has a determinant that is not a superkey, retaining `branch_name` in `accounts` violated both 3NF and BCNF.
   - *Resolution:* `branch_name` and `city` were eliminated from `accounts` and decomposed into `branches`. `card_pin_hash` was decomposed into `account_card_credentials`.
+  - *Lossless Join Guarantee:* Heath's Theorem proves that because $\text{accounts} \cap \text{branches} = \{\text{ifsc\_code}\}$, which is a declared candidate key (`UNIQUE KEY`) in `branches`, the decomposition is 100% lossless: $\text{accounts} \bowtie \text{branches} = \text{Original Accounts}$.
+  - *Full Remediation Details:* See [`BCNF_ACCOUNTS_REMEDIATION_REPORT.md`](file:///c:/Users/MANAN/OneDrive/Desktop/SQL%20PROJECT/BCNF_ACCOUNTS_REMEDIATION_REPORT.md).
 - **Normal Form Evaluation:**
   - **1NF:** Satisfied.
-  - **2NF:** Satisfied.
+  - **2NF:** Satisfied. (Candidate key is single-column, so no partial dependencies can exist).
   - **3NF:** Satisfied. Transitive dependencies on branch attributes eliminated.
-  - **BCNF:** **Satisfied.** The determinant $\{\text{account\_number}\}$ is a superkey.
+  - **BCNF:** **Satisfied.** Every determinant is a superkey of the relation.
 
 ---
 

@@ -69,7 +69,13 @@ export async function verifyAccountOwnership(
   customerId: string,
   options: { requireActive?: boolean; activeActionName?: string } = {}
 ): Promise<{ account: any; errorResponse?: never } | { account?: never; errorResponse: NextResponse }> {
-  const [rows] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accountNumber]);
+  const [rows] = await db.query(
+    `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city
+     FROM accounts a
+     LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code
+     WHERE a.account_number = ?`,
+    [accountNumber]
+  );
   if (!rows || rows.length === 0) {
     return {
       errorResponse: NextResponse.json({ error: 'Account not found' }, { status: 404 }),
