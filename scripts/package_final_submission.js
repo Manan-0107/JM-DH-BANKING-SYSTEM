@@ -121,6 +121,7 @@ copyFiltered(path.join(projectRoot, 'bankist_normalization_tests.sql'), path.joi
 copyFiltered(path.join(projectRoot, 'NORMALIZATION_AUDIT_REPORT.md'), path.join(stagingDir, 'NORMALIZATION_AUDIT_REPORT.md'));
 copyFiltered(path.join(projectRoot, 'BCNF_ACCOUNTS_REMEDIATION_REPORT.md'), path.join(stagingDir, 'BCNF_ACCOUNTS_REMEDIATION_REPORT.md'));
 copyFiltered(path.join(projectRoot, 'POST_BCNF_INDEPENDENT_AUDIT_REPORT.md'), path.join(stagingDir, 'POST_BCNF_INDEPENDENT_AUDIT_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'FINAL_BCNF_MATHEMATICAL_VERIFICATION_AND_SUBMISSION_REPORT.md'), path.join(stagingDir, 'FINAL_BCNF_MATHEMATICAL_VERIFICATION_AND_SUBMISSION_REPORT.md'));
 copyFiltered(path.join(projectRoot, 'MYSQL_TEST_RESULTS.md'), path.join(stagingDir, 'MYSQL_TEST_RESULTS.md'));
 copyFiltered(path.join(projectRoot, 'README_NORMALIZATION.md'), path.join(stagingDir, 'README_NORMALIZATION.md'));
 copyFiltered(path.join(projectRoot, 'BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md'), path.join(stagingDir, 'BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md'));
@@ -184,6 +185,7 @@ const criticalFiles = [
   'NORMALIZATION_AUDIT_REPORT.md',
   'BCNF_ACCOUNTS_REMEDIATION_REPORT.md',
   'POST_BCNF_INDEPENDENT_AUDIT_REPORT.md',
+  'FINAL_BCNF_MATHEMATICAL_VERIFICATION_AND_SUBMISSION_REPORT.md',
   'MYSQL_TEST_RESULTS.md',
   'README_NORMALIZATION.md',
   'BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md',
