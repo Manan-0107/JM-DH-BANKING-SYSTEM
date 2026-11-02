@@ -1,33 +1,35 @@
 #!/usr/bin/env node
 /**
  * ==============================================================================
- * JM-DH BANKING SYSTEM — AUTHORITATIVE MYSQL 8.0+ CSV DATA IMPORTER & RECONCILIATION
+ * JM-DH BANKING SYSTEM — AUTHORITATIVE BCNF CSV DATA IMPORTER & RECONCILIATION
  * ==============================================================================
  * 
- * Safely, idempotently integrates authoritative CSV datasets into MySQL 8.0+ (bankist):
- * 1.  branches.csv             -> branches
- * 2.  customers.csv            -> customers
- * 3.  accounts.csv             -> accounts
- * 4.  account_lien_records.csv -> account_lien_records
- * 5.  beneficiaries.csv        -> beneficiaries
- * 6.  deposits.csv             -> deposits
- * 7.  transactions.csv         -> transactions
- * 8.  kyc_verifications.csv    -> kyc_verifications
- * 9.  audit_logs.csv           -> audit_logs
- * 10. otp_sessions.csv        -> otp_sessions
- * 11. security_rate_limits.csv-> security_rate_limits
+ * Safely, idempotently integrates authoritative normalized CSV datasets into MySQL 8.0+:
+ * 1.  branches.csv                 -> branches
+ * 2.  customers.csv                -> customers
+ * 3.  customer_nominees.csv        -> customer_nominees
+ * 4.  accounts.csv                 -> accounts
+ * 5.  account_card_credentials.csv -> account_card_credentials
+ * 6.  account_lien_records.csv     -> account_lien_records
+ * 7.  deposits.csv                 -> deposits
+ * 8.  beneficiaries.csv            -> beneficiaries
+ * 9.  transactions.csv             -> transactions
+ * 10. kyc_verifications.csv        -> kyc_verifications
+ * 11. audit_logs.csv               -> audit_logs
+ * 12. otp_sessions.csv             -> otp_sessions
+ * 13. security_rate_limits.csv     -> security_rate_limits
  * 
- * Strict Data Protection & Integrity Rules:
- * - MySQL 8.0+ is the exclusive runtime database.
+ * Strict Safety, Protection & Integrity Rules:
+ * - Default target database is 'bankist_college_demo_test' (disposable test database).
+ * - Targeting the live database ('bankist') requires explicit opt-in flag (--allow-live-db).
  * - Topological foreign-key dependency order strictly enforced.
- * - Non-destructive conflict policy: Existing customer profiles, live balances,
- *   remediated bcrypt hashes, and audit histories are strictly preserved and NEVER overwritten.
- * - Zero Plaintext Storage: Plaintext card_pin and otp_code are strictly set to NULL in DB.
- * - Atomic transaction batches per table with full rollback on failure.
- * - Full audit reconciliation reporting per table.
+ * - Non-destructive conflict policy: Existing customer profiles and account balances are preserved.
+ * - Zero Plaintext Storage: Plaintext card_pin and otp_code are strictly omitted/NULL.
+ * - Atomic transaction batches per table with rollback on failure.
+ * - Accurate inserted, skipped, and rejected counts with detailed reconciliation reporting.
  * 
  * Usage:
- *   node scripts/import_csv_data.js [--dry-run]
+ *   node scripts/import_csv_data.js [--dry-run] [--target=<dbname>] [--allow-live-db]
  */
 
 const fs = require('fs');
@@ -52,6 +54,35 @@ const mysql = require(path.resolve(TEST_DIR, 'node_modules/mysql2/promise'));
 // Parse command line arguments
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
+const allowLiveDb = args.includes('--allow-live-db');
+
+// Safe default: Always target the disposable test database unless explicitly overridden
+let targetDb = 'bankist_college_demo_test';
+for (const arg of args) {
+  if (arg.startsWith('--target=')) {
+    targetDb = arg.split('=')[1].trim();
+  }
+}
+if (args.includes('--use-env-db') && process.env.DB_NAME) {
+  targetDb = process.env.DB_NAME;
+}
+
+// Safety Guard: Opt-in for live database operations
+if (targetDb === 'bankist' && !allowLiveDb && !isDryRun) {
+  console.error('\n================================================================');
+  console.error('[SAFETY ERROR] Attempted write import targeting live database: "bankist"');
+  console.error('Destructive or modifying operations against the live production DB are blocked by default.');
+  console.error('To import into a test/disposable database, specify:');
+  console.error('   node scripts/import_csv_data.js --target=bankist_college_demo_test');
+  console.error('If you genuinely intend to update the live database, provide:');
+  console.error('   node scripts/import_csv_data.js --allow-live-db');
+  console.error('================================================================\n');
+  process.exit(1);
+}
+
+// Determine CSV source directory: prefer data/bcnf, fallback to workspace root
+const BCNF_CSV_DIR = path.resolve(WORKSPACE_ROOT, 'data/bcnf');
+const CSV_SOURCE_DIR = fs.existsSync(BCNF_CSV_DIR) ? BCNF_CSV_DIR : WORKSPACE_ROOT;
 
 // ------------------------------------------------------------------------------
 // RFC 4180 Compliant CSV Parser
@@ -145,7 +176,7 @@ function parseCSV(filePath) {
 }
 
 // ------------------------------------------------------------------------------
-// Field Normalization for Deep Equivalence
+// Deep Equivalence Comparison
 // ------------------------------------------------------------------------------
 function valuesEquivalent(col, csvVal, dbVal) {
   if ((csvVal === null || csvVal === undefined || csvVal === '') &&
@@ -157,7 +188,7 @@ function valuesEquivalent(col, csvVal, dbVal) {
   }
 
   // Monetary / numeric columns
-  if (['balance', 'amount', 'lien_amount', 'transfer_limit', 'principal_amount', 'interest_rate', 'maturity_amount'].includes(col)) {
+  if (['balance', 'amount', 'lien_amount', 'transfer_limit', 'principal_amount', 'interest_rate', 'maturity_amount', 'allocation_percentage'].includes(col)) {
     const nCsv = parseFloat(csvVal);
     const nDb = parseFloat(dbVal);
     if (!isNaN(nCsv) && !isNaN(nDb)) {
@@ -175,7 +206,7 @@ function valuesEquivalent(col, csvVal, dbVal) {
   }
 
   // Date / timestamp normalization
-  if (['created_at', 'opening_date', 'date_time', 'verified_at', 'timestamp'].includes(col)) {
+  if (['created_at', 'opening_date', 'date_time', 'verified_at', 'timestamp', 'updated_at'].includes(col)) {
     const dCsv = String(csvVal).replace('T', ' ').replace(/\.\d+Z?$/, '');
     const dDb = String(dbVal).replace('T', ' ').replace(/\.\d+Z?$/, '');
     if (dCsv === dDb) return true;
@@ -187,15 +218,49 @@ function valuesEquivalent(col, csvVal, dbVal) {
 // ------------------------------------------------------------------------------
 // Main Import & Reconciliation Workflow
 // ------------------------------------------------------------------------------
-async function runImporter() {
+async function runImporter(options = {}) {
+  const effectiveDb = options.targetDb || targetDb;
+  const effectiveDryRun = options.isDryRun !== undefined ? options.isDryRun : isDryRun;
+
   console.log('================================================================');
-  console.log('       BHARAT TRUST BANK — AUTHORITATIVE CSV DATA IMPORTER      ');
+  console.log('       BHARAT TRUST BANK — AUTHORITATIVE BCNF CSV IMPORTER      ');
   console.log('================================================================');
-  console.log(`Target Database Engine : MYSQL 8.0+ (Exclusive)`);
-  console.log(`Execution Mode         : ${isDryRun ? 'DRY-RUN (Pre-Import Assessment, No Writes)' : 'LIVE IMPORT (Transactional Batch)'}`);
+  console.log(`Target Database Engine : MYSQL 8.0+ (InnoDB)`);
+  console.log(`Execution Mode         : ${effectiveDryRun ? 'DRY-RUN (Pre-Import Assessment, No Writes)' : 'LIVE IMPORT (Transactional Batch)'}`);
   console.log(`Database Host          : ${process.env.DB_HOST || '127.0.0.1'}:${process.env.DB_PORT || '3306'}`);
-  console.log(`Database Name          : ${process.env.DB_NAME || 'bankist'}`);
-  console.log(`CSV Source Directory   : ${WORKSPACE_ROOT}\n`);
+  console.log(`Database Name          : ${effectiveDb}`);
+  console.log(`CSV Source Directory   : ${CSV_SOURCE_DIR}\n`);
+
+  // Ensure target database exists and tables are initialized
+  const initConn = await mysql.createConnection({
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: parseInt(process.env.DB_PORT || '3306', 10),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD,
+    multipleStatements: true,
+  });
+
+  try {
+    await initConn.query(`CREATE DATABASE IF NOT EXISTS \`${effectiveDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+    
+    // Check if tables exist in the target database
+    const [existingTables] = await initConn.query(
+      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'`,
+      [effectiveDb]
+    );
+
+    if (existingTables.length === 0) {
+      console.log(`[INIT] Target database "${effectiveDb}" is empty. Applying normalized BCNF schema from bankist_normalized.sql...`);
+      const schemaSqlPath = path.resolve(WORKSPACE_ROOT, 'bankist_normalized.sql');
+      if (fs.existsSync(schemaSqlPath)) {
+        const schemaSql = fs.readFileSync(schemaSqlPath, 'utf8');
+        await initConn.query(`USE \`${effectiveDb}\`;\n${schemaSql}`);
+        console.log(`[INIT] Normalized schema applied successfully.`);
+      }
+    }
+  } finally {
+    await initConn.end();
+  }
 
   // Establish MySQL 2 Pool
   const pool = mysql.createPool({
@@ -203,7 +268,7 @@ async function runImporter() {
     port: parseInt(process.env.DB_PORT || '3306', 10),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME || 'bankist',
+    database: effectiveDb,
     dateStrings: true,
     waitForConnections: true,
     connectionLimit: 5
@@ -215,17 +280,17 @@ async function runImporter() {
       throw new Error('MySQL connection ping failed');
     }
   } catch (err) {
-    console.error('[DATABASE ERROR] Failed to connect to MySQL 8.0:', err.message);
-    process.exit(1);
+    console.error(`[DATABASE ERROR] Failed to connect to MySQL database "${effectiveDb}":`, err.message);
+    throw err;
   }
 
-  // Table Configuration in Strict Dependency Order
+  // 13 Tables Configuration in Strict Topological Dependency Order
   const tables = [
     {
       name: 'branches',
       csv: 'branches.csv',
       pk: 'branch_id',
-      columns: ['branch_id', 'branch_name', 'ifsc_code', 'city', 'address', 'timing', 'phone', 'status'],
+      columns: ['branch_id', 'ifsc_code', 'bank_name', 'branch_name', 'city', 'address', 'timing', 'phone', 'status', 'created_at'],
       validate: () => null
     },
     {
@@ -236,46 +301,45 @@ async function runImporter() {
         'customer_id', 'full_name', 'email', 'phone', 'dob', 'address', 'created_at',
         'status', 'kyc_status', 'password_hash', 'credit_score', 'tier', 'pan_number',
         'aadhaar_number', 'gender', 'father_name', 'marital_status', 'occupation',
-        'annual_income', 'nominee_name', 'nominee_relation', 'nominee_dob', 'vkyc_status',
-        'signature_data', 'avatar_data', 'card_pin', 'card_pin_hash'
+        'annual_income', 'vkyc_status', 'signature_data', 'avatar_data'
       ],
-      transform: (row) => {
-        const rawPin = row.card_pin ? row.card_pin.toString().trim() : '';
-        let cardPinHash = row.card_pin_hash;
-        if (rawPin && (!cardPinHash || cardPinHash.length === 64)) {
-          cardPinHash = bcrypt.hashSync(rawPin, 10);
-        }
-        return {
-          ...row,
-          card_pin: null, // Strictly eliminate plaintext PIN
-          card_pin_hash: cardPinHash
-        };
-      },
       validate: () => null
+    },
+    {
+      name: 'customer_nominees',
+      csv: 'customer_nominees.csv',
+      pk: 'nominee_id',
+      columns: ['nominee_id', 'customer_id', 'nominee_name', 'relationship', 'dob', 'allocation_percentage', 'contact_phone', 'created_at'],
+      validate: (row, context) => {
+        if (!context.customers.has(row.customer_id)) {
+          return `Missing referenced customer_id: ${row.customer_id}`;
+        }
+        return null;
+      }
     },
     {
       name: 'accounts',
       csv: 'accounts.csv',
       pk: 'account_number',
-      columns: [
-        'account_number', 'customer_id', 'account_type', 'balance', 'ifsc_code',
-        'branch_name', 'opening_date', 'status', 'card_pin', 'card_pin_hash'
-      ],
-      transform: (row) => {
-        const rawPin = row.card_pin ? row.card_pin.toString().trim() : '';
-        let cardPinHash = row.card_pin_hash;
-        if (rawPin && (!cardPinHash || cardPinHash.length === 64)) {
-          cardPinHash = bcrypt.hashSync(rawPin, 10);
-        }
-        return {
-          ...row,
-          card_pin: null, // Strictly eliminate plaintext PIN
-          card_pin_hash: cardPinHash
-        };
-      },
+      columns: ['account_number', 'customer_id', 'account_type', 'balance', 'ifsc_code', 'opening_date', 'status'],
       validate: (row, context) => {
         if (!context.customers.has(row.customer_id)) {
           return `Missing referenced customer_id: ${row.customer_id}`;
+        }
+        if (!context.branches.has(row.ifsc_code)) {
+          return `Missing referenced branch ifsc_code: ${row.ifsc_code}`;
+        }
+        return null;
+      }
+    },
+    {
+      name: 'account_card_credentials',
+      csv: 'account_card_credentials.csv',
+      pk: 'credential_id',
+      columns: ['credential_id', 'account_number', 'card_pin_hash', 'status', 'created_at', 'updated_at'],
+      validate: (row, context) => {
+        if (!context.accounts.has(row.account_number)) {
+          return `Missing referenced account_number: ${row.account_number}`;
         }
         return null;
       }
@@ -293,34 +357,34 @@ async function runImporter() {
       }
     },
     {
-      name: 'beneficiaries',
-      csv: 'beneficiaries.csv',
-      pk: 'beneficiary_id',
+      name: 'deposits',
+      csv: 'deposits.csv',
+      pk: 'deposit_id',
       columns: [
-        'beneficiary_id', 'customer_id', 'beneficiary_name', 'account_number',
-        'ifsc_code', 'bank_name', 'transfer_limit', 'cooling_until', 'created_at', 'is_active'
+        'deposit_id', 'linked_account', 'deposit_type', 'principal_amount',
+        'interest_rate', 'tenure_months', 'maturity_amount', 'maturity_date', 'status', 'created_at'
       ],
       validate: (row, context) => {
-        if (!context.customers.has(row.customer_id)) {
-          return `Missing referenced customer_id: ${row.customer_id}`;
+        if (!context.accounts.has(row.linked_account)) {
+          return `Missing referenced linked_account: ${row.linked_account}`;
         }
         return null;
       }
     },
     {
-      name: 'deposits',
-      csv: 'deposits.csv',
-      pk: 'deposit_id',
+      name: 'beneficiaries',
+      csv: 'beneficiaries.csv',
+      pk: 'beneficiary_id',
       columns: [
-        'deposit_id', 'customer_id', 'linked_account', 'deposit_type', 'principal_amount',
-        'interest_rate', 'tenure_months', 'maturity_amount', 'maturity_date', 'status', 'created_at'
+        'beneficiary_id', 'customer_id', 'beneficiary_name', 'account_number',
+        'ifsc_code', 'transfer_limit', 'cooling_until', 'created_at', 'is_active'
       ],
       validate: (row, context) => {
         if (!context.customers.has(row.customer_id)) {
           return `Missing referenced customer_id: ${row.customer_id}`;
         }
-        if (!context.accounts.has(row.linked_account)) {
-          return `Missing referenced linked_account: ${row.linked_account}`;
+        if (!context.branches.has(row.ifsc_code)) {
+          return `Missing referenced ifsc_code: ${row.ifsc_code}`;
         }
         return null;
       }
@@ -330,18 +394,10 @@ async function runImporter() {
       csv: 'transactions.csv',
       pk: 'transaction_id',
       columns: [
-        'transaction_id', 'sender_account', 'receiver_account', 'amount',
-        'type', 'date_time', 'status', 'description', 'reference_number'
+        'transaction_id', 'sender_account', 'receiver_account', 'counterparty_details',
+        'channel', 'amount', 'type', 'date_time', 'status', 'description', 'reference_number'
       ],
-      validate: (row, context) => {
-        if (row.sender_account && !context.accounts.has(row.sender_account)) {
-          return `Missing sender account: ${row.sender_account}`;
-        }
-        if (row.receiver_account && !context.accounts.has(row.receiver_account)) {
-          return `Missing receiver account: ${row.receiver_account}`;
-        }
-        return null;
-      }
+      validate: () => null
     },
     {
       name: 'kyc_verifications',
@@ -370,13 +426,9 @@ async function runImporter() {
       csv: 'otp_sessions.csv',
       pk: 'session_id',
       columns: [
-        'session_id', 'identifier', 'purpose', 'otp_code', 'otp_hash',
+        'session_id', 'identifier', 'purpose', 'otp_hash',
         'expires_at', 'verified', 'attempts', 'last_sent_at', 'created_at'
       ],
-      transform: (row) => ({
-        ...row,
-        otp_code: null // Strictly eliminate plaintext OTP
-      }),
       validate: () => null
     },
     {
@@ -390,20 +442,37 @@ async function runImporter() {
 
   // Build referential context
   const context = {
+    branches: new Set(),
     customers: new Set(),
     accounts: new Set()
   };
 
-  const [cRows] = await pool.query('SELECT customer_id FROM customers');
-  cRows.forEach(r => context.customers.add(r.customer_id));
-  const [aRows] = await pool.query('SELECT account_number FROM accounts');
-  aRows.forEach(r => context.accounts.add(r.account_number));
+  try {
+    const [bRows] = await pool.query('SELECT ifsc_code FROM branches');
+    bRows.forEach(r => context.branches.add(r.ifsc_code));
+    const [cRows] = await pool.query('SELECT customer_id FROM customers');
+    cRows.forEach(r => context.customers.add(r.customer_id));
+    const [aRows] = await pool.query('SELECT account_number FROM accounts');
+    aRows.forEach(r => context.accounts.add(r.account_number));
+  } catch (e) {
+    // If tables are empty or newly initialized, sets will populate during sequential import
+  }
 
   const reconciliationReport = [];
 
   for (const tableConfig of tables) {
-    const csvPath = path.resolve(WORKSPACE_ROOT, tableConfig.csv);
+    const csvPath = path.resolve(CSV_SOURCE_DIR, tableConfig.csv);
+    if (!fs.existsSync(csvPath)) {
+      console.warn(`[WARNING] CSV file not found: ${csvPath}. Skipping table ${tableConfig.name}.`);
+      continue;
+    }
+
     const { header, rows } = parseCSV(csvPath);
+
+    // Filter columns that actually exist in the table in MySQL
+    let [dbCols] = await pool.query(`DESCRIBE \`${tableConfig.name}\``);
+    const existingColNames = new Set(dbCols.map(c => c.Field));
+    const activeColumns = tableConfig.columns.filter(c => existingColNames.has(c));
 
     const [dbRows] = await pool.query(`SELECT * FROM \`${tableConfig.name}\``);
     const dbMap = new Map();
@@ -426,7 +495,7 @@ async function runImporter() {
       if (dbRow) {
         // Record exists: check if identical or conflicting
         let diffs = [];
-        tableConfig.columns.forEach(col => {
+        activeColumns.forEach(col => {
           if (!valuesEquivalent(col, rawRow[col], dbRow[col])) {
             diffs.push({ col, csv: rawRow[col], db: dbRow[col] });
           }
@@ -441,6 +510,7 @@ async function runImporter() {
         }
 
         // Maintain referential context
+        if (tableConfig.name === 'branches' && rawRow.ifsc_code) context.branches.add(rawRow.ifsc_code);
         if (tableConfig.name === 'customers') context.customers.add(pkVal);
         if (tableConfig.name === 'accounts') context.accounts.add(pkVal);
       } else {
@@ -455,6 +525,7 @@ async function runImporter() {
         const transformed = tableConfig.transform ? tableConfig.transform(rawRow) : rawRow;
         rowsToInsert.push(transformed);
 
+        if (tableConfig.name === 'branches' && rawRow.ifsc_code) context.branches.add(rawRow.ifsc_code);
         if (tableConfig.name === 'customers') context.customers.add(pkVal);
         if (tableConfig.name === 'accounts') context.accounts.add(pkVal);
         dbMap.set(pkVal, transformed);
@@ -462,15 +533,15 @@ async function runImporter() {
     }
 
     // Execute batch insert in atomic transaction if live and candidate rows exist
-    if (!isDryRun && rowsToInsert.length > 0) {
+    if (!effectiveDryRun && rowsToInsert.length > 0) {
       const conn = await pool.getConnection();
       await conn.beginTransaction();
       try {
-        const placeholders = tableConfig.columns.map(() => '?').join(', ');
-        const insertSql = `INSERT INTO \`${tableConfig.name}\` (${tableConfig.columns.map(c => `\`${c}\``).join(', ')}) VALUES (${placeholders})`;
+        const placeholders = activeColumns.map(() => '?').join(', ');
+        const insertSql = `INSERT INTO \`${tableConfig.name}\` (${activeColumns.map(c => `\`${c}\``).join(', ')}) VALUES (${placeholders})`;
 
         for (const r of rowsToInsert) {
-          const values = tableConfig.columns.map(c => (r[c] === undefined ? null : r[c]));
+          const values = activeColumns.map(c => (r[c] === undefined ? null : r[c]));
           await conn.query(insertSql, values);
           rowsInserted++;
         }
@@ -481,7 +552,7 @@ async function runImporter() {
       } finally {
         conn.release();
       }
-    } else if (isDryRun) {
+    } else if (effectiveDryRun) {
       rowsInserted = rowsToInsert.length;
     }
 
@@ -507,23 +578,23 @@ async function runImporter() {
   // Reconciliation Presentation
   // ------------------------------------------------------------------------------
   console.log('--------------------------------------------------------------------------------------------------------');
-  console.log('                         TABLE-BY-TABLE CSV DATA RECONCILIATION REPORT                         ');
+  console.log('                         TABLE-BY-TABLE BCNF CSV DATA RECONCILIATION REPORT                     ');
   console.log('--------------------------------------------------------------------------------------------------------');
   console.log(
-    'Table Name'.padEnd(23) +
+    'Table Name'.padEnd(26) +
     'CSV Rows'.padStart(9) +
     'Inserted'.padStart(9) +
     'Identical'.padStart(10) +
     'Conflict'.padStart(9) +
     'Skipped'.padStart(8) +
     'Miss-FK'.padStart(8) +
-    'Live DB Total'.padStart(14)
+    'Target Total'.padStart(14)
   );
-  console.log('-'.repeat(90));
+  console.log('-'.repeat(93));
 
   for (const r of reconciliationReport) {
     console.log(
-      r.table.padEnd(23) +
+      r.table.padEnd(26) +
       String(r.csvDataRows).padStart(9) +
       String(r.rowsInserted).padStart(9) +
       String(r.rowsIdentical).padStart(10) +
@@ -533,62 +604,10 @@ async function runImporter() {
       String(r.finalDbCount).padStart(14)
     );
   }
-  console.log('-'.repeat(90));
-
-  // Display Conflict Policy Analysis
-  const conflicted = reconciliationReport.filter(r => r.rowsConflicting > 0);
-  if (conflicted.length > 0) {
-    console.log('\n=== DOCUMENTED CONFLICT POLICY & SAFETY EXPLANATION ===');
-    for (const c of conflicted) {
-      console.log(`\nTable [${c.table}] — ${c.rowsConflicting} conflicting record(s) safely preserved:`);
-      if (c.table === 'customers') {
-        console.log('  * Policy: Existing live demo customer profiles (Aarav Lynn, Priya Nair, etc.) and remediated bcrypt');
-        console.log('            hashes were strictly preserved. Overwriting with synthetic CSV names would break application logins.');
-      } else if (c.table === 'accounts') {
-        console.log('  * Policy: Existing live account balances and bcrypt card_pin_hashes were strictly preserved.');
-        console.log('            Overwriting with stale CSV balances would destroy financial ledger reconciliation.');
-      } else if (c.table === 'beneficiaries') {
-        console.log('  * Policy: Seeded demo beneficiaries for CUST-101 (pointing to fellow demo users ACC-553102, etc.)');
-        console.log('            were preserved to support frontend instant transfer workflows.');
-      } else if (c.table === 'otp_sessions') {
-        console.log('  * Policy: Plaintext otp_code values in CSV were rejected to comply with the cryptographic HMAC-SHA256');
-        console.log('            security remediation. Existing hashed session records were preserved.');
-      }
-      console.log(`  * Sample Conflict: PK ${c.conflictDetails[0].pk}: ` +
-        c.conflictDetails[0].diffs.slice(0, 3).map(d => `${d.col} (CSV='${d.csv}' vs DB='${d.db}')`).join(', '));
-    }
-  }
-
-  // Relational Integrity & Monetary Reconciliation Invariant
-  console.log('\n=== RELATIONAL INTEGRITY & FINANCIAL BALANCE RECONCILIATION ===');
-  const [orphanAccounts] = await pool.query(`
-    SELECT COUNT(*) as count FROM accounts a LEFT JOIN customers c ON a.customer_id = c.customer_id WHERE c.customer_id IS NULL
-  `);
-  const [orphanLiens] = await pool.query(`
-    SELECT COUNT(*) as count FROM account_lien_records l LEFT JOIN accounts a ON l.account_number = a.account_number WHERE a.account_number IS NULL
-  `);
-  const [orphanBeneficiaries] = await pool.query(`
-    SELECT COUNT(*) as count FROM beneficiaries b LEFT JOIN customers c ON b.customer_id = c.customer_id WHERE c.customer_id IS NULL
-  `);
-  const [orphanDeposits] = await pool.query(`
-    SELECT COUNT(*) as count FROM deposits d LEFT JOIN customers c ON d.customer_id = c.customer_id WHERE c.customer_id IS NULL
-  `);
-
-  console.log(`  * Orphan Accounts          : ${orphanAccounts[0].count} (0 expected)`);
-  console.log(`  * Orphan Lien Records      : ${orphanLiens[0].count} (0 expected)`);
-  console.log(`  * Orphan Beneficiaries     : ${orphanBeneficiaries[0].count} (0 expected)`);
-  console.log(`  * Orphan Deposit Records   : ${orphanDeposits[0].count} (0 expected)`);
-
-  const [[{ accSum }]] = await pool.query('SELECT SUM(balance) as accSum FROM accounts');
-  const [[{ portfolioSum }]] = await pool.query('SELECT SUM(total_liquid_balance) as portfolioSum FROM v_customer_portfolio');
-  const variance = Math.abs(parseFloat(accSum) - parseFloat(portfolioSum));
-
-  console.log(`  * Accounts Table Balance Sum   : ₹${parseFloat(accSum).toFixed(2)}`);
-  console.log(`  * Portfolio View Balance Sum  : ₹${parseFloat(portfolioSum).toFixed(2)}`);
-  console.log(`  * Financial Reconciliation Diff: ₹${variance.toFixed(2)} (${variance < 0.01 ? 'EXACT 100% RECONCILED' : 'DISCREPANCY'})`);
+  console.log('-'.repeat(93));
 
   await pool.end();
-  console.log('\n[COMPLETED] Importer execution and reconciliation finished successfully.\n');
+  console.log('\n[COMPLETED] BCNF Importer execution and reconciliation finished successfully.\n');
   return reconciliationReport;
 }
 

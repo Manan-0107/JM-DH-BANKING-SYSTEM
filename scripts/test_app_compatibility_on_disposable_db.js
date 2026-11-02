@@ -75,19 +75,28 @@ async function testAppCompatibility() {
     assert(accRows.length > 0 && accRows.some(a => a.account_number === 'ACC-772910'), 'Auth Login / My-Accounts: Account listing succeeded');
 
     // B. Credential Verification Scenarios
+    // Query card credentials from BCNF relation account_card_credentials
+    const [cardRows] = await appConn.query(
+      `SELECT c.card_pin_hash FROM account_card_credentials c 
+       JOIN accounts a ON c.account_number = a.account_number 
+       WHERE a.customer_id = ? AND c.status = 'Active' LIMIT 1`,
+      ['CUST-101']
+    );
+    const pinHash = cardRows.length > 0 ? cardRows[0].card_pin_hash : null;
+
     // Scenario 1: Valid PIN
-    const isPinMatch = custRows[0].card_pin_hash && bcrypt.compareSync('1234', custRows[0].card_pin_hash);
+    const isPinMatch = pinHash && bcrypt.compareSync('1234', pinHash);
     assert(isPinMatch, 'Auth Login: Valid 4-digit card PIN authentication matched expected hash');
 
     // Scenario 2: Invalid PIN (must reject)
-    const isInvalidPinMatch = custRows[0].card_pin_hash && bcrypt.compareSync('9999', custRows[0].card_pin_hash);
+    const isInvalidPinMatch = pinHash && bcrypt.compareSync('9999', pinHash);
     assert(!isInvalidPinMatch, 'Auth Login: Invalid PIN (9999) correctly rejected');
 
     // Scenario 3: Account without card credentials (fails closed securely without crashing)
     const testNoCredAcc = `ACC-NOCRED-${Date.now()}`;
     await appConn.query(
-      `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, status, card_pin_hash)
-       VALUES (?, 'CUST-101', 'Savings Account', 25000.00, 'BTBI0001024', 'Mumbai Nariman Point Hub', 'Active', NULL)`,
+      `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, status)
+       VALUES (?, 'CUST-101', 'Savings Account', 25000.00, 'BTBI0001024', 'Active')`,
       [testNoCredAcc]
     );
 
@@ -194,18 +203,18 @@ async function testAppCompatibility() {
     );
     assert(true, 'UPI Simulate Receive: Transaction insertion with external VPA sender succeeded');
 
-    // H. Term Deposit Booking & Premature Break
+    // H. Term Deposit Booking & Premature Break (BCNF: customer resolved via linked_account)
     const depId = `FD-COMPAT-${Date.now()}`;
     await appConn.query(
-      `INSERT INTO deposits (deposit_id, customer_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at)
-       VALUES (?, 'CUST-101', ?, 'Fixed Deposit', 10000.00, 7.50, 12, 10750.00, DATE_ADD(CURRENT_DATE, INTERVAL 12 MONTH), 'Active', CURRENT_TIMESTAMP)`,
+      `INSERT INTO deposits (deposit_id, linked_account, deposit_type, principal_amount, interest_rate, tenure_months, maturity_amount, maturity_date, status, created_at)
+       VALUES (?, ?, 'Fixed Deposit', 10000.00, 7.50, 12, 10750.00, DATE_ADD(CURRENT_DATE, INTERVAL 12 MONTH), 'Active', CURRENT_TIMESTAMP)`,
       [depId, fromAcc]
     );
     assert(true, 'Deposits: Fixed deposit contract booking succeeded');
 
     // Break Deposit
     const [breakDepRes] = await appConn.query(
-      'UPDATE deposits SET status = "Liquidated" WHERE deposit_id = ? AND customer_id = "CUST-101"',
+      'UPDATE deposits SET status = "Liquidated" WHERE deposit_id = ?',
       [depId]
     );
     assert(breakDepRes.affectedRows === 1, 'Deposits: Premature deposit break/liquidation query succeeded');
@@ -234,24 +243,32 @@ async function testAppCompatibility() {
     );
     assert(rateRow.length === 1, 'Security: Rate limit defensive table queried successfully');
 
-    // M. Account Creation / Signup Queries
+    // M. Account Creation / Signup Queries (BCNF normalized relations)
     const newCustId = `CUST-TEST-${Date.now()}`;
     const newEmail = `testuser.${Date.now()}@example.com`;
     const newAccNum = `ACC-TEST-${Math.floor(100000 + Math.random() * 900000)}`;
+    const testPinHash = '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC';
 
     await appConn.query(
-      `INSERT INTO customers (customer_id, full_name, email, phone, password_hash, credit_score, tier, card_pin_hash)
-       VALUES (?, 'New Test User', ?, '+91 99999 11111', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC', 750, 'Silver', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC')`,
-      [newCustId, newEmail]
+      `INSERT INTO customers (customer_id, full_name, email, phone, password_hash, credit_score, tier)
+       VALUES (?, 'New Test User', ?, '+91 99999 11111', ?, 750, 'Silver')`,
+      [newCustId, newEmail, testPinHash]
     );
     assert(true, 'Signup: New customer creation succeeded');
 
     await appConn.query(
-      `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, branch_name, status, card_pin_hash)
-       VALUES (?, ?, 'Savings Account', 10000.00, 'BTBI0001024', 'Mumbai Nariman Point Hub', 'Active', '$2a$10$Ae9nKPkrHJQQuBilwJdDxOaL.heCr7mtxFh9GeDd7Liwem7yvWekC')`,
+      `INSERT INTO accounts (account_number, customer_id, account_type, balance, ifsc_code, status)
+       VALUES (?, ?, 'Savings Account', 10000.00, 'BTBI0001024', 'Active')`,
       [newAccNum, newCustId]
     );
-    assert(true, 'Signup: New account creation with branch_name succeeded');
+    assert(true, 'Signup: New account creation succeeded');
+
+    await appConn.query(
+      `INSERT INTO account_card_credentials (credential_id, account_number, card_pin_hash, status)
+       VALUES (?, ?, ?, 'Active')`,
+      [`CARD-CRED-${newAccNum}`, newAccNum, testPinHash]
+    );
+    assert(true, 'Signup: Account card credential creation succeeded');
 
     // N. Portfolio View Net Worth Check
     const [portfolioView] = await appConn.query('SELECT * FROM v_customer_portfolio WHERE customer_id = ?', [newCustId]);

@@ -48,12 +48,16 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
       \`address\` TEXT NOT NULL,
       \`timing\` VARCHAR(50) DEFAULT '09:30 AM - 04:30 PM',
       \`phone\` VARCHAR(30) DEFAULT NULL,
-      \`status\` VARCHAR(20) DEFAULT 'Active'
+      \`status\` VARCHAR(20) DEFAULT 'Active',
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
   try {
     await adapter.query("ALTER TABLE branches ADD COLUMN bank_name VARCHAR(100) NOT NULL DEFAULT 'Bharat Trust Bank'");
+  } catch (e) {}
+  try {
+    await adapter.query("ALTER TABLE branches ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
   } catch (e) {}
 
   // 2. Customers Entity (BCNF: Nominees and Card Credentials decomposed into separate relations)
@@ -95,11 +99,16 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
       \`relationship\` VARCHAR(50) NOT NULL,
       \`dob\` DATE DEFAULT NULL,
       \`allocation_percentage\` DECIMAL(5,2) DEFAULT 100.00,
+      \`contact_phone\` VARCHAR(30) DEFAULT NULL,
       \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
       INDEX \`idx_nominee_customer\` (\`customer_id\`),
       CONSTRAINT \`fk_nominee_customer\` FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\` (\`customer_id\`) ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  try {
+    await adapter.query("ALTER TABLE customer_nominees ADD COLUMN contact_phone VARCHAR(30) DEFAULT NULL");
+  } catch (e) {}
 
   // 4. Accounts Entity (BCNF: Transitive branch_name removed; resolved via ifsc_code -> branches)
   await adapter.query(`
@@ -478,11 +487,11 @@ async function runCommonMigrationsAndSeeds(adapter: DbAdapter) {
         ('BR-101', 'BTBI0001024', 'Bharat Trust Bank', 'Mumbai Nariman Point Hub', 'Mumbai', 'Ground Floor, Express Towers, Nariman Point, Mumbai 400021', '09:30 AM - 04:30 PM', '022-22881024'),
         ('BR-102', 'BTBI0002018', 'Bharat Trust Bank', 'Bengaluru MG Road Branch', 'Bengaluru', 'Prestige Meridian, 29 MG Road, Bengaluru 560001', '09:30 AM - 04:30 PM', '080-25582018'),
         ('BR-103', 'BTBI0003055', 'Bharat Trust Bank', 'Delhi Connaught Place Branch', 'New Delhi', 'Inner Circle, Blocks A-C, Connaught Place, New Delhi 110001', '09:30 AM - 04:30 PM', '011-23343055'),
-        ('BR-104', 'Pune Camp Central Branch', 'BTBI0004011', 'Pune', 'Moledina Road, Camp, Pune 411001', '09:30 AM - 04:30 PM', '020-26124011'),
-        ('BR-105', 'Ahmedabad Ashram Road Hub', 'BTBI0005089', 'Ahmedabad', 'Near Sakar III, Ashram Road, Ahmedabad 380009', '09:30 AM - 04:30 PM', '079-26585089'),
-        ('BR-106', 'Hyderabad Banjara Hills Branch', 'BTBI0006033', 'Hyderabad', 'Road No. 12, Banjara Hills, Hyderabad 500034', '09:30 AM - 04:30 PM', '040-23396033'),
-        ('BR-107', 'Chennai Anna Salai Branch', 'BTBI0007019', 'Chennai', 'Mount Road, Anna Salai, Chennai 600002', '09:30 AM - 04:30 PM', '044-28527019'),
-        ('BR-108', 'Kolkata Park Street Branch', 'BTBI0008044', 'Kolkata', 'Park Street Crossing, Kolkata 700016', '09:30 AM - 04:30 PM', '033-22298044');
+        ('BR-104', 'BTBI0004011', 'Bharat Trust Bank', 'Pune Camp Central Branch', 'Pune', 'Moledina Road, Camp, Pune 411001', '09:30 AM - 04:30 PM', '020-26124011'),
+        ('BR-105', 'BTBI0005089', 'Bharat Trust Bank', 'Ahmedabad Ashram Road Hub', 'Ahmedabad', 'Near Sakar III, Ashram Road, Ahmedabad 380009', '09:30 AM - 04:30 PM', '079-26585089'),
+        ('BR-106', 'BTBI0006033', 'Bharat Trust Bank', 'Hyderabad Banjara Hills Branch', 'Hyderabad', 'Road No. 12, Banjara Hills, Hyderabad 500034', '09:30 AM - 04:30 PM', '040-23396033'),
+        ('BR-107', 'BTBI0007019', 'Bharat Trust Bank', 'Chennai Anna Salai Branch', 'Chennai', 'Mount Road, Anna Salai, Chennai 600002', '09:30 AM - 04:30 PM', '044-28527019'),
+        ('BR-108', 'BTBI0008044', 'Bharat Trust Bank', 'Kolkata Park Street Branch', 'Kolkata', 'Park Street Crossing, Kolkata 700016', '09:30 AM - 04:30 PM', '033-22298044');
       `);
     }
   } catch (e) {

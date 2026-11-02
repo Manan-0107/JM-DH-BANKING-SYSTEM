@@ -150,8 +150,9 @@ BEGIN
     DECLARE v_err_caught INT DEFAULT 0;
     DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err_caught = 1;
 
-    -- Intentionally attempt illegal negative balance
-    UPDATE accounts SET balance = -500.00 WHERE account_number = 'ACC-772910';
+    -- Intentionally attempt illegal negative balance on an existing account
+    SET @acc = (SELECT account_number FROM accounts LIMIT 1);
+    UPDATE accounts SET balance = -500.00 WHERE account_number = @acc;
 
     IF v_err_caught = 1 THEN
         SELECT 'SUCCESS: Negative balance was strictly rejected by trg_prevent_negative_balance' AS test_result;
@@ -165,8 +166,9 @@ CALL sp_test_trigger_overdraft_block();
 DROP PROCEDURE IF EXISTS `sp_test_trigger_overdraft_block`;
 
 -- Test 2: Verify Lifecycle Status Transition Trigger
-UPDATE accounts SET status = 'Frozen' WHERE account_number = 'ACC-553102';
-UPDATE accounts SET status = 'Active' WHERE account_number = 'ACC-553102';
+SET @status_acc = (SELECT account_number FROM accounts WHERE account_number <> @acc LIMIT 1);
+UPDATE accounts SET status = 'Frozen' WHERE account_number = @status_acc;
+UPDATE accounts SET status = 'Active' WHERE account_number = @status_acc;
 
 -- Test 3: Verify Audit Log Output
 SELECT log_id, action, entity_id, details, timestamp 

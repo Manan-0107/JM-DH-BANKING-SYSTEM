@@ -73,10 +73,12 @@ function isForbiddenItem(fullPath, rootDir = projectRoot) {
   }
 
   // 4. Backup files, dumps, raw customer CSV exports, build logs & temp zips
+  // Explicitly ALLOW authoritative normalized CSV datasets under data/bcnf/
+  const isBcnfCsv = normalizedRel.includes('data/bcnf') && baseName.endsWith('.csv');
   if (
     baseName.includes('backup') ||
     baseName.endsWith('.bak') ||
-    baseName.endsWith('.csv') ||
+    (baseName.endsWith('.csv') && !isBcnfCsv) ||
     baseName.endsWith('.log') ||
     baseName.endsWith('.tsbuildinfo') ||
     (baseName.endsWith('.zip') && normalizedRel !== '')
@@ -105,10 +107,12 @@ function copyFiltered(src, dest) {
   }
 }
 
-console.log('1. Copying root documentation & SQL scripts...');
+console.log('1. Copying root documentation, SQL scripts, and normalized datasets...');
 copyFiltered(path.join(projectRoot, 'README.md'), path.join(stagingDir, 'README.md'));
+copyFiltered(path.join(projectRoot, 'DEMO_SETUP_GUIDE.md'), path.join(stagingDir, 'DEMO_SETUP_GUIDE.md'));
 copyFiltered(path.join(projectRoot, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'), path.join(stagingDir, 'DBMS_VIVA_DEMONSTRATION_GUIDE.md'));
-copyFiltered(path.join(projectRoot, 'COMPLETE_REMEDIATION_REPORT.md'), path.join(stagingDir, 'COMPLETE_REMEDIATION_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'VIVA_PREPARATION.md'), path.join(stagingDir, 'VIVA_PREPARATION.md'));
+copyFiltered(path.join(projectRoot, 'SETUP_AND_ACTIVATION_GUIDE.md'), path.join(stagingDir, 'SETUP_AND_ACTIVATION_GUIDE.md'));
 copyFiltered(path.join(projectRoot, 'SQLITE_TO_MYSQL_MIGRATION_REPORT.md'), path.join(stagingDir, 'SQLITE_TO_MYSQL_MIGRATION_REPORT.md'));
 copyFiltered(path.join(projectRoot, 'DBMS_LAB_FINAL.sql'), path.join(stagingDir, 'DBMS_LAB_FINAL.sql'));
 copyFiltered(path.join(projectRoot, 'bankist_normalized.sql'), path.join(stagingDir, 'bankist_normalized.sql'));
@@ -119,9 +123,11 @@ copyFiltered(path.join(projectRoot, 'BCNF_ACCOUNTS_REMEDIATION_REPORT.md'), path
 copyFiltered(path.join(projectRoot, 'POST_BCNF_INDEPENDENT_AUDIT_REPORT.md'), path.join(stagingDir, 'POST_BCNF_INDEPENDENT_AUDIT_REPORT.md'));
 copyFiltered(path.join(projectRoot, 'MYSQL_TEST_RESULTS.md'), path.join(stagingDir, 'MYSQL_TEST_RESULTS.md'));
 copyFiltered(path.join(projectRoot, 'README_NORMALIZATION.md'), path.join(stagingDir, 'README_NORMALIZATION.md'));
-copyFiltered(path.join(projectRoot, 'NORMALIZATION_AUDIT_CURRENT.md'), path.join(stagingDir, 'NORMALIZATION_AUDIT_CURRENT.md'));
-copyFiltered(path.join(projectRoot, 'NORMALIZATION_CONSISTENCY_FIX_2026-10-29.md'), path.join(stagingDir, 'NORMALIZATION_CONSISTENCY_FIX_2026-10-29.md'));
 copyFiltered(path.join(projectRoot, 'BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md'), path.join(stagingDir, 'BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md'));
+copyFiltered(path.join(projectRoot, 'BANKIST_COMPATIBILITY_MATRIX.md'), path.join(stagingDir, 'BANKIST_COMPATIBILITY_MATRIX.md'));
+copyFiltered(path.join(projectRoot, 'BANKIST_CUTOVER_ROLLBACK_PLAN.md'), path.join(stagingDir, 'BANKIST_CUTOVER_ROLLBACK_PLAN.md'));
+copyFiltered(path.join(projectRoot, 'QUERY_AND_INDEX_OPTIMIZATION_REPORT.md'), path.join(stagingDir, 'QUERY_AND_INDEX_OPTIMIZATION_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'data/bcnf'), path.join(stagingDir, 'data/bcnf'));
 copyFiltered(path.join(projectRoot, 'database'), path.join(stagingDir, 'database'));
 copyFiltered(path.join(projectRoot, 'docs'), path.join(stagingDir, 'docs'));
 copyFiltered(path.join(projectRoot, 'scripts'), path.join(stagingDir, 'scripts'));
@@ -168,23 +174,45 @@ execSync(`powershell -NoProfile -Command "${psExtract}"`, { stdio: 'inherit' });
 // Verify critical files in extracted archive
 const criticalFiles = [
   'README.md',
+  'DEMO_SETUP_GUIDE.md',
   'DBMS_VIVA_DEMONSTRATION_GUIDE.md',
+  'VIVA_PREPARATION.md',
   'DBMS_LAB_FINAL.sql',
   'bankist_normalized.sql',
   'bankist_migration.sql',
   'bankist_normalization_tests.sql',
   'NORMALIZATION_AUDIT_REPORT.md',
   'BCNF_ACCOUNTS_REMEDIATION_REPORT.md',
+  'POST_BCNF_INDEPENDENT_AUDIT_REPORT.md',
   'MYSQL_TEST_RESULTS.md',
   'README_NORMALIZATION.md',
+  'BANKIST_NORMALIZATION_AND_ARCHITECTURE_MASTER.md',
+  'data/bcnf/README.md',
+  'data/bcnf/branches.csv',
+  'data/bcnf/customers.csv',
+  'data/bcnf/customer_nominees.csv',
+  'data/bcnf/accounts.csv',
+  'data/bcnf/account_card_credentials.csv',
+  'data/bcnf/account_lien_records.csv',
+  'data/bcnf/deposits.csv',
+  'data/bcnf/beneficiaries.csv',
+  'data/bcnf/transactions.csv',
+  'data/bcnf/kyc_verifications.csv',
+  'data/bcnf/otp_sessions.csv',
+  'data/bcnf/security_rate_limits.csv',
+  'data/bcnf/audit_logs.csv',
   'database/advanced-sql/01_ddl_and_integrity.sql',
   'database/advanced-sql/04_stored_routines.sql',
   'database/advanced-sql/08_transactions_and_concurrency.sql',
+  'docs/ER_AND_EER_MODELING.md',
+  'docs/DATABASE_SCHEMA_DICTIONARY.md',
+  'docs/NORMALIZATION_REPORT_1NF_TO_5NF.md',
   'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/package.json',
   'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/.env.example',
   'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/test_backend_suite.js',
   'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/test_persistence.js',
   'DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/test_security_remediation.js',
+  'scripts/import_csv_data.js',
   'scripts/run_all_dbms_tests.js',
 ];
 

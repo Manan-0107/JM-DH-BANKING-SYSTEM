@@ -1,0 +1,6 @@
+branch_id,ifsc_code,bank_name,branch_name,city,address,timing,phone,status,created_at
+BR-101,BTBI0001024,Bharat Trust Bank,Mumbai Nariman Point Hub,Mumbai,"Ground Floor, Express Towers, Nariman Point, Mumbai 400021",09:30 AM - 04:30 PM,022-22881024,Active,
+BR-102,BTBI0002018,Bharat Trust Bank,Bengaluru MG Road Branch,Bengaluru,"Prestige Meridian, 29 MG Road, Bengaluru 560001",09:30 AM - 04:30 PM,080-25582018,Active,
+BR-103,BTBI0003055,Bharat Trust Bank,Delhi Connaught Place Branch,New Delhi,"Inner Circle, Blocks A-C, Connaught Place, New Delhi 110001",09:30 AM - 04:30 PM,011-23343055,Active,
+BR-104,BTBI0004011,Bharat Trust Bank,Pune Camp Central Branch,Pune,"Moledina Road, Camp, Pune 411001",09:30 AM - 04:30 PM,020-26124011,Active,
+BR-105,BTBI0005089,Bharat Trust Bank,Ahmedabad Ashram Road Hub,Ahmedabad,"Near Sakar III, Ashram Road, Ahmedabad 380009",09:30 AM - 04:30 PM,079-26585089,Active,

@@ -236,28 +236,30 @@ BEGIN
     FROM customers 
     WHERE customer_id = p_cust_id;
 
-    -- Result 2: Accounts & Balances with Masking
+    -- Result 2: Accounts & Balances with Masking (BCNF: branch_name joined from branches)
     SELECT 
-        account_number, 
-        fn_mask_account_number(account_number) AS masked_account, 
-        account_type, 
-        balance, 
-        branch_name, 
-        status 
-    FROM accounts 
-    WHERE customer_id = p_cust_id;
+        a.account_number, 
+        fn_mask_account_number(a.account_number) AS masked_account, 
+        a.account_type, 
+        a.balance, 
+        b.branch_name, 
+        a.status 
+    FROM accounts a
+    LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code
+    WHERE a.customer_id = p_cust_id;
 
-    -- Result 3: Active Term Deposits
+    -- Result 3: Active Term Deposits (BCNF: customer joined via linked_account)
     SELECT 
-        deposit_id, 
-        linked_account, 
-        deposit_type, 
-        principal_amount, 
-        interest_rate, 
-        maturity_amount, 
-        maturity_date 
-    FROM deposits 
-    WHERE customer_id = p_cust_id;
+        d.deposit_id, 
+        d.linked_account, 
+        d.deposit_type, 
+        d.principal_amount, 
+        d.interest_rate, 
+        d.maturity_amount, 
+        d.maturity_date 
+    FROM deposits d
+    JOIN accounts a ON d.linked_account = a.account_number
+    WHERE a.customer_id = p_cust_id;
 END //
 DELIMITER ;
 
