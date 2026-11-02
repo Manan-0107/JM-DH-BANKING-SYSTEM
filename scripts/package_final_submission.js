@@ -115,6 +115,8 @@ copyFiltered(path.join(projectRoot, 'bankist_normalized.sql'), path.join(staging
 copyFiltered(path.join(projectRoot, 'bankist_migration.sql'), path.join(stagingDir, 'bankist_migration.sql'));
 copyFiltered(path.join(projectRoot, 'bankist_normalization_tests.sql'), path.join(stagingDir, 'bankist_normalization_tests.sql'));
 copyFiltered(path.join(projectRoot, 'NORMALIZATION_AUDIT_REPORT.md'), path.join(stagingDir, 'NORMALIZATION_AUDIT_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'BCNF_ACCOUNTS_REMEDIATION_REPORT.md'), path.join(stagingDir, 'BCNF_ACCOUNTS_REMEDIATION_REPORT.md'));
+copyFiltered(path.join(projectRoot, 'POST_BCNF_INDEPENDENT_AUDIT_REPORT.md'), path.join(stagingDir, 'POST_BCNF_INDEPENDENT_AUDIT_REPORT.md'));
 copyFiltered(path.join(projectRoot, 'MYSQL_TEST_RESULTS.md'), path.join(stagingDir, 'MYSQL_TEST_RESULTS.md'));
 copyFiltered(path.join(projectRoot, 'README_NORMALIZATION.md'), path.join(stagingDir, 'README_NORMALIZATION.md'));
 copyFiltered(path.join(projectRoot, 'NORMALIZATION_AUDIT_CURRENT.md'), path.join(stagingDir, 'NORMALIZATION_AUDIT_CURRENT.md'));
@@ -172,6 +174,7 @@ const criticalFiles = [
   'bankist_migration.sql',
   'bankist_normalization_tests.sql',
   'NORMALIZATION_AUDIT_REPORT.md',
+  'BCNF_ACCOUNTS_REMEDIATION_REPORT.md',
   'MYSQL_TEST_RESULTS.md',
   'README_NORMALIZATION.md',
   'database/advanced-sql/01_ddl_and_integrity.sql',

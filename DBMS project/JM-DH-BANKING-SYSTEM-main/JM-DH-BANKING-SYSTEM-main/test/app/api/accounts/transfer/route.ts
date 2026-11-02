@@ -160,7 +160,13 @@ export async function POST(request: Request) {
     });
 
     // Fetch updated sender account
-    const [updatedSender] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [cleanFrom]);
+    const [updatedSender] = await db.query(
+      `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city
+       FROM accounts a
+       LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code
+       WHERE a.account_number = ?`,
+      [cleanFrom]
+    );
     const cleanSender = sanitizeAccount(updatedSender?.[0]);
 
     return NextResponse.json({

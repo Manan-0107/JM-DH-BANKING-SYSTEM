@@ -380,7 +380,13 @@ export async function POST(request: Request) {
     const [newCustomer] = await db.query('SELECT * FROM customers WHERE customer_id = ?', [createdCustomerId]);
     const cleanCustomer = sanitizeCustomer(newCustomer?.[0]);
 
-    const [newAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [createdAccNum]);
+    const [newAccount] = await db.query(
+      `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city
+       FROM accounts a
+       LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code
+       WHERE a.account_number = ?`,
+      [createdAccNum]
+    );
     const cleanAccount = sanitizeAccount(newAccount?.[0]);
 
     const token = generateToken(cleanCustomer!);

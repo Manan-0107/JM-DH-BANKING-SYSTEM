@@ -21,7 +21,13 @@ export async function POST(
     const newStatus = account.status === 'Frozen' ? 'Active' : 'Frozen';
     await db.query('UPDATE accounts SET status = ? WHERE account_number = ?', [newStatus, accountId]);
 
-    const [updated] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accountId]);
+    const [updated] = await db.query(
+      `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city
+       FROM accounts a
+       LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code
+       WHERE a.account_number = ?`,
+      [accountId]
+    );
     const cleanAccount = sanitizeAccount(updated?.[0]);
 
     return NextResponse.json({

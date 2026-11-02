@@ -110,7 +110,13 @@ export async function POST(request: Request) {
       );
     });
 
-    const [newAccount] = await db.query('SELECT * FROM accounts WHERE account_number = ?', [accNum]);
+    const [newAccount] = await db.query(
+      `SELECT a.*, b.branch_name, b.bank_name, b.city AS branch_city
+       FROM accounts a
+       LEFT JOIN branches b ON a.ifsc_code = b.ifsc_code
+       WHERE a.account_number = ?`,
+      [accNum]
+    );
     const cleanAccount = sanitizeAccount(newAccount?.[0]);
 
     const message = initialGrant > 0
