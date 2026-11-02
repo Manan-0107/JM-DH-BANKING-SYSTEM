@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { generateToken, verifyPin, generateAuditId } from '@/lib/auth';
+import { generateToken, verifyPin, generateAuditId, needsPinRehash } from '@/lib/auth';
 import { sanitizeCustomer, sanitizeAccounts, checkRateLimit, recordFailedAttempt, resetRateLimit } from '@/lib/api-helpers';
 import bcrypt from 'bcryptjs';
 
@@ -157,6 +157,20 @@ export async function POST(request: Request) {
 
     // Reset account rate limit strictly on eligible, active authenticated sessions
     await resetRateLimit(db, accountRateLimitKey);
+
+    // Opportunistically upgrade legacy SHA-256 PIN hash to salted bcrypt
+    if (isPinMatch && cardPinHash && needsPinRehash(cardPinHash)) {
+      try {
+        const upgradedHash = bcrypt.hashSync(password.trim(), 10);
+        await db.query(
+          `UPDATE account_card_credentials SET card_pin_hash = ? 
+           WHERE account_number IN (SELECT account_number FROM accounts WHERE customer_id = ?)`,
+          [upgradedHash, customer.customer_id]
+        );
+      } catch (rehashErr) {
+        console.warn('Opportunistic PIN rehash non-fatal warning:', rehashErr);
+      }
+    }
 
     // Record login audit trail
     const auditId = generateAuditId();

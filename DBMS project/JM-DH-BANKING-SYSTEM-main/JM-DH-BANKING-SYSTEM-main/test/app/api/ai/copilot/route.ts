@@ -139,7 +139,12 @@ export async function POST(request: Request) {
       try {
         const aiResponse = await callGeminiApi(prompt, finCtx, geminiApiKey);
         if (aiResponse) {
-          return NextResponse.json(aiResponse);
+          return NextResponse.json({
+            ...aiResponse,
+            is_ai_generated: true,
+            provider_configured: true,
+            engine: 'gemini-1.5-flash',
+          });
         }
       } catch (geminiError) {
         console.warn('Gemini API call skipped or failed. Falling back to deterministic heuristics.');
@@ -148,7 +153,15 @@ export async function POST(request: Request) {
 
     // 7. Deterministic Financial Reasoning Engine (Fall-through or Default)
     const result = runFinancialHeuristics(prompt, finCtx);
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      is_ai_generated: false,
+      provider_configured: !!geminiApiKey,
+      engine: 'deterministic_demo_heuristics',
+      notice: geminiApiKey 
+        ? 'Response generated via deterministic analytics (Gemini rate-limited or unavailable).'
+        : 'Running in offline demonstration mode. (Set GEMINI_API_KEY for live conversational AI).',
+    });
   } catch (error: any) {
     console.error('AI Co-Pilot Endpoint Error:', error);
     return NextResponse.json({ error: error.message || 'Internal server error in AI Co-Pilot' }, { status: 500 });
@@ -176,15 +189,15 @@ function runFinancialHeuristics(prompt: string, ctx: FinancialContext) {
     };
   }
 
-  // Pattern 2: FD Compounding & Yield Advisory
+  // Pattern 2: FD Compounding & Yield Advisory (Illustrative demo figures clearly stated)
   if (p.includes('fd') || p.includes('fixed deposit') || p.includes('invest') || p.includes('interest')) {
-    const rate = 7.5; // BTB Platinum 1-Year Rate
+    const illustrativeRate = 7.0; // Illustrative demonstration rate
     const testPrincipal = 50000;
-    const testMaturity = Math.round(testPrincipal * (1 + (rate / 100)));
+    const testMaturity = Math.round(testPrincipal * (1 + (illustrativeRate / 100)));
     return {
-      reply: `Bharat Trust Bank offers competitive FD returns up to **${rate}% p.a.** on 1-year tenures for ${ctx.tier} customers. For example, depositing ₹${testPrincipal.toLocaleString('en-IN')} yields ₹${testMaturity.toLocaleString('en-IN')} upon maturity. You currently have ₹${ctx.totalBalance.toLocaleString('en-IN')} liquid balance available.`,
+      reply: `*(Illustrative Demo Calculation)*: Based on an illustrative ${illustrativeRate}% p.a. term deposit estimate for demonstration purposes, depositing ₹${testPrincipal.toLocaleString('en-IN')} would yield approximately ₹${testMaturity.toLocaleString('en-IN')} upon 1-year maturity for ${ctx.tier} customers. (Actual term deposit rates are governed by active BTB ALCO circulars and tenure slabs). You currently have ₹${ctx.totalBalance.toLocaleString('en-IN')} liquid balance available.`,
       insights: [
-        { label: 'Top FD Rate', value: `${rate}% p.a.`, positive: true },
+        { label: 'Illustrative Yield', value: `${illustrativeRate}% p.a. (Demo)`, positive: true },
         { label: 'Liquid Surplus', value: `₹${ctx.totalBalance.toLocaleString('en-IN')}`, positive: true },
       ],
       suggestedFollowUps: [
@@ -221,7 +234,7 @@ function runFinancialHeuristics(prompt: string, ctx: FinancialContext) {
       { label: 'Active Deposits', value: `${ctx.deposits.length} Accounts`, positive: true },
     ],
     suggestedFollowUps: [
-      'Can I afford to lock ₹50,000 in a 1-year FD at 7.5%?',
+      'Can I afford to lock ₹50,000 in an illustrative 1-year FD?',
       'What is my highest spending category this month?',
       'Forecast my projected month-end balance',
       'What loan interest rates am I pre-approved for?',

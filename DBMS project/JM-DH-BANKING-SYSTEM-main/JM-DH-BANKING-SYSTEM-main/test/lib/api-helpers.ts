@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getUserFromRequest, verifyTransactionPin } from '@/lib/auth';
+import bcrypt from 'bcryptjs';
+import { getUserFromRequest, verifyTransactionPin, needsPinRehash } from '@/lib/auth';
 import { AuthUser } from '@/types';
 import { DbAdapter } from '@/lib/db';
 
@@ -303,6 +304,20 @@ export async function verifyCustomerCredentials(
 
   // Reset attempt counter on successful PIN entry
   await resetRateLimit(db, rateLimitKey);
+
+  // Opportunistic hash upgrade: if PIN was validated against legacy SHA-256 digest,
+  // upgrade to salted bcrypt immediately to eliminate low-entropy hash vulnerabilities
+  if (cardPinHash && needsPinRehash(cardPinHash)) {
+    try {
+      const bcryptHash = bcrypt.hashSync(pin.toString().trim(), 10);
+      await db.query(
+        'UPDATE account_card_credentials SET card_pin_hash = ? WHERE account_number IN (SELECT account_number FROM accounts WHERE customer_id = ?)',
+        [bcryptHash, customerId]
+      );
+    } catch (e) {
+      // Non-fatal background migration
+    }
+  }
 
   return { valid: true };
 }

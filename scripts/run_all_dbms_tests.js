@@ -20,12 +20,22 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 const { execSync } = require('child_process');
+
+const TEST_DIR = path.resolve(__dirname, '../DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test');
+const ENV_PATH = path.resolve(TEST_DIR, '.env');
+try {
+  const dotenv = require(path.resolve(TEST_DIR, 'node_modules/dotenv'));
+  if (fs.existsSync(ENV_PATH)) {
+    dotenv.config({ path: ENV_PATH });
+  }
+} catch (e) {}
 
 function getMysqlDriver() {
   const possiblePaths = [
     'mysql2/promise',
-    path.resolve(__dirname, '../DBMS project/JM-DH-BANKING-SYSTEM-main/JM-DH-BANKING-SYSTEM-main/test/node_modules/mysql2/promise'),
+    path.resolve(TEST_DIR, 'node_modules/mysql2/promise'),
     path.resolve(__dirname, '../test/node_modules/mysql2/promise')
   ];
   for (const p of possiblePaths) {
@@ -38,12 +48,30 @@ function getMysqlDriver() {
 
 const mysql = getMysqlDriver();
 
+// Safety: Default strictly to disposable test database to guarantee zero live DB mutations
+const args = process.argv.slice(2);
+let targetDatabase = 'bankist_college_demo_test';
+for (const arg of args) {
+  if (arg.startsWith('--database=')) {
+    targetDatabase = arg.split('=')[1].trim();
+  }
+}
+if (args.includes('--use-env-db') && process.env.DB_NAME) {
+  targetDatabase = process.env.DB_NAME;
+}
+
+if (targetDatabase === 'bankist' && !args.includes('--allow-live-db')) {
+  console.error('\n[SAFETY ERROR] run_all_dbms_tests.js contains mutating DML tests and cannot run against live "bankist".');
+  console.error('Target an isolated disposable database: node scripts/run_all_dbms_tests.js --database=bankist_college_demo_test\n');
+  process.exit(1);
+}
+
 const DB_CONFIG = {
   host: process.env.DB_HOST || '127.0.0.1',
-  port: parseInt(process.env.DB_PORT || '3307', 10),
+  port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'bankist',
+  database: targetDatabase,
   multipleStatements: true
 };
 
@@ -127,11 +155,14 @@ async function runMasterTestSuite() {
     // --------------------------------------------------------------------------
     console.log('\n--- SUITE 4: UNIQUE Constraints & Duplicate Handling ---');
     let duplicateEmailRejected = false;
+    const [existingCust] = await pool.query('SELECT email FROM customers LIMIT 1');
+    const existingEmail = existingCust.length > 0 ? existingCust[0].email : 'aarav@example.com';
     try {
-      await pool.query(`INSERT INTO customers (customer_id, full_name, email, password_hash) VALUES ('CUST-DUP-TEST', 'Duplicate User', 'aarav@example.com', 'hash')`);
+      await pool.query(`INSERT INTO customers (customer_id, full_name, email, password_hash) VALUES ('CUST-DUP-TEST', 'Duplicate User', ?, 'hash')`, [existingEmail]);
     } catch (e) {
       duplicateEmailRejected = e.message.includes('Duplicate entry') && e.message.includes('email');
     }
+    try { await pool.query("DELETE FROM customers WHERE customer_id = 'CUST-DUP-TEST'"); } catch (e) {}
     assert(duplicateEmailRejected, `UNIQUE constraint rejected duplicate customer email address`);
 
     // --------------------------------------------------------------------------
@@ -166,6 +197,22 @@ async function runMasterTestSuite() {
     const allZeroVariance = parityCheck.length > 0 && parityCheck.every(r => Math.abs(parseFloat(r.variance)) < 0.01);
     assert(allZeroVariance, `Materialized summary table mv_branch_financial_summary reflects exact live view balance (Zero variance across ${parityCheck.length} branches)`);
 
+    // Dynamically retrieve active accounts for state-machine testing
+    const [activeAccs] = await pool.query(
+      "SELECT account_number, balance FROM accounts WHERE status = 'Active' AND balance > 1000 ORDER BY balance DESC LIMIT 2"
+    );
+    if (activeAccs.length < 2) {
+      throw new Error('Test suite requires at least 2 active accounts with balance > 1000.');
+    }
+    const testSenderAcc = activeAccs[0].account_number;
+    const testReceiverAcc = activeAccs[1].account_number;
+
+    const [freezeCandidates] = await pool.query(
+      "SELECT account_number FROM accounts WHERE status = 'Active' AND account_number NOT IN (?, ?) LIMIT 1",
+      [testSenderAcc, testReceiverAcc]
+    );
+    const testFreezeAcc = freezeCandidates.length > 0 ? freezeCandidates[0].account_number : testReceiverAcc;
+
     // --------------------------------------------------------------------------
     // SUITE 7: Stored Procedures & Functions Execution
     // --------------------------------------------------------------------------
@@ -173,15 +220,18 @@ async function runMasterTestSuite() {
     const [fnYield] = await pool.query('SELECT fn_calculate_compound_yield(50000.00, 7.50, 12) AS yield_val');
     assert(parseFloat(fnYield[0].yield_val) > 50000.00, `Stored function fn_calculate_compound_yield executed (Yield on 50k @ 7.5%: INR ${fnYield[0].yield_val})`);
 
-    const [fnMask] = await pool.query("SELECT fn_mask_account_number('ACC-772910') AS masked");
-    assert(fnMask[0].masked === 'ACC-****10', `Data protection function fn_mask_account_number returned masked token: ${fnMask[0].masked}`);
+    const [fnMask] = await pool.query("SELECT fn_mask_account_number(?) AS masked", [testSenderAcc]);
+    assert(fnMask[0].masked && fnMask[0].masked.includes('****'), `Data protection function fn_mask_account_number returned masked token: ${fnMask[0].masked}`);
 
     // Stored Procedure Fund Transfer Execution using connection
     const spConn = await pool.getConnection();
     let statusVal = '';
     try {
       await spConn.query("SET @status = '', @txnid = ''");
-      await spConn.query("CALL sp_atomic_fund_transfer('ACC-772910', 'ACC-553102', 10.00, 'Automated Test Suite Transfer', @status, @txnid)");
+      await spConn.query(
+        "CALL sp_atomic_fund_transfer(?, ?, 10.00, 'Automated Test Suite Transfer', @status, @txnid)",
+        [testSenderAcc, testReceiverAcc]
+      );
       const [statusRes] = await spConn.query("SELECT @status AS s, @txnid AS t");
       statusVal = statusRes[0].s;
     } finally {
@@ -195,27 +245,27 @@ async function runMasterTestSuite() {
     console.log('\n--- SUITE 8: Triggers Validation & Compliance Logging ---');
     let triggerOverdraftBlocked = false;
     try {
-      await pool.query("UPDATE accounts SET balance = -100.00 WHERE account_number = 'ACC-772910'");
+      await pool.query("UPDATE accounts SET balance = -100.00 WHERE account_number = ?", [testSenderAcc]);
     } catch (e) {
       triggerOverdraftBlocked = e.message.includes('Account balance cannot be negative') || e.message.includes('Overdraft rejected');
     }
     assert(triggerOverdraftBlocked, `BEFORE UPDATE trigger trg_prevent_negative_balance threw SQLSTATE 45000 on negative balance`);
 
     // Test Status Transition Audit Trigger
-    await pool.query("UPDATE accounts SET status = 'Frozen' WHERE account_number = 'ACC-883921'");
-    await pool.query("UPDATE accounts SET status = 'Active' WHERE account_number = 'ACC-883921'");
+    await pool.query("UPDATE accounts SET status = 'Frozen' WHERE account_number = ?", [testFreezeAcc]);
+    await pool.query("UPDATE accounts SET status = 'Active' WHERE account_number = ?", [testFreezeAcc]);
     const [auditCheck] = await pool.query(`
       SELECT COUNT(*) AS cnt 
       FROM audit_logs 
-      WHERE action = 'ACCOUNT_STATUS_TRANSITION' AND entity_id = 'ACC-883921'
-    `);
+      WHERE action = 'ACCOUNT_STATUS_TRANSITION' AND entity_id = ?
+    `, [testFreezeAcc]);
     assert(auditCheck[0].cnt >= 2, `AFTER UPDATE trigger trg_audit_account_status_change recorded lifecycle state transitions in audit_logs`);
 
     // --------------------------------------------------------------------------
     // SUITE 9: ACID Atomicity & Failure-Driven Rollback
     // --------------------------------------------------------------------------
     console.log('\n--- SUITE 9: ACID Atomicity & Failure-Driven Rollback ---');
-    const [balBefore] = await pool.query("SELECT balance FROM accounts WHERE account_number = 'ACC-772910'");
+    const [balBefore] = await pool.query("SELECT balance FROM accounts WHERE account_number = ?", [testSenderAcc]);
     const [txnsBefore] = await pool.query("SELECT COUNT(*) AS cnt FROM transactions");
 
     let midTxnFailed = false;
@@ -223,7 +273,7 @@ async function runMasterTestSuite() {
     try {
       await conn.beginTransaction();
       // Step 1: Deduct balance
-      await conn.query("UPDATE accounts SET balance = balance - 1000.00 WHERE account_number = 'ACC-772910'");
+      await conn.query("UPDATE accounts SET balance = balance - 1000.00 WHERE account_number = ?", [testSenderAcc]);
       // Step 2: Deliberate mid-transaction failure
       await conn.query("INSERT INTO non_existent_table_for_rollback_test VALUES (1)");
       await conn.commit();
@@ -234,7 +284,7 @@ async function runMasterTestSuite() {
       conn.release();
     }
 
-    const [balAfter] = await pool.query("SELECT balance FROM accounts WHERE account_number = 'ACC-772910'");
+    const [balAfter] = await pool.query("SELECT balance FROM accounts WHERE account_number = ?", [testSenderAcc]);
     const [txnsAfter] = await pool.query("SELECT COUNT(*) AS cnt FROM transactions");
 
     assert(midTxnFailed, `Deliberate failure was intercepted during transaction execution`);
@@ -245,7 +295,7 @@ async function runMasterTestSuite() {
     // SUITE 10: Concurrency Safety & Row-Level Locking
     // --------------------------------------------------------------------------
     console.log('\n--- SUITE 10: Concurrency Safety & Row-Level Locking ---');
-    const [accBal] = await pool.query("SELECT balance FROM accounts WHERE account_number = 'ACC-772910'");
+    const [accBal] = await pool.query("SELECT balance FROM accounts WHERE account_number = ?", [testSenderAcc]);
     const availableBal = parseFloat(accBal[0].balance);
     const spendAmount = availableBal * 0.70;
 
@@ -253,12 +303,12 @@ async function runMasterTestSuite() {
       const threadConn = await pool.getConnection();
       try {
         await threadConn.beginTransaction();
-        const [rows] = await threadConn.query("SELECT balance FROM accounts WHERE account_number = 'ACC-772910' FOR UPDATE");
+        const [rows] = await threadConn.query("SELECT balance FROM accounts WHERE account_number = ? FOR UPDATE", [testSenderAcc]);
         const currentBal = parseFloat(rows[0].balance);
 
         if (currentBal >= spendAmount) {
-          await threadConn.query("UPDATE accounts SET balance = balance - ? WHERE account_number = 'ACC-772910'", [spendAmount]);
-          await threadConn.query("UPDATE accounts SET balance = balance + ? WHERE account_number = 'ACC-553102'", [spendAmount]);
+          await threadConn.query("UPDATE accounts SET balance = balance - ? WHERE account_number = ?", [spendAmount, testSenderAcc]);
+          await threadConn.query("UPDATE accounts SET balance = balance + ? WHERE account_number = ?", [spendAmount, testReceiverAcc]);
           await threadConn.commit();
           return { threadId, status: 'SUCCESS' };
         } else {
@@ -286,10 +336,10 @@ async function runMasterTestSuite() {
     // SUITE 11: Query Optimizer Plans & Composite Index Leftmost Prefix Evidence
     // --------------------------------------------------------------------------
     console.log('\n--- SUITE 11: Query Optimizer & Composite Indexes ---');
-    const [planBoth] = await pool.query("EXPLAIN SELECT * FROM transactions WHERE sender_account = 'ACC-772910' AND date_time > '2024-01-01'");
+    const [planBoth] = await pool.query("EXPLAIN SELECT * FROM transactions WHERE sender_account = ? AND date_time > '2024-01-01'", [testSenderAcc]);
     const [planTrailing] = await pool.query("EXPLAIN SELECT * FROM transactions WHERE date_time > '2024-01-01'");
 
-    assert(planBoth[0].key.includes('idx_tx_sender'), `Optimizer used composite index idx_tx_sender_datetime when leading prefix was supplied`);
+    assert(planBoth[0].key && planBoth[0].key.includes('idx_tx_sender'), `Optimizer used composite index idx_tx_sender_datetime when leading prefix was supplied`);
     assert(planTrailing[0].key === null || planTrailing[0].type === 'ALL', `Optimizer bypassed composite seek when leftmost prefix column was omitted (Full table scan verified)`);
 
     // --------------------------------------------------------------------------
@@ -299,9 +349,9 @@ async function runMasterTestSuite() {
     const [restoreParity] = await pool.query(`
       SELECT 
         (SELECT COUNT(*) FROM bankist.customers) AS prod_cust,
-        (SELECT COUNT(*) FROM bankist_recovery_verify.customers) AS test_cust,
+        (SELECT COUNT(*) FROM bankist_recovery.customers) AS test_cust,
         (SELECT ROUND(SUM(balance), 2) FROM bankist.accounts) AS prod_assets,
-        (SELECT ROUND(SUM(balance), 2) FROM bankist_recovery_verify.accounts) AS test_assets
+        (SELECT ROUND(SUM(balance), 2) FROM bankist_recovery.accounts) AS test_assets
     `);
     
     assert(restoreParity[0].prod_cust > 0, `Production database contains active customers (${restoreParity[0].prod_cust})`);

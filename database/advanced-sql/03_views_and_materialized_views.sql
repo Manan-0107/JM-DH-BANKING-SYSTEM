@@ -32,10 +32,11 @@ LEFT JOIN (
     GROUP BY customer_id
 ) acc ON c.customer_id = acc.customer_id
 LEFT JOIN (
-    SELECT customer_id, SUM(principal_amount) AS total_deposits_principal
-    FROM deposits
-    WHERE status = 'Active'
-    GROUP BY customer_id
+    SELECT a.customer_id, SUM(d.principal_amount) AS total_deposits_principal
+    FROM deposits d
+    JOIN accounts a ON d.linked_account = a.account_number
+    WHERE d.status = 'Active'
+    GROUP BY a.customer_id
 ) dep ON c.customer_id = dep.customer_id;
 
 -- View 2: High Value Transaction Monitor (Transactions >= ₹25,000 for AML Compliance)
@@ -68,7 +69,8 @@ SELECT
     d.maturity_date,
     DATEDIFF(d.maturity_date, CURDATE()) AS days_to_maturity
 FROM deposits d
-JOIN customers c ON d.customer_id = c.customer_id
+JOIN accounts a ON d.linked_account = a.account_number
+JOIN customers c ON a.customer_id = c.customer_id
 WHERE d.status = 'Active';
 
 -- View 4: Live Branch Liquidity Summary (Real-Time Aggregation View)

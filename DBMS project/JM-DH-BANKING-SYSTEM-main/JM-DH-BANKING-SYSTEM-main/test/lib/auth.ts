@@ -112,6 +112,15 @@ export function verifyPin(pin: string, storedHash: string | null | undefined): b
 }
 
 /**
+ * Returns true if a stored PIN hash uses a legacy format (e.g. SHA-256)
+ * and should be opportunistically upgraded to salted bcrypt upon successful authentication.
+ */
+export function needsPinRehash(storedHash: string | null | undefined): boolean {
+  if (!storedHash) return false;
+  return /^[a-f0-9]{64}$/i.test(storedHash);
+}
+
+/**
  * Verifies transaction authorization against the 4-digit Debit Card PIN hash (bcrypt).
  * Strictly enforces separation of credentials: NetBanking login password is not accepted
  * as a transaction PIN.

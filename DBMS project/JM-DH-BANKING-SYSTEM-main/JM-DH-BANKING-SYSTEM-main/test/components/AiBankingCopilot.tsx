@@ -15,6 +15,10 @@ interface Message {
     params?: any;
   };
   followUps?: string[];
+  is_ai_generated?: boolean;
+  provider_configured?: boolean;
+  engine?: string;
+  notice?: string;
   timestamp: string;
 }
 
@@ -38,13 +42,13 @@ export default function AiBankingCopilot({
     {
       id: 'welcome-1',
       sender: 'assistant',
-      text: `Hello ${customer?.full_name ? customer.full_name.split(' ')[0] : 'there'}! I am your **BTB NetBanking Co-Pilot**.\n\nI have real-time access to your verified accounts, cash-flow run rate, and deposit rates. How can I assist your financial planning today?`,
+      text: `Hello ${customer?.full_name ? customer.full_name.split(' ')[0] : 'there'}! I am your **BTB NetBanking Co-Pilot**.\n\nI have real-time access to your verified accounts, cash-flow run rate, and deposit terms. How can I assist your financial planning today?`,
       insights: [
         { label: 'Status', value: `${customer?.tier || 'Platinum'} Tier`, positive: true },
         { label: 'Primary Account', value: activeAccount?.account_number || 'Active', positive: true },
       ],
       followUps: [
-        'Can I afford to lock ₹50,000 in a 1-year FD at 7.5%?',
+        'Can I afford to lock ₹50,000 in an illustrative 1-year FD?',
         'What is my highest spending category this month?',
         'Forecast my projected month-end balance',
       ],
@@ -98,6 +102,10 @@ export default function AiBankingCopilot({
         insights: data.insights,
         action: data.suggestedAction,
         followUps: data.suggestedFollowUps,
+        is_ai_generated: data.is_ai_generated,
+        provider_configured: data.provider_configured,
+        engine: data.engine,
+        notice: data.notice,
         timestamp: 'Just now',
       };
 
@@ -307,7 +315,42 @@ export default function AiBankingCopilot({
                       whiteSpace: 'pre-line',
                     }}
                   >
-                    {msg.text}
+                    {msg.sender === 'assistant' && msg.id !== 'welcome-1' && (
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          fontSize: '0.95rem',
+                          fontWeight: 700,
+                          padding: '0.2rem 0.6rem',
+                          borderRadius: '0.4rem',
+                          marginBottom: '0.6rem',
+                          background: msg.is_ai_generated ? '#eff6ff' : '#f8fafc',
+                          color: msg.is_ai_generated ? '#1d4ed8' : '#475569',
+                          border: msg.is_ai_generated ? '1px solid #bfdbfe' : '1px solid #cbd5e1',
+                        }}
+                      >
+                        <span>{msg.is_ai_generated ? '✦ Gemini 1.5 Flash' : '⚙ Rule Engine (Offline Demo)'}</span>
+                      </div>
+                    )}
+                    <div>{msg.text}</div>
+                    {msg.notice && (
+                      <div
+                        style={{
+                          fontSize: '1rem',
+                          color: '#64748b',
+                          marginTop: '0.8rem',
+                          padding: '0.5rem 0.8rem',
+                          background: '#f8fafc',
+                          borderRadius: '0.5rem',
+                          borderLeft: '3px solid #94a3b8',
+                          lineHeight: '1.4',
+                        }}
+                      >
+                        ℹ️ {msg.notice}
+                      </div>
+                    )}
 
                     {/* Insights Badges Grid */}
                     {msg.insights && msg.insights.length > 0 && (

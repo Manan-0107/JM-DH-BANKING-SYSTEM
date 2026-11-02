@@ -1,0 +1,251 @@
+verification_id,customer_id,document_type,document_number,verification_method,status,verified_at,remarks
+KYC-5000001,CUST-101,MOBILE_OTP,+91 94299 46048,SMS_OTP_AUTHENTICATION,Verified,2025-03-19 10:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000002,CUST-101,PAN_CARD,BDCPS9928G,NSDL_TIN_API_SIMULATED,Verified,2025-03-19 10:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000003,CUST-101,AADHAAR_UIDAI,XXXXXXXX4611,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-03-19 10:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000004,CUST-101,VIDEO_KYC,+91 94299 46048,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-03-19 10:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000005,CUST-101,DIGITAL_SIGNATURE,+91 94299 46048,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-03-19 10:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000006,CUST-102,MOBILE_OTP,+91 82449 22676,SMS_OTP_AUTHENTICATION,Pending,2025-06-15 03:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000007,CUST-102,PAN_CARD,EDEPP2139A,NSDL_TIN_API_SIMULATED,Pending,2025-06-15 03:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000008,CUST-102,AADHAAR_UIDAI,XXXXXXXX4733,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-06-15 03:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000009,CUST-102,VIDEO_KYC,+91 82449 22676,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-06-15 03:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000010,CUST-102,DIGITAL_SIGNATURE,+91 82449 22676,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-06-15 03:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000011,CUST-103,MOBILE_OTP,+91 78748 99593,SMS_OTP_AUTHENTICATION,Pending,2026-01-21 09:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000012,CUST-103,PAN_CARD,DCDPV1916D,NSDL_TIN_API_SIMULATED,Pending,2026-01-21 09:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000013,CUST-103,AADHAAR_UIDAI,XXXXXXXX1525,UIDAI_DEMOGRAPHIC_EKYC,Pending,2026-01-21 09:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000014,CUST-103,VIDEO_KYC,+91 78748 99593,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2026-01-21 09:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000015,CUST-103,DIGITAL_SIGNATURE,+91 78748 99593,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2026-01-21 09:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000016,CUST-104,MOBILE_OTP,+91 99967 94259,SMS_OTP_AUTHENTICATION,Pending,2025-03-03 03:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000017,CUST-104,PAN_CARD,BECPC1771B,NSDL_TIN_API_SIMULATED,Pending,2025-03-03 03:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000018,CUST-104,AADHAAR_UIDAI,XXXXXXXX3504,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-03-03 03:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000019,CUST-104,VIDEO_KYC,+91 99967 94259,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-03-03 03:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000020,CUST-104,DIGITAL_SIGNATURE,+91 99967 94259,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-03-03 03:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000021,CUST-105,MOBILE_OTP,+91 98992 80381,SMS_OTP_AUTHENTICATION,Verified,2025-07-10 09:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000022,CUST-105,PAN_CARD,BCAPX5889L,NSDL_TIN_API_SIMULATED,Verified,2025-07-10 09:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000023,CUST-105,AADHAAR_UIDAI,XXXXXXXX9317,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-07-10 09:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000024,CUST-105,VIDEO_KYC,+91 98992 80381,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-07-10 09:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000025,CUST-105,DIGITAL_SIGNATURE,+91 98992 80381,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-07-10 09:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000026,CUST-106,MOBILE_OTP,+91 97252 50306,SMS_OTP_AUTHENTICATION,Verified,2025-05-19 10:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000027,CUST-106,PAN_CARD,CBEPL4470J,NSDL_TIN_API_SIMULATED,Verified,2025-05-19 10:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000028,CUST-106,AADHAAR_UIDAI,XXXXXXXX4295,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-05-19 10:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000029,CUST-106,VIDEO_KYC,+91 97252 50306,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-05-19 10:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000030,CUST-106,DIGITAL_SIGNATURE,+91 97252 50306,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-05-19 10:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000031,CUST-107,MOBILE_OTP,+91 88150 40161,SMS_OTP_AUTHENTICATION,Verified,2026-07-30 08:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000032,CUST-107,PAN_CARD,BDBPD8744D,NSDL_TIN_API_SIMULATED,Verified,2026-07-30 08:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000033,CUST-107,AADHAAR_UIDAI,XXXXXXXX8749,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-07-30 08:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000034,CUST-107,VIDEO_KYC,+91 88150 40161,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-07-30 08:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000035,CUST-107,DIGITAL_SIGNATURE,+91 88150 40161,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-07-30 08:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000036,CUST-108,MOBILE_OTP,+91 83193 54473,SMS_OTP_AUTHENTICATION,Verified,2025-06-26 09:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000037,CUST-108,PAN_CARD,EAEPW2604A,NSDL_TIN_API_SIMULATED,Verified,2025-06-26 09:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000038,CUST-108,AADHAAR_UIDAI,XXXXXXXX9856,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-06-26 09:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000039,CUST-108,VIDEO_KYC,+91 83193 54473,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-06-26 09:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000040,CUST-108,DIGITAL_SIGNATURE,+91 83193 54473,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-06-26 09:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000041,CUST-109,MOBILE_OTP,+91 82793 44760,SMS_OTP_AUTHENTICATION,Verified,2025-03-08 01:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000042,CUST-109,PAN_CARD,ECCPT1936A,NSDL_TIN_API_SIMULATED,Verified,2025-03-08 01:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000043,CUST-109,AADHAAR_UIDAI,XXXXXXXX8811,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-03-08 01:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000044,CUST-109,VIDEO_KYC,+91 82793 44760,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-03-08 01:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000045,CUST-109,DIGITAL_SIGNATURE,+91 82793 44760,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-03-08 01:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000046,CUST-110,MOBILE_OTP,+91 71302 91183,SMS_OTP_AUTHENTICATION,Verified,2025-11-09 07:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000047,CUST-110,PAN_CARD,ADCPY2188A,NSDL_TIN_API_SIMULATED,Verified,2025-11-09 07:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000048,CUST-110,AADHAAR_UIDAI,XXXXXXXX8508,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-11-09 07:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000049,CUST-110,VIDEO_KYC,+91 71302 91183,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-11-09 07:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000050,CUST-110,DIGITAL_SIGNATURE,+91 71302 91183,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-11-09 07:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000051,CUST-111,MOBILE_OTP,+91 97320 81200,SMS_OTP_AUTHENTICATION,Verified,2025-03-10 07:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000052,CUST-111,PAN_CARD,ACBPP6617D,NSDL_TIN_API_SIMULATED,Verified,2025-03-10 07:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000053,CUST-111,AADHAAR_UIDAI,XXXXXXXX5325,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-03-10 07:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000054,CUST-111,VIDEO_KYC,+91 97320 81200,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-03-10 07:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000055,CUST-111,DIGITAL_SIGNATURE,+91 97320 81200,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-03-10 07:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000056,CUST-112,MOBILE_OTP,+91 94288 67912,SMS_OTP_AUTHENTICATION,Verified,2026-07-13 00:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000057,CUST-112,PAN_CARD,AABPX1653F,NSDL_TIN_API_SIMULATED,Verified,2026-07-13 00:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000058,CUST-112,AADHAAR_UIDAI,XXXXXXXX4441,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-07-13 00:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000059,CUST-112,VIDEO_KYC,+91 94288 67912,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-07-13 00:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000060,CUST-112,DIGITAL_SIGNATURE,+91 94288 67912,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-07-13 00:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000061,CUST-113,MOBILE_OTP,+91 83510 13248,SMS_OTP_AUTHENTICATION,Verified,2026-01-17 07:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000062,CUST-113,PAN_CARD,EBEPL6000D,NSDL_TIN_API_SIMULATED,Verified,2026-01-17 07:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000063,CUST-113,AADHAAR_UIDAI,XXXXXXXX4652,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-01-17 07:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000064,CUST-113,VIDEO_KYC,+91 83510 13248,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-01-17 07:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000065,CUST-113,DIGITAL_SIGNATURE,+91 83510 13248,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-01-17 07:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000066,CUST-114,MOBILE_OTP,+91 97645 80282,SMS_OTP_AUTHENTICATION,Pending,2025-12-31 11:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000067,CUST-114,PAN_CARD,BDCPK4114E,NSDL_TIN_API_SIMULATED,Pending,2025-12-31 11:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000068,CUST-114,AADHAAR_UIDAI,XXXXXXXX1727,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-12-31 11:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000069,CUST-114,VIDEO_KYC,+91 97645 80282,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-12-31 11:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000070,CUST-114,DIGITAL_SIGNATURE,+91 97645 80282,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-12-31 11:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000071,CUST-115,MOBILE_OTP,+91 80134 97410,SMS_OTP_AUTHENTICATION,Verified,2026-03-16 05:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000072,CUST-115,PAN_CARD,CEBPF6279H,NSDL_TIN_API_SIMULATED,Verified,2026-03-16 05:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000073,CUST-115,AADHAAR_UIDAI,XXXXXXXX8238,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-03-16 05:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000074,CUST-115,VIDEO_KYC,+91 80134 97410,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-03-16 05:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000075,CUST-115,DIGITAL_SIGNATURE,+91 80134 97410,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-03-16 05:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000076,CUST-116,MOBILE_OTP,+91 96429 36100,SMS_OTP_AUTHENTICATION,Verified,2026-07-16 04:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000077,CUST-116,PAN_CARD,CBDPA2746G,NSDL_TIN_API_SIMULATED,Verified,2026-07-16 04:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000078,CUST-116,AADHAAR_UIDAI,XXXXXXXX4585,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-07-16 04:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000079,CUST-116,VIDEO_KYC,+91 96429 36100,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-07-16 04:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000080,CUST-116,DIGITAL_SIGNATURE,+91 96429 36100,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-07-16 04:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000081,CUST-117,MOBILE_OTP,+91 89511 51588,SMS_OTP_AUTHENTICATION,Pending,2025-06-29 09:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000082,CUST-117,PAN_CARD,EBDPM4919E,NSDL_TIN_API_SIMULATED,Pending,2025-06-29 09:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000083,CUST-117,AADHAAR_UIDAI,XXXXXXXX8206,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-06-29 09:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000084,CUST-117,VIDEO_KYC,+91 89511 51588,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-06-29 09:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000085,CUST-117,DIGITAL_SIGNATURE,+91 89511 51588,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-06-29 09:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000086,CUST-118,MOBILE_OTP,+91 75007 38043,SMS_OTP_AUTHENTICATION,Pending,2025-07-30 11:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000087,CUST-118,PAN_CARD,CDEPT7232H,NSDL_TIN_API_SIMULATED,Pending,2025-07-30 11:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000088,CUST-118,AADHAAR_UIDAI,XXXXXXXX1096,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-07-30 11:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000089,CUST-118,VIDEO_KYC,+91 75007 38043,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-07-30 11:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000090,CUST-118,DIGITAL_SIGNATURE,+91 75007 38043,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-07-30 11:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000091,CUST-119,MOBILE_OTP,+91 70951 60968,SMS_OTP_AUTHENTICATION,Pending,2025-06-07 09:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000092,CUST-119,PAN_CARD,ADAPM1823E,NSDL_TIN_API_SIMULATED,Pending,2025-06-07 09:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000093,CUST-119,AADHAAR_UIDAI,XXXXXXXX7211,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-06-07 09:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000094,CUST-119,VIDEO_KYC,+91 70951 60968,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-06-07 09:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000095,CUST-119,DIGITAL_SIGNATURE,+91 70951 60968,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-06-07 09:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000096,CUST-120,MOBILE_OTP,+91 94544 80702,SMS_OTP_AUTHENTICATION,Verified,2026-08-18 11:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000097,CUST-120,PAN_CARD,BCAPY8619E,NSDL_TIN_API_SIMULATED,Verified,2026-08-18 11:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000098,CUST-120,AADHAAR_UIDAI,XXXXXXXX7043,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-08-18 11:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000099,CUST-120,VIDEO_KYC,+91 94544 80702,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-08-18 11:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000100,CUST-120,DIGITAL_SIGNATURE,+91 94544 80702,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-08-18 11:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000101,CUST-121,MOBILE_OTP,+91 76498 19961,SMS_OTP_AUTHENTICATION,Verified,2025-11-24 01:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000102,CUST-121,PAN_CARD,DADPA7882H,NSDL_TIN_API_SIMULATED,Verified,2025-11-24 01:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000103,CUST-121,AADHAAR_UIDAI,XXXXXXXX2729,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-11-24 01:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000104,CUST-121,VIDEO_KYC,+91 76498 19961,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-11-24 01:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000105,CUST-121,DIGITAL_SIGNATURE,+91 76498 19961,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-11-24 01:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000106,CUST-122,MOBILE_OTP,+91 84272 87656,SMS_OTP_AUTHENTICATION,Pending,2025-06-24 08:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000107,CUST-122,PAN_CARD,EABPU6576E,NSDL_TIN_API_SIMULATED,Pending,2025-06-24 08:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000108,CUST-122,AADHAAR_UIDAI,XXXXXXXX5526,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-06-24 08:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000109,CUST-122,VIDEO_KYC,+91 84272 87656,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-06-24 08:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000110,CUST-122,DIGITAL_SIGNATURE,+91 84272 87656,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-06-24 08:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000111,CUST-123,MOBILE_OTP,+91 95982 12260,SMS_OTP_AUTHENTICATION,Pending,2025-11-19 01:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000112,CUST-123,PAN_CARD,CDBPS5438E,NSDL_TIN_API_SIMULATED,Pending,2025-11-19 01:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000113,CUST-123,AADHAAR_UIDAI,XXXXXXXX5118,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-11-19 01:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000114,CUST-123,VIDEO_KYC,+91 95982 12260,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-11-19 01:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000115,CUST-123,DIGITAL_SIGNATURE,+91 95982 12260,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-11-19 01:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000116,CUST-124,MOBILE_OTP,+91 89319 78765,SMS_OTP_AUTHENTICATION,Verified,2025-09-24 09:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000117,CUST-124,PAN_CARD,BECPS3068L,NSDL_TIN_API_SIMULATED,Verified,2025-09-24 09:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000118,CUST-124,AADHAAR_UIDAI,XXXXXXXX9042,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-09-24 09:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000119,CUST-124,VIDEO_KYC,+91 89319 78765,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-09-24 09:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000120,CUST-124,DIGITAL_SIGNATURE,+91 89319 78765,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-09-24 09:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000121,CUST-125,MOBILE_OTP,+91 72141 62521,SMS_OTP_AUTHENTICATION,Verified,2025-03-01 07:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000122,CUST-125,PAN_CARD,CCDPU7232H,NSDL_TIN_API_SIMULATED,Verified,2025-03-01 07:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000123,CUST-125,AADHAAR_UIDAI,XXXXXXXX8253,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-03-01 07:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000124,CUST-125,VIDEO_KYC,+91 72141 62521,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-03-01 07:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000125,CUST-125,DIGITAL_SIGNATURE,+91 72141 62521,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-03-01 07:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000126,CUST-126,MOBILE_OTP,+91 72660 30585,SMS_OTP_AUTHENTICATION,Verified,2025-08-06 04:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000127,CUST-126,PAN_CARD,DDCPR5334L,NSDL_TIN_API_SIMULATED,Verified,2025-08-06 04:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000128,CUST-126,AADHAAR_UIDAI,XXXXXXXX4241,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-08-06 04:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000129,CUST-126,VIDEO_KYC,+91 72660 30585,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-08-06 04:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000130,CUST-126,DIGITAL_SIGNATURE,+91 72660 30585,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-08-06 04:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000131,CUST-127,MOBILE_OTP,+91 97008 84607,SMS_OTP_AUTHENTICATION,Pending,2025-08-12 07:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000132,CUST-127,PAN_CARD,EDDPA4750L,NSDL_TIN_API_SIMULATED,Pending,2025-08-12 07:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000133,CUST-127,AADHAAR_UIDAI,XXXXXXXX1339,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-08-12 07:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000134,CUST-127,VIDEO_KYC,+91 97008 84607,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-08-12 07:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000135,CUST-127,DIGITAL_SIGNATURE,+91 97008 84607,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-08-12 07:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000136,CUST-128,MOBILE_OTP,+91 85401 55607,SMS_OTP_AUTHENTICATION,Verified,2025-08-03 00:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000137,CUST-128,PAN_CARD,ECCPI6296B,NSDL_TIN_API_SIMULATED,Verified,2025-08-03 00:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000138,CUST-128,AADHAAR_UIDAI,XXXXXXXX7622,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-08-03 00:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000139,CUST-128,VIDEO_KYC,+91 85401 55607,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-08-03 00:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000140,CUST-128,DIGITAL_SIGNATURE,+91 85401 55607,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-08-03 00:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000141,CUST-129,MOBILE_OTP,+91 71691 36680,SMS_OTP_AUTHENTICATION,Verified,2025-05-20 10:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000142,CUST-129,PAN_CARD,CCAPZ2858H,NSDL_TIN_API_SIMULATED,Verified,2025-05-20 10:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000143,CUST-129,AADHAAR_UIDAI,XXXXXXXX2924,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-05-20 10:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000144,CUST-129,VIDEO_KYC,+91 71691 36680,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-05-20 10:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000145,CUST-129,DIGITAL_SIGNATURE,+91 71691 36680,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-05-20 10:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000146,CUST-130,MOBILE_OTP,+91 82569 34983,SMS_OTP_AUTHENTICATION,Verified,2025-07-31 06:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000147,CUST-130,PAN_CARD,ECDPW8316J,NSDL_TIN_API_SIMULATED,Verified,2025-07-31 06:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000148,CUST-130,AADHAAR_UIDAI,XXXXXXXX8935,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-07-31 06:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000149,CUST-130,VIDEO_KYC,+91 82569 34983,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-07-31 06:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000150,CUST-130,DIGITAL_SIGNATURE,+91 82569 34983,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-07-31 06:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000151,CUST-131,MOBILE_OTP,+91 80426 71993,SMS_OTP_AUTHENTICATION,Verified,2026-05-22 03:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000152,CUST-131,PAN_CARD,EAAPW3529B,NSDL_TIN_API_SIMULATED,Verified,2026-05-22 03:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000153,CUST-131,AADHAAR_UIDAI,XXXXXXXX8692,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-05-22 03:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000154,CUST-131,VIDEO_KYC,+91 80426 71993,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-05-22 03:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000155,CUST-131,DIGITAL_SIGNATURE,+91 80426 71993,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-05-22 03:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000156,CUST-132,MOBILE_OTP,+91 90232 18968,SMS_OTP_AUTHENTICATION,Verified,2026-06-28 05:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000157,CUST-132,PAN_CARD,BABPB6873F,NSDL_TIN_API_SIMULATED,Verified,2026-06-28 05:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000158,CUST-132,AADHAAR_UIDAI,XXXXXXXX8056,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-06-28 05:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000159,CUST-132,VIDEO_KYC,+91 90232 18968,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-06-28 05:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000160,CUST-132,DIGITAL_SIGNATURE,+91 90232 18968,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-06-28 05:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000161,CUST-133,MOBILE_OTP,+91 77891 75230,SMS_OTP_AUTHENTICATION,Pending,2025-06-15 07:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000162,CUST-133,PAN_CARD,ACBPP7951E,NSDL_TIN_API_SIMULATED,Pending,2025-06-15 07:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000163,CUST-133,AADHAAR_UIDAI,XXXXXXXX8484,UIDAI_DEMOGRAPHIC_EKYC,Pending,2025-06-15 07:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000164,CUST-133,VIDEO_KYC,+91 77891 75230,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2025-06-15 07:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000165,CUST-133,DIGITAL_SIGNATURE,+91 77891 75230,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2025-06-15 07:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000166,CUST-134,MOBILE_OTP,+91 91568 61879,SMS_OTP_AUTHENTICATION,Verified,2025-05-08 07:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000167,CUST-134,PAN_CARD,DDDPR3240L,NSDL_TIN_API_SIMULATED,Verified,2025-05-08 07:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000168,CUST-134,AADHAAR_UIDAI,XXXXXXXX2591,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-05-08 07:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000169,CUST-134,VIDEO_KYC,+91 91568 61879,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-05-08 07:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000170,CUST-134,DIGITAL_SIGNATURE,+91 91568 61879,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-05-08 07:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000171,CUST-135,MOBILE_OTP,+91 76579 27322,SMS_OTP_AUTHENTICATION,Verified,2026-04-13 07:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000172,CUST-135,PAN_CARD,ECAPT4696L,NSDL_TIN_API_SIMULATED,Verified,2026-04-13 07:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000173,CUST-135,AADHAAR_UIDAI,XXXXXXXX7511,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-04-13 07:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000174,CUST-135,VIDEO_KYC,+91 76579 27322,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-04-13 07:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000175,CUST-135,DIGITAL_SIGNATURE,+91 76579 27322,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-04-13 07:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000176,CUST-136,MOBILE_OTP,+91 96948 93695,SMS_OTP_AUTHENTICATION,Verified,2025-01-02 03:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000177,CUST-136,PAN_CARD,EEBPK3290A,NSDL_TIN_API_SIMULATED,Verified,2025-01-02 03:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000178,CUST-136,AADHAAR_UIDAI,XXXXXXXX1609,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-01-02 03:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000179,CUST-136,VIDEO_KYC,+91 96948 93695,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-01-02 03:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000180,CUST-136,DIGITAL_SIGNATURE,+91 96948 93695,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-01-02 03:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000181,CUST-137,MOBILE_OTP,+91 94322 30253,SMS_OTP_AUTHENTICATION,Verified,2025-12-16 11:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000182,CUST-137,PAN_CARD,BBEPJ6876A,NSDL_TIN_API_SIMULATED,Verified,2025-12-16 11:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000183,CUST-137,AADHAAR_UIDAI,XXXXXXXX7523,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-12-16 11:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000184,CUST-137,VIDEO_KYC,+91 94322 30253,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-12-16 11:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000185,CUST-137,DIGITAL_SIGNATURE,+91 94322 30253,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-12-16 11:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000186,CUST-138,MOBILE_OTP,+91 95787 84000,SMS_OTP_AUTHENTICATION,Verified,2026-02-19 08:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000187,CUST-138,PAN_CARD,EAAPG3858B,NSDL_TIN_API_SIMULATED,Verified,2026-02-19 08:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000188,CUST-138,AADHAAR_UIDAI,XXXXXXXX1422,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-02-19 08:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000189,CUST-138,VIDEO_KYC,+91 95787 84000,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-02-19 08:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000190,CUST-138,DIGITAL_SIGNATURE,+91 95787 84000,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-02-19 08:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000191,CUST-139,MOBILE_OTP,+91 73724 18330,SMS_OTP_AUTHENTICATION,Verified,2026-06-09 04:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000192,CUST-139,PAN_CARD,ECCPZ1996H,NSDL_TIN_API_SIMULATED,Verified,2026-06-09 04:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000193,CUST-139,AADHAAR_UIDAI,XXXXXXXX7580,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-06-09 04:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000194,CUST-139,VIDEO_KYC,+91 73724 18330,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-06-09 04:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000195,CUST-139,DIGITAL_SIGNATURE,+91 73724 18330,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-06-09 04:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000196,CUST-140,MOBILE_OTP,+91 89181 81874,SMS_OTP_AUTHENTICATION,Verified,2025-06-21 03:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000197,CUST-140,PAN_CARD,DECPW8046H,NSDL_TIN_API_SIMULATED,Verified,2025-06-21 03:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000198,CUST-140,AADHAAR_UIDAI,XXXXXXXX4743,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-06-21 03:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000199,CUST-140,VIDEO_KYC,+91 89181 81874,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-06-21 03:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000200,CUST-140,DIGITAL_SIGNATURE,+91 89181 81874,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-06-21 03:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000201,CUST-141,MOBILE_OTP,+91 92505 72163,SMS_OTP_AUTHENTICATION,Verified,2026-06-22 00:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000202,CUST-141,PAN_CARD,ECDPK7929A,NSDL_TIN_API_SIMULATED,Verified,2026-06-22 00:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000203,CUST-141,AADHAAR_UIDAI,XXXXXXXX5712,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-06-22 00:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000204,CUST-141,VIDEO_KYC,+91 92505 72163,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-06-22 00:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000205,CUST-141,DIGITAL_SIGNATURE,+91 92505 72163,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-06-22 00:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000206,CUST-142,MOBILE_OTP,+91 88227 58176,SMS_OTP_AUTHENTICATION,Verified,2024-12-31 02:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000207,CUST-142,PAN_CARD,DBBPA3347K,NSDL_TIN_API_SIMULATED,Verified,2024-12-31 02:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000208,CUST-142,AADHAAR_UIDAI,XXXXXXXX7566,UIDAI_DEMOGRAPHIC_EKYC,Verified,2024-12-31 02:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000209,CUST-142,VIDEO_KYC,+91 88227 58176,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2024-12-31 02:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000210,CUST-142,DIGITAL_SIGNATURE,+91 88227 58176,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2024-12-31 02:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000211,CUST-143,MOBILE_OTP,+91 93645 52517,SMS_OTP_AUTHENTICATION,Verified,2026-04-20 02:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000212,CUST-143,PAN_CARD,CDCPF9394B,NSDL_TIN_API_SIMULATED,Verified,2026-04-20 02:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000213,CUST-143,AADHAAR_UIDAI,XXXXXXXX6655,UIDAI_DEMOGRAPHIC_EKYC,Verified,2026-04-20 02:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000214,CUST-143,VIDEO_KYC,+91 93645 52517,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2026-04-20 02:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000215,CUST-143,DIGITAL_SIGNATURE,+91 93645 52517,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2026-04-20 02:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000216,CUST-144,MOBILE_OTP,+91 70251 36794,SMS_OTP_AUTHENTICATION,Verified,2025-12-06 06:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000217,CUST-144,PAN_CARD,ABDPN6802B,NSDL_TIN_API_SIMULATED,Verified,2025-12-06 06:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000218,CUST-144,AADHAAR_UIDAI,XXXXXXXX7505,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-12-06 06:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000219,CUST-144,VIDEO_KYC,+91 70251 36794,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-12-06 06:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000220,CUST-144,DIGITAL_SIGNATURE,+91 70251 36794,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-12-06 06:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000221,CUST-145,MOBILE_OTP,+91 83272 12733,SMS_OTP_AUTHENTICATION,Verified,2025-09-23 10:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000222,CUST-145,PAN_CARD,CAEPT4630F,NSDL_TIN_API_SIMULATED,Verified,2025-09-23 10:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000223,CUST-145,AADHAAR_UIDAI,XXXXXXXX3754,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-09-23 10:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000224,CUST-145,VIDEO_KYC,+91 83272 12733,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-09-23 10:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000225,CUST-145,DIGITAL_SIGNATURE,+91 83272 12733,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-09-23 10:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000226,CUST-146,MOBILE_OTP,+91 74798 43550,SMS_OTP_AUTHENTICATION,Pending,2026-07-13 09:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000227,CUST-146,PAN_CARD,CDEPQ6295L,NSDL_TIN_API_SIMULATED,Pending,2026-07-13 09:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000228,CUST-146,AADHAAR_UIDAI,XXXXXXXX6179,UIDAI_DEMOGRAPHIC_EKYC,Pending,2026-07-13 09:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000229,CUST-146,VIDEO_KYC,+91 74798 43550,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2026-07-13 09:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000230,CUST-146,DIGITAL_SIGNATURE,+91 74798 43550,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2026-07-13 09:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000231,CUST-147,MOBILE_OTP,+91 80171 70521,SMS_OTP_AUTHENTICATION,Pending,2024-12-07 10:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000232,CUST-147,PAN_CARD,DECPV4084F,NSDL_TIN_API_SIMULATED,Pending,2024-12-07 10:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000233,CUST-147,AADHAAR_UIDAI,XXXXXXXX8792,UIDAI_DEMOGRAPHIC_EKYC,Pending,2024-12-07 10:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000234,CUST-147,VIDEO_KYC,+91 80171 70521,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2024-12-07 10:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000235,CUST-147,DIGITAL_SIGNATURE,+91 80171 70521,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2024-12-07 10:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000236,CUST-148,MOBILE_OTP,+91 87129 89928,SMS_OTP_AUTHENTICATION,Verified,2025-10-17 01:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000237,CUST-148,PAN_CARD,CBBPW3463F,NSDL_TIN_API_SIMULATED,Verified,2025-10-17 01:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000238,CUST-148,AADHAAR_UIDAI,XXXXXXXX2335,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-10-17 01:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000239,CUST-148,VIDEO_KYC,+91 87129 89928,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-10-17 01:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000240,CUST-148,DIGITAL_SIGNATURE,+91 87129 89928,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-10-17 01:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000241,CUST-149,MOBILE_OTP,+91 74187 97833,SMS_OTP_AUTHENTICATION,Verified,2025-07-22 03:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000242,CUST-149,PAN_CARD,EBDPE3253C,NSDL_TIN_API_SIMULATED,Verified,2025-07-22 03:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000243,CUST-149,AADHAAR_UIDAI,XXXXXXXX2264,UIDAI_DEMOGRAPHIC_EKYC,Verified,2025-07-22 03:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000244,CUST-149,VIDEO_KYC,+91 74187 97833,AI_FACIAL_LIVENESS_GEO_TAG,Verified,2025-07-22 03:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000245,CUST-149,DIGITAL_SIGNATURE,+91 74187 97833,TOUCH_CANVAS_DIGITAL_RECORD,Verified,2025-07-22 03:20:20,Digital signature specimen captured and recorded for mandate
+KYC-5000246,CUST-150,MOBILE_OTP,+91 99578 31697,SMS_OTP_AUTHENTICATION,Pending,2026-01-28 04:20:20,Mobile number authenticated with 2-factor OTP verification
+KYC-5000247,CUST-150,PAN_CARD,BECPV7026L,NSDL_TIN_API_SIMULATED,Pending,2026-01-28 04:20:20,PAN format validated and legal name verified against Income Tax Database
+KYC-5000248,CUST-150,AADHAAR_UIDAI,XXXXXXXX8218,UIDAI_DEMOGRAPHIC_EKYC,Pending,2026-01-28 04:20:20,Aadhaar demographic details verified via biometric/OTP e-KYC
+KYC-5000249,CUST-150,VIDEO_KYC,+91 99578 31697,AI_FACIAL_LIVENESS_GEO_TAG,Pending,2026-01-28 04:20:20,Liveness confirmed and geo-coordinates stamped in compliance with RBI norms
+KYC-5000250,CUST-150,DIGITAL_SIGNATURE,+91 99578 31697,TOUCH_CANVAS_DIGITAL_RECORD,Pending,2026-01-28 04:20:20,Digital signature specimen captured and recorded for mandate
